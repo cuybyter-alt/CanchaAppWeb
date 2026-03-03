@@ -1,0 +1,313 @@
+@import "tailwindcss";
+/** No hacer caso a este warning, es un bug de Tailwind que no afecta el funcionamiento del proyecto */
+@theme {
+  /* Spacing tokens */
+  --spacing-1: 4px;
+  --spacing-2: 8px;
+  --spacing-3: 12px;
+  --spacing-4: 16px;
+  --spacing-5: 20px;
+  --spacing-6: 24px;
+  --spacing-8: 32px;
+  --spacing-10: 40px;
+  --spacing-12: 48px;
+  --spacing-16: 64px;
+
+  /* Border radius */
+  --radius-xs: 4px;
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
+  --radius-badge: 20px;
+  --radius-full: 9999px;
+
+  /* Colors - Primary Green */
+  --color-primary: #62bf3b;
+  --color-primary-light: #83d45f;
+  --color-primary-dark: #469a25;
+  --color-primary-deeper: #2e6b16;
+  --color-primary-tint: #edfae6;
+  --color-primary-glow: rgba(98, 191, 59, 0.28);
+
+  /* Colors - Accent Red */
+  --color-accent: #ff4757;
+  --color-accent-light: #ff7585;
+  --color-accent-dark: #cc2030;
+  --color-accent-tint: #fff0f2;
+
+  /* Colors - Score Yellow */
+  --color-score: #ffd60a;
+  --color-score-dark: #b89800;
+
+  /* Colors - Neutrals */
+  --color-bg: #f4f7f3;
+  --color-surface: #ffffff;
+  --color-surf2: #eef5eb;
+  --color-border: #d4e8cd;
+  --color-text: #1a2e14;
+  --color-text-2: #4a6b40;
+  --color-text-3: #7a9b70;
+  --color-muted: #b8d4b0;
+
+  /* Shadows */
+  --shadow-sm:
+    0 2px 8px rgba(26, 46, 20, 0.1),
+    0 1px 2px rgba(26, 46, 20, 0.06);
+  --shadow-md:
+    0 4px 16px rgba(26, 46, 20, 0.12),
+    0 2px 4px rgba(26, 46, 20, 0.08);
+  --shadow-lg:
+    0 8px 32px rgba(26, 46, 20, 0.14),
+    0 4px 8px rgba(26, 46, 20, 0.08);
+  --shadow-xl:
+    0 16px 48px rgba(26, 46, 20, 0.18),
+    0 8px 16px rgba(26, 46, 20, 0.1);
+  --shadow-2xl:
+    0 24px 64px rgba(26, 46, 20, 0.25),
+    0 12px 24px rgba(26, 46, 20, 0.15);
+  --shadow-primary:
+    0 6px 24px var(--color-primary-glow),
+    0 2px 6px rgba(98, 191, 59, 0.15);
+  --shadow-accent:
+    0 6px 24px rgba(255, 71, 87, 0.28),
+    0 2px 6px rgba(255, 71, 87, 0.15);
+  --shadow-inner:
+    inset 0 2px 0 rgba(255, 255, 255, 0.55),
+    inset 0 -2px 0 rgba(0, 0, 0, 0.08);
+
+  /* Font families */
+  --font-display: "Barlow Condensed", sans-serif;
+  --font-body: "Nunito", sans-serif;
+  --font-pixel: "Press Start 2P", monospace;
+
+  /* Transitions */
+  --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --ease-pop: cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  --ease-swift: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-smooth: cubic-bezier(0.4, 0, 0.6, 1);
+  --duration-fast: 120ms;
+  --duration-mid: 220ms;
+  --duration-slow: 360ms;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  margin: 0;
+  padding: 0;
+  scroll-behavior: smooth;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: var(--font-body);
+  background: var(--color-bg);
+  color: var(--color-text);
+  font-size: 16px;
+  line-height: 1.6;
+  font-weight: 600;
+  min-height: 100vh;
+}
+
+/* Pixel grid background */
+body::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+  background-image:
+    repeating-linear-gradient(
+      0deg,
+      transparent,
+      transparent 7px,
+      rgba(98, 191, 59, 0.015) 8px
+    ),
+    repeating-linear-gradient(
+      90deg,
+      transparent,
+      transparent 7px,
+      rgba(98, 191, 59, 0.015) 8px
+    );
+}
+
+/* Fade-in animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes ping {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  60% {
+    transform: scale(1.5);
+    opacity: 0.4;
+  }
+}
+
+@keyframes pop-in {
+  0% {
+    transform: scale(0.3);
+    opacity: 0;
+  }
+  70% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes mascot-idle {
+  0%,
+  100% {
+    transform: translateY(0) rotate(0);
+  }
+  35% {
+    transform: translateY(-10px) rotate(-1deg);
+  }
+  65% {
+    transform: translateY(-8px) rotate(1deg);
+  }
+}
+
+@keyframes float {
+  0%, 100% {
+    transform: translateY(0) rotate(0deg);
+  }
+  25% {
+    transform: translateY(-10px) rotate(2deg);
+  }
+  50% {
+    transform: translateY(-15px) rotate(0deg);
+  }
+  75% {
+    transform: translateY(-10px) rotate(-2deg);
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.45s var(--ease-bounce) forwards;
+}
+
+.animate-ping {
+  animation: ping 1.8s ease-in-out infinite;
+}
+
+.animate-pop-in {
+  animation: pop-in 0.6s var(--ease-pop);
+}
+
+.animate-mascot-idle {
+  animation: mascot-idle 2.5s var(--ease-bounce) infinite;
+}
+
+.animate-float {
+  animation: float 3s ease-in-out infinite;
+}
+
+/* Stagger delays for fade-in */
+.animate-fade-in:nth-child(1) {
+  animation-delay: 0.03s;
+}
+.animate-fade-in:nth-child(2) {
+  animation-delay: 0.09s;
+}
+.animate-fade-in:nth-child(3) {
+  animation-delay: 0.15s;
+}
+.animate-fade-in:nth-child(4) {
+  animation-delay: 0.21s;
+}
+.animate-fade-in:nth-child(5) {
+  animation-delay: 0.27s;
+}
+
+/* Mobile menu slide animation */
+@keyframes slide-in-left {
+  from {
+    transform: translateX(-100%);
+    opacity: 0;
+  }
+  to {
+    transform: translateX(0);
+    opacity: 1;
+  }
+}
+
+.animate-slide-in-left {
+  animation: slide-in-left 0.3s var(--ease-swift) forwards;
+}
+
+/* Mapbox GL styles - CRÍTICO para que el mapa se vea */
+.mapboxgl-map {
+  width: 100%;
+  height: 100%;
+}
+
+.mapboxgl-canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* Modal animations */
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes scale-in {
+  from {
+    transform: scale(0.95);
+    opacity: 0;
+  }
+  to {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes slide-up {
+  from {
+    transform: translateY(20px);
+    opacity: 0;
+  }
+  to {
+    transform: translateY(0);
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fade-in 0.2s var(--ease-smooth) forwards;
+}
+
+.animate-scale-in {
+  animation: scale-in 0.3s var(--ease-bounce) forwards;
+}
+
+.animate-slide-up {
+  animation: slide-up 0.3s var(--ease-swift) forwards;
+}

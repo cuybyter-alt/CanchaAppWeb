@@ -36,10 +36,15 @@ const MailIcon = () => (
   </svg>
 );
 
-const Login: React.FC = () => {
+interface LoginProps {
+  onLogin: () => void;
+}
+
+const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const handleSocialLogin = (provider: string) => {
     console.log(`Logging in with ${provider}`);
     // Implementar lógica de autenticación
+    onLogin();
   };
 
   return (

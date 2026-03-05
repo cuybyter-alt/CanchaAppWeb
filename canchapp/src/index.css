@@ -1,6 +1,8 @@
-@import "tailwindcss";
-/** No hacer caso a este warning, es un bug de Tailwind que no afecta el funcionamiento del proyecto */
-@theme {
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
   /* Spacing tokens */
   --spacing-1: 4px;
   --spacing-2: 8px;

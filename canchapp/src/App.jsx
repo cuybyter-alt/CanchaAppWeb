@@ -4,6 +4,7 @@ import './App.css'
 import Login from './pages/Login'
 import Home from './pages/Home'
 import AppLayout from './layouts/AppLayout'
+import Register from './pages/Register'
 
 function App() {
   const [isLoggedIn, setIsLoggedIn] = useState(false)
@@ -22,7 +23,12 @@ function App() {
             isLoggedIn ? <Navigate to="/" replace /> : <Login onLogin={handleLogin} />
           } 
         />
-
+        <Route
+          path="/register"
+          element={
+            isLoggedIn ? <Navigate to="/" replace /> : <Register onRegister={handleLogin} />
+          }
+        />
         {/* Protected routes with layout */}
         {isLoggedIn ? (
           <Route element={<AppLayout />}>

@@ -1,5 +1,6 @@
 import React from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
+import { tokenStorage } from '../services/AuthService';
 
 const GoogleIcon = () => (
   <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -22,32 +23,31 @@ const TikTokIcon = () => (
   </svg>
 );
 
-const EyeIcon = ({ open }: { open: boolean }) => (
-  <svg className="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-    {open ? (
-      <>
-        <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
-        <circle cx="12" cy="12" r="3"/>
-      </>
-    ) : (
-      <>
-        <path d="M17.94 17.94A10.07 10.07 0 0112 20c-7 0-11-8-11-8a18.45 18.45 0 015.06-5.94M9.9 4.24A9.12 9.12 0 0112 4c7 0 11 8 11 8a18.5 18.5 0 01-2.16 3.19m-6.72-1.07a3 3 0 11-4.24-4.24"/>
-        <line x1="1" y1="1" x2="23" y2="23"/>
-      </>
-    )}
-  </svg>
-);
 
-interface LoginProps {}
-
-const Login: React.FC<LoginProps> = () => {
+const Login: React.FC = () => {
   const navigate = useNavigate();
-  
+
   const handleSocialLogin = (provider: string) => {
     console.log(`Logging in with ${provider}`);
-    // Mock authentication - save token to localStorage
-    localStorage.setItem('authToken', `token_${provider}_${Date.now()}`);
-    // Navigate to home
+    // Usar authService para guardar el token
+    const mockToken = {
+      access: `access_token_${provider}_${Date.now()}`,
+      refresh: `refresh_token_${provider}_${Date.now()}`,
+    };
+    tokenStorage.save(mockToken);
+    // Mock user
+    const mockUser = {
+      user_id: `user_${Date.now()}`,
+      username: provider.toLowerCase(),
+      email: `user@${provider.toLowerCase()}.com`,
+      f_name: 'Usuario',
+      l_name: provider,
+      role_name: 'Player',
+      status: 'active',
+      avatar_url: null,
+      is_guest: false,
+    };
+    tokenStorage.saveUser(mockUser);
     navigate('/');
   };
 
@@ -67,9 +67,9 @@ const Login: React.FC<LoginProps> = () => {
       <div className="w-full max-w-md lg:max-w-lg">
         <div className="bg-white rounded-3xl shadow-2xl shadow-slate-300/50 p-6 sm:p-8 lg:p-10 backdrop-blur-sm">
           
-          {/* Logo placeholder */}
-          <div className="relative w-24 h-24 sm:w-28 sm:h-28 lg:w-32 lg:h-32 mx-auto mb-6 sm:mb-8">
-            <div className="absolute inset-0 bg-black rounded-2xl border-4 border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.5),0_0_40px_rgba(34,197,94,0.3)] flex items-center justify-center animate-float hover:scale-110 transition-transform duration-300 cursor-pointer">
+          {/* Logo */}
+          <div className="relative w-24 h-24 sm:w-28 sm:h-28 lg:w-32 lg:h-32 mx-auto mb-6 sm:mb-8 logo-tilt">
+            <div className="absolute inset-0 bg-black rounded-2xl border-4 border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.5),0_0_40px_rgba(34,197,94,0.3)] flex items-center justify-center">
               <img 
                 src="/cuypequeniologo.png" 
                 alt="Canchapp Logo" 
@@ -78,170 +78,83 @@ const Login: React.FC<LoginProps> = () => {
             </div>
           </div>
 
-  const Logo = () => (
-    <div className="flex flex-col items-center mb-6">
-      <div className="w-16 h-16 rounded-2xl bg-black border-2 border-green-500 flex items-center justify-center shadow-lg shadow-green-500/20 mb-4">
-        <img src="/cuypequeniologo.png" alt="Canchapp" className="w-12 h-12 object-contain" />
-      </div>
-      <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-        Bienvenido de Nuevo
-      </h1>
-      <p className="text-sm text-gray-500 mt-1 text-center">
-        Inicia sesión para reservar tus canchas favoritas
-      </p>
-    </div>
-  );
+          {/* Header */}
+          <h1 className="text-2xl sm:text-3xl lg:text-4xl font-bold text-gray-900 text-center mb-2 sm:mb-3 tracking-tight">
+            Bienvenido de Nuevo
+          </h1>
+          <p className="text-sm sm:text-base text-gray-600 text-center mb-6 sm:mb-8 lg:mb-10 leading-relaxed max-w-sm mx-auto">
+            Inicia sesión para reservar tus canchas favoritas
+          </p>
 
-  const Divider = () => (
-    <div className="relative my-4">
-      <div className="absolute inset-0 flex items-center">
-        <div className="w-full border-t border-gray-200" />
-      </div>
-      <div className="relative flex justify-center">
-        <span className="px-3 bg-white text-xs text-gray-400 font-medium">O</span>
-      </div>
-    </div>
-  );
-
-  // ── Vista 1: Selección de método ──────────────────────────────────────────
-  if (view === "social") {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f0f4f0] p-4">
-        <div className="w-full max-w-sm bg-white rounded-3xl shadow-sm px-8 py-10">
-          <Logo />
-
-          <div className="space-y-3">
-            {/* Google */}
-            <button
-              onClick={() => handleFirebaseLogin("Google")}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white border border-gray-200 rounded-full text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all duration-150 shadow-sm"
+          {/* Authentication buttons */}
+          <div className="space-y-3 sm:space-y-3.5 mb-6 sm:mb-8">
+            
+            {/* Google Button */}
+            <button 
+              onClick={() => handleSocialLogin('Google')}
+              className="w-full flex items-center justify-center gap-3 px-6 py-3.5 sm:py-4 bg-white border-2 border-gray-300 rounded-full font-semibold text-gray-700 text-sm sm:text-base hover:border-blue-400 hover:bg-blue-50/30 hover:shadow-md hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
             >
               <GoogleIcon />
-              Continuar con Google
+              <span>Continuar con Google</span>
             </button>
 
-            {/* Instagram */}
-            <button
-              onClick={() => handleFirebaseLogin("Instagram")}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-full text-sm font-semibold text-white transition-all duration-150 hover:opacity-90 hover:shadow-md"
-              style={{ background: "linear-gradient(90deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)" }}
+            {/* Instagram Button */}
+            <button 
+              onClick={() => handleSocialLogin('Instagram')}
+              className="w-full flex items-center justify-center gap-3 px-6 py-3.5 sm:py-4 bg-gradient-to-r from-orange-400 via-pink-500 to-purple-600 rounded-full font-semibold text-white text-sm sm:text-base hover:from-orange-500 hover:via-pink-600 hover:to-purple-700 hover:shadow-lg hover:shadow-pink-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
             >
               <InstagramIcon />
-              Continuar con Instagram
+              <span>Continuar con Instagram</span>
             </button>
 
-            {/* TikTok */}
-            <button
-              onClick={() => handleFirebaseLogin("TikTok")}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-black rounded-full text-sm font-semibold text-white hover:bg-gray-900 hover:shadow-md transition-all duration-150"
+            {/* TikTok Button */}
+            <button 
+              onClick={() => handleSocialLogin('TikTok')}
+              className="w-full flex items-center justify-center gap-3 px-6 py-3.5 sm:py-4 bg-black rounded-full font-semibold text-white text-sm sm:text-base hover:bg-gray-800 hover:shadow-lg hover:shadow-gray-900/50 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
             >
               <TikTokIcon />
-              Continuar con TikTok
+              <span>Continuar con TikTok</span>
             </button>
 
-            <Divider />
+            {/* Separator */}
+            <div className="relative flex items-center justify-center py-4 sm:py-5">
+              <div className="absolute inset-0 flex items-center">
+                <div className="w-full border-t border-gray-300"></div>
+              </div>
+              <div className="relative bg-white px-4">
+                <div className="w-8 h-8 rounded-full bg-white flex items-center justify-center text-xs font-bold text-gray-900">
+                  O
+                </div>
+              </div>
+            </div>
 
-            {/* Email */}
-            <button
-              onClick={() => setView("email")}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-green-500 rounded-full text-sm font-semibold text-white hover:bg-green-600 hover:shadow-md hover:shadow-green-500/30 transition-all duration-150"
+            {/* Email Button */}
+            <button 
+              onClick={() => handleSocialLogin('Email')}
+              className="w-full flex items-center justify-center gap-3 px-6 py-3.5 sm:py-4 bg-green-500 rounded-full font-semibold text-white text-sm sm:text-base hover:bg-green-600 hover:shadow-lg hover:shadow-green-500/40 hover:-translate-y-0.5 active:translate-y-0 transition-all duration-200"
             >
-              Continuar con Correo
+              <svg className="w-6 h-6" viewBox="0 0 24 24" fill="none">
+                <circle cx="12" cy="12" r="10" fill="white"/>
+                <g transform="translate(6, 7)">
+                  <rect x="0" y="1" width="12" height="9" rx="1.5" stroke="#22C55E" strokeWidth="1.2" fill="none"/>
+                  <path d="M0 2l6 4 6-4" stroke="#22C55E" strokeWidth="1.2" fill="none"/>
+                </g>
+              </svg>
+              <span>Continuar con Correo</span>
             </button>
           </div>
 
-          <p className="text-center text-sm text-gray-500 mt-6">
-            ¿No tienes una cuenta?{" "}
-            <Link to="/register" className="font-semibold text-green-600 hover:text-green-700">
+          {/* Footer */}
+          <div className="text-center text-sm sm:text-base text-gray-600 pt-2">
+            <span className="inline-block">¿No tienes una cuenta? </span>
+            <Link 
+              to="/register" 
+              className="inline-block font-semibold text-green-600 hover:text-green-700 hover:underline underline-offset-2 transition-colors"
+            >
               Regístrate
             </Link>
-          </p>
+          </div>
         </div>
-      </div>
-    );
-  }
-
-  // ── Vista 2: Login con correo ─────────────────────────────────────────────
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f0f4f0] p-4">
-      <div className="w-full max-w-sm bg-white rounded-3xl shadow-sm px-8 py-10">
-        <Logo />
-
-        <div className="space-y-4">
-          {/* Correo / Identificador */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Correo Electrónico
-            </label>
-            <input
-              type="text"
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
-              placeholder="tu@correo.com"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition-all"
-            />
-          </div>
-
-          {/* Contraseña */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Contraseña
-            </label>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleEmailLogin()}
-                placeholder="••••••••"
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition-all pr-11"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                <EyeIcon open={showPassword} />
-              </button>
-            </div>
-          </div>
-
-          {/* Links: Volver / Olvidaste */}
-          <div className="flex items-center justify-between text-sm pt-1">
-            <button
-              onClick={() => { setView("social"); setError(null); }}
-              className="text-green-600 font-medium hover:text-green-700 transition-colors"
-            >
-              ← Volver
-            </button>
-            <button className="text-gray-500 hover:text-gray-700 transition-colors">
-              ¿Olvidaste tu contraseña?
-            </button>
-          </div>
-
-          {/* Error */}
-          {error && (
-            <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">
-              {error}
-            </div>
-          )}
-
-          {/* Submit */}
-          <button
-            onClick={handleEmailLogin}
-            disabled={loading}
-            className="w-full py-3 bg-green-500 rounded-full text-sm font-semibold text-white hover:bg-green-600 hover:shadow-md hover:shadow-green-500/30 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-150 mt-1"
-          >
-            {loading ? "Ingresando..." : "Ingresar"}
-          </button>
-        </div>
-
-        <p className="text-center text-sm text-gray-500 mt-6">
-          ¿No tienes una cuenta?{" "}
-          <Link to="/register" className="font-semibold text-green-600 hover:text-green-700">
-            Regístrate
-          </Link>
-        </p>
       </div>
     </div>
   );

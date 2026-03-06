@@ -38,3 +38,24 @@
 .read-the-docs {
   color: #888;
 }
+
+/* Logo tilt animation */
+@keyframes gentle-tilt {
+  0%, 100% {
+    transform: perspective(1000px) rotateX(0deg) rotateY(0deg);
+  }
+  25% {
+    transform: perspective(1000px) rotateX(-2deg) rotateY(-3deg);
+  }
+  50% {
+    transform: perspective(1000px) rotateX(2deg) rotateY(3deg);
+  }
+  75% {
+    transform: perspective(1000px) rotateX(-1deg) rotateY(-2deg);
+  }
+}
+
+.logo-tilt {
+  animation: gentle-tilt 6s ease-in-out infinite;
+  transform-style: preserve-3d;
+}

@@ -1,4 +1,5 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 // Icon Components - Approach profesional con SVGs simples
 const GoogleIcon = () => (
@@ -36,19 +37,32 @@ const MailIcon = () => (
   </svg>
 );
 
-interface LoginProps {
-  onLogin: () => void;
-}
+interface LoginProps {}
 
-const Login: React.FC<LoginProps> = ({ onLogin }) => {
+const Login: React.FC<LoginProps> = () => {
+  const navigate = useNavigate();
+  
   const handleSocialLogin = (provider: string) => {
     console.log(`Logging in with ${provider}`);
-    // Implementar lógica de autenticación
-    onLogin();
+    // Mock authentication - save token to localStorage
+    localStorage.setItem('authToken', `token_${provider}_${Date.now()}`);
+    // Navigate to home
+    navigate('/');
   };
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-200 p-4 sm:p-6 lg:p-8">
+      {/* Back Button */}
+      <button
+        onClick={() => navigate(-1)}
+        className="absolute top-6 left-6 sm:top-8 sm:left-8 p-2 rounded-lg bg-white/80 hover:bg-white text-gray-700 hover:text-gray-900 transition-all duration-200 shadow-md hover:shadow-lg"
+        title="Volver"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+
       <div className="w-full max-w-md lg:max-w-lg">
         <div className="bg-white rounded-3xl shadow-2xl shadow-slate-300/50 p-6 sm:p-8 lg:p-10 backdrop-blur-sm">
           

@@ -11,6 +11,7 @@ function App() {
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<Login />} />
+        <Route path="/register" element={<Register />} />
 
         {/* Home and layout routes - accessible to all */}
         <Route element={<AppLayout />}>

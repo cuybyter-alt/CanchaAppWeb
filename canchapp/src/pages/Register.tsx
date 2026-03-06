@@ -160,7 +160,7 @@ const Register: React.FC = () => {
 
   const Logo = () => (
     <div className="flex flex-col items-center mb-6">
-      <div className="w-16 h-16 rounded-2xl bg-black border-2 border-green-500 flex items-center justify-center shadow-lg shadow-green-500/20 mb-4">
+      <div className="w-16 h-16 rounded-2xl bg-black border-2 border-green-500 flex items-center justify-center shadow-lg shadow-green-500/20 mb-4 logo-tilt">
         <img src="/cuypequeniologo.png" alt="Canchapp" className="w-12 h-12 object-contain" />
       </div>
       <h1 className="text-2xl font-bold text-gray-900 tracking-tight">Crear Cuenta</h1>
@@ -185,6 +185,17 @@ const Register: React.FC = () => {
   if (view === "social") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f0f4f0] p-4">
+        {/* Back Button */}
+        <button
+          onClick={() => navigate(-1)}
+          className="absolute top-6 left-6 sm:top-8 sm:left-8 p-2 rounded-lg bg-white/80 hover:bg-white text-gray-700 hover:text-gray-900 transition-all duration-200 shadow-md hover:shadow-lg"
+          title="Volver"
+        >
+          <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+          </svg>
+        </button>
+
         <div className="w-full max-w-sm bg-white rounded-3xl shadow-sm px-8 py-10">
           <Logo />
 
@@ -244,6 +255,17 @@ const Register: React.FC = () => {
   // ── Vista 2: Formulario de registro ──────────────────────────────────────
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#f0f4f0] p-4">
+      {/* Back Button */}
+      <button
+        onClick={() => navigate(-1)}
+        className="absolute top-6 left-6 sm:top-8 sm:left-8 p-2 rounded-lg bg-white/80 hover:bg-white text-gray-700 hover:text-gray-900 transition-all duration-200 shadow-md hover:shadow-lg"
+        title="Volver"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-sm px-8 py-10">
         <Logo />
 

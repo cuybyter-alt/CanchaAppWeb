@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Bell, MapPin, Search, LogOut, User, Shield, Menu, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import authService, { tokenStorage } from '../../services/AuthService';
 
 interface TopbarProps {
   onSearch?: (query: string) => void;
@@ -12,15 +13,19 @@ export function Topbar({ onSearch }: TopbarProps) {
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   
-  // Mock authentication - check for token in localStorage
-  const isAuthenticated = !!localStorage.getItem('authToken');
-  const user = { name: 'Usuario', email: 'usuario@canchapp.com' };
-  const isAdmin = false;
+  // Use authService to check authentication
+  const isAuthenticated = authService.isAuthenticated();
+  const user = tokenStorage.getUser();
+  const isAdmin = user?.role_name === 'Admin';
 
   const handleLogout = () => {
-    // Remove token from localStorage
-    localStorage.removeItem('authToken');
-    // toast.success('Sesión cerrada exitosamente');
+    // Use authService logout
+    try {
+      authService.logout();
+    } catch (e) {
+      console.error('Logout error:', e);
+      tokenStorage.clear();
+    }
     console.log('Logout clicked');
     setShowMobileMenu(false);
     setShowUserMenu(false);
@@ -119,7 +124,7 @@ export function Topbar({ onSearch }: TopbarProps) {
                   <div className="absolute right-0 top-[calc(100%+8px)] z-[120] w-56 bg-white rounded-[var(--radius-lg)] shadow-[var(--shadow-xl)] overflow-hidden border border-[var(--color-border)]">
                     <div className="p-4 bg-[var(--color-bg)] border-b border-[var(--color-border)]">
                       <p className="font-[var(--font-body)] font-bold text-sm text-[var(--color-text)] truncate">
-                        {user?.name}
+                        {user ? `${user.f_name} ${user.l_name}` : 'Usuario'}
                       </p>
                       <p className="font-[var(--font-body)] text-xs text-[var(--color-text-3)] truncate">
                         {user?.email}
@@ -254,7 +259,7 @@ export function Topbar({ onSearch }: TopbarProps) {
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-[var(--font-body)] font-bold text-sm text-[var(--color-text)] truncate">
-                      {user?.name}
+                      {user ? `${user.f_name} ${user.l_name}` : 'Usuario'}
                     </p>
                     <p className="font-[var(--font-body)] text-xs text-[var(--color-text-3)] truncate">
                       {user?.email}

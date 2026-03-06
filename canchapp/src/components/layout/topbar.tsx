@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Bell, MapPin, Search, LogOut, User, Shield, Menu, X } from 'lucide-react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate } from 'react-router-dom';
 
 interface TopbarProps {
   onSearch?: (query: string) => void;
@@ -8,20 +8,22 @@ interface TopbarProps {
 
 export function Topbar({ onSearch }: TopbarProps) {
   const navigate = useNavigate();
-  const location = useLocation();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   
-  // Mock user data - replace with real store later
-  const isAuthenticated = true;
+  // Mock authentication - check for token in localStorage
+  const isAuthenticated = !!localStorage.getItem('authToken');
   const user = { name: 'Usuario', email: 'usuario@canchapp.com' };
   const isAdmin = false;
 
   const handleLogout = () => {
+    // Remove token from localStorage
+    localStorage.removeItem('authToken');
     // toast.success('Sesión cerrada exitosamente');
     console.log('Logout clicked');
     setShowMobileMenu(false);
+    setShowUserMenu(false);
     navigate('/login');
   };
 

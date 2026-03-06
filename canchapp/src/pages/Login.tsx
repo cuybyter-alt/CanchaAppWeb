@@ -1,9 +1,5 @@
-import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
-import authService from "../services/AuthService";
-import type { ApiError } from "../services/ApiClient";
-
-// ─── Icons ────────────────────────────────────────────────────────────────────
+import React from 'react';
+import { useNavigate } from 'react-router-dom';
 
 const GoogleIcon = () => (
   <svg className="w-5 h-5" viewBox="0 0 24 24">
@@ -42,49 +38,45 @@ const EyeIcon = ({ open }: { open: boolean }) => (
   </svg>
 );
 
-// ─── Types ────────────────────────────────────────────────────────────────────
+interface LoginProps {}
 
-type LoginView = "social" | "email";
-
-interface LoginProps {
-  onLogin?: () => void;
-}
-
-// ─── Component ────────────────────────────────────────────────────────────────
-
-const Login: React.FC<LoginProps> = ({ onLogin }) => {
+const Login: React.FC<LoginProps> = () => {
   const navigate = useNavigate();
-  const [view, setView] = useState<LoginView>("social");
-  const [identifier, setIdentifier] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const handleEmailLogin = async () => {
-    if (!identifier.trim() || !password.trim()) {
-      setError("Por favor completa todos los campos.");
-      return;
-    }
-    setLoading(true);
-    setError(null);
-    try {
-      await authService.login({ identifier, password });
-      onLogin?.();
-      navigate("/");
-    } catch (e) {
-      const err = e as ApiError;
-      setError(err.message ?? "Error al iniciar sesión.");
-    } finally {
-      setLoading(false);
-    }
+  
+  const handleSocialLogin = (provider: string) => {
+    console.log(`Logging in with ${provider}`);
+    // Mock authentication - save token to localStorage
+    localStorage.setItem('authToken', `token_${provider}_${Date.now()}`);
+    // Navigate to home
+    navigate('/');
   };
 
-  const handleFirebaseLogin = async (provider: string) => {
-    // Firebase OAuth — token debe venir del SDK de Firebase del cliente
-    // Aquí solo mostramos el flujo; integrar con firebase/auth cuando esté configurado
-    console.log(`OAuth con ${provider} — integrar Firebase SDK`);
-  };
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-blue-50 to-slate-200 p-4 sm:p-6 lg:p-8">
+      {/* Back Button */}
+      <button
+        onClick={() => navigate(-1)}
+        className="absolute top-6 left-6 sm:top-8 sm:left-8 p-2 rounded-lg bg-white/80 hover:bg-white text-gray-700 hover:text-gray-900 transition-all duration-200 shadow-md hover:shadow-lg"
+        title="Volver"
+      >
+        <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 19l-7-7 7-7" />
+        </svg>
+      </button>
+
+      <div className="w-full max-w-md lg:max-w-lg">
+        <div className="bg-white rounded-3xl shadow-2xl shadow-slate-300/50 p-6 sm:p-8 lg:p-10 backdrop-blur-sm">
+          
+          {/* Logo placeholder */}
+          <div className="relative w-24 h-24 sm:w-28 sm:h-28 lg:w-32 lg:h-32 mx-auto mb-6 sm:mb-8">
+            <div className="absolute inset-0 bg-black rounded-2xl border-4 border-green-500 shadow-[0_0_20px_rgba(34,197,94,0.5),0_0_40px_rgba(34,197,94,0.3)] flex items-center justify-center animate-float hover:scale-110 transition-transform duration-300 cursor-pointer">
+              <img 
+                src="/cuypequeniologo.png" 
+                alt="Canchapp Logo" 
+                className="w-20 h-20 sm:w-24 sm:h-24 lg:w-28 lg:h-28 object-contain p-2"
+              />
+            </div>
+          </div>
 
   const Logo = () => (
     <div className="flex flex-col items-center mb-6">

@@ -8,10 +8,19 @@ interface RequestOptions {
   withAuth?: boolean;
 }
 
+// Backend error envelope: { success: false, error: { code, message, details } }
+export interface ErrorDetail {
+  code: string;
+  message: string;
+  details?: Record<string, string>;
+}
+
 export interface ApiError {
   status: number;
   message: string;
-  detail?: unknown;
+  code?: string;
+  details?: Record<string, string>;
+  raw?: unknown;
 }
 
 async function request<T>(
@@ -40,17 +49,17 @@ async function request<T>(
   });
 
   if (!response.ok) {
-    let errorDetail: unknown;
+    let errorBody: unknown;
     try {
-      errorDetail = await response.json();
+      errorBody = await response.json();
     } catch {
-      errorDetail = await response.text();
+      errorBody = await response.text();
     }
 
     const error: ApiError = {
       status: response.status,
-      message: getErrorMessage(response.status, errorDetail),
-      detail: errorDetail,
+      ...parseErrorBody(response.status, errorBody),
+      raw: errorBody,
     };
     throw error;
   }
@@ -62,14 +71,40 @@ async function request<T>(
   return response.json() as Promise<T>;
 }
 
-function getErrorMessage(status: number, detail?: unknown): string {
-  // Try to extract message from Django REST Framework response
-  if (detail && typeof detail === "object") {
-    const d = detail as Record<string, unknown>;
-    if (typeof d.message === "string") return d.message;
-    if (typeof d.detail === "string") return d.detail;
+/**
+ * Parses the backend error envelope:
+ *   { success: false, error: { code, message, details } }
+ * Falls back to legacy DRF { detail } and then to generic status messages.
+ */
+function parseErrorBody(
+  status: number,
+  body: unknown,
+): Pick<ApiError, "message" | "code" | "details"> {
+  if (body && typeof body === "object") {
+    const b = body as Record<string, unknown>;
+
+    // Standard envelope: { error: { code, message, details } }
+    if (b.error && typeof b.error === "object") {
+      const e = b.error as Record<string, unknown>;
+      return {
+        message: typeof e.message === "string" ? e.message : fallbackMessage(status),
+        code: typeof e.code === "string" ? e.code : undefined,
+        details:
+          e.details && typeof e.details === "object"
+            ? (e.details as Record<string, string>)
+            : undefined,
+      };
+    }
+
+    // Legacy DRF: { message } or { detail }
+    if (typeof b.message === "string") return { message: b.message };
+    if (typeof b.detail === "string")  return { message: b.detail };
   }
 
+  return { message: fallbackMessage(status) };
+}
+
+function fallbackMessage(status: number): string {
   const messages: Record<number, string> = {
     400: "Datos inválidos. Revisa los campos.",
     401: "No autorizado. Verifica tus credenciales.",

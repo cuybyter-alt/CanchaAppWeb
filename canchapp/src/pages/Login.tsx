@@ -133,6 +133,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               Regístrate
             </Link>
           </p>
+          <p className="text-center mt-3">
+            <Link to="/" className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+              Explorar canchas sin iniciar sesión →
+            </Link>
+          </p>
         </div>
       </div>
     );
@@ -217,6 +222,11 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
           ¿No tienes una cuenta?{" "}
           <Link to="/register" className="font-semibold text-green-600 hover:text-green-700">
             Regístrate
+          </Link>
+        </p>
+        <p className="text-center mt-3">
+          <Link to="/" className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+            Explorar canchas sin iniciar sesión →
           </Link>
         </p>
       </div>

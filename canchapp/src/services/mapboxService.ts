@@ -255,8 +255,8 @@ export async function getUserLocation(): Promise<UserLocation | null> {
       },
       {
         enableHighAccuracy: true,
-        timeout: 5000,
-        maximumAge: 0,
+        timeout: 15000,  // 15s — GPS on mobile needs more time
+        maximumAge: 60000, // accept a cached position up to 1 min old
       }
     );
   });

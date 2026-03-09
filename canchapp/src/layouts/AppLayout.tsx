@@ -4,6 +4,7 @@ import { Topbar } from '../components/layout/topbar';
 import { Sidebar } from '../components/layout/sidebar';
 import { MapDialog } from '../components/sections/MapDialog';
 import { MapContext } from '../context/MapContext';
+import { LocationBanner } from '../components/layout/LocationBanner';
 
 export default function AppLayout() {
   const [isMapOpen, setIsMapOpen] = useState(false);
@@ -21,7 +22,10 @@ export default function AppLayout() {
       <div className="min-h-screen relative z-[1]">
         {/* Topbar - fixed at top */}
         <Topbar />
-        
+
+        {/* Location permission reminder */}
+        <LocationBanner />
+
         {/* Content below topbar */}
         <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr]">
           {/* Sidebar - hidden on mobile */}

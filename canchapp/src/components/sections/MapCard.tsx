@@ -97,6 +97,7 @@ export function MapCard({
   const map = useRef<MapboxMap | null>(null);
   const markersRef = useRef<any[]>([]);
   const isInitialized = useRef(false);
+  const autoGeolocateRef = useRef(false);
 
   const [locationState, setLocationState] = useState<LocationState>('checking');
   const [nearbyFields, setNearbyFields] = useState<SportsField[]>([]);
@@ -149,18 +150,30 @@ export function MapCard({
           // a CSS animation (e.g. dialog open transition)
           mapInstance.resize();
 
-          setLocationState('map-ready');
+          // Add markers first so they're visible during the fly animation
           const markers = addMarkers(mapInstance, fieldsToDisplay);
           markersRef.current = markers;
 
-          if (fieldsToDisplay.length > 1 && !userLoc) {
+          if (userLoc) {
+            // Pre-granted permission: fly to known coords, then show live dot
+            mapInstance.flyTo({
+              center: [userLoc.longitude, userLoc.latitude],
+              zoom: 14,
+              speed: 1.4,
+              essential: true,
+            });
+            setTimeout(() => geoCtrl.trigger(), 1000);
+          } else if (autoGeolocateRef.current) {
+            // User just granted via our banner — let GeolocateControl request
+            // position and fly there automatically (permission already granted,
+            // so no browser dialog will appear again).
+            setTimeout(() => geoCtrl.trigger(), 300);
+          } else if (fieldsToDisplay.length > 1) {
             fitMapToMarkers(mapInstance, fieldsToDisplay);
+            if (!showMiniMap) setTimeout(() => geoCtrl.trigger(), 600);
           }
 
-          // Trigger geolocate: always on full map, or when we have the location on mini
-          if (userLoc || !showMiniMap) {
-            setTimeout(() => geoCtrl.trigger(), 600);
-          }
+          setLocationState('map-ready');
         });
 
       mapInstance.on('error', (e) => {
@@ -188,9 +201,14 @@ export function MapCard({
         try {
           const result = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
           if (result.state === 'granted') {
-            // Already permitted → get location silently and start map
-            const loc = await getUserLocation();
-            startMap(loc);
+            if (showMiniMap) {
+              // Mini map: always show banner so the user can confirm location use
+              setLocationState('prompt');
+            } else {
+              // Full map dialog: silently start with existing permission
+              const loc = await getUserLocation();
+              startMap(loc);
+            }
           } else if (result.state === 'denied') {
             // Blocked → start map without location (no point prompting)
             startMap(null);
@@ -211,10 +229,13 @@ export function MapCard({
   }, [startMap]);
 
   // ── Banner actions ────────────────────────────────────────────────────
-  const handleAllowLocation = async () => {
-    setLocationState('loading-loc');
-    const loc = await getUserLocation(); // triggers native browser prompt
-    startMap(loc ?? null);
+  const handleAllowLocation = () => {
+    // Start the map immediately — don't block on GPS.
+    // The GeolocateControl triggered inside startMap's load handler will
+    // request position (browser already has permission after the browser
+    // dialog) and fly the map there automatically.
+    autoGeolocateRef.current = true;
+    startMap(null);
   };
 
   const handleSkipLocation = () => {
@@ -257,10 +278,10 @@ export function MapCard({
         </div>
       )}
 
-      {/* Overlay: solicitar permiso de ubicación */}
-      {(locationState === 'prompt' || locationState === 'loading-loc') && (
+      {/* Overlay: solicitando permiso de ubicación */}
+      {locationState === 'prompt' && (
         <LocationPermissionBanner
-          loading={locationState === 'loading-loc'}
+          loading={false}
           onAllow={handleAllowLocation}
           onSkip={handleSkipLocation}
           showMiniMap={showMiniMap}

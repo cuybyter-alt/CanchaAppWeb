@@ -60,19 +60,23 @@ export function createMap(
   // Agregar controles de navegación
   map.addControl(new mapboxgl.NavigationControl(), 'top-right');
 
-  // Agregar control de geolocalización
-  map.addControl(
-    new mapboxgl.GeolocateControl({
-      positionOptions: {
-        enableHighAccuracy: true,
-      },
-      trackUserLocation: true,
-      showUserHeading: true,
-    }),
-    'top-right'
-  );
-
   return map;
+}
+
+/**
+ * Agrega el control de geolocalización al mapa y lo retorna para poder
+ * dispararlo programáticamente con .trigger()
+ */
+export function setupGeolocateControl(map: mapboxgl.Map): mapboxgl.GeolocateControl {
+  const control = new mapboxgl.GeolocateControl({
+    positionOptions: {
+      enableHighAccuracy: true,
+    },
+    trackUserLocation: true,
+    showUserHeading: true,
+  });
+  map.addControl(control, 'top-right');
+  return control;
 }
 
 /**
@@ -86,11 +90,10 @@ function createMarkerElement(field: SportsField): HTMLElement {
   
   // Mapeo de iconos Font Awesome según el deporte
   const iconMap: Record<string, string> = {
-    futbol: 'fa-futbol',
-    basketball: 'fa-basketball',
-    tennis: 'fa-table-tennis-paddle-ball',
-    volleyball: 'fa-volleyball',
-    paddle: 'fa-baseball',
+    futbol5:    'fa-futbol',
+    futbol7:    'fa-futbol',
+    futbol11:   'fa-futbol',
+    microfutbol: 'fa-circle-dot',
   };
 
   const icon = iconMap[field.sport] || 'fa-location-dot';

@@ -1,9 +1,13 @@
-import React from 'react';
+import { useState } from 'react';
 import { Outlet } from 'react-router-dom';
 import { Topbar } from '../components/layout/topbar';
 import { Sidebar } from '../components/layout/sidebar';
+import { MapDialog } from '../components/sections/MapDialog';
+import { MapContext } from '../context/MapContext';
 
 export default function AppLayout() {
+  const [isMapOpen, setIsMapOpen] = useState(false);
+
   // Mock upcoming booking - puedes conectarlo a tu store más tarde
   const upcomingBooking = {
     name: 'Cancha\nEl Estadio',
@@ -13,22 +17,27 @@ export default function AppLayout() {
   };
 
   return (
-    <div className="min-h-screen relative z-[1]">
-      {/* Topbar - fixed at top */}
-      <Topbar />
-      
-      {/* Content below topbar */}
-      <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr]">
-        {/* Sidebar - hidden on mobile */}
-        <div className="hidden lg:block">
-          <Sidebar upcomingBooking={upcomingBooking} />
+    <MapContext.Provider value={{ openMap: () => setIsMapOpen(true) }}>
+      <div className="min-h-screen relative z-[1]">
+        {/* Topbar - fixed at top */}
+        <Topbar />
+        
+        {/* Content below topbar */}
+        <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr]">
+          {/* Sidebar - hidden on mobile */}
+          <div className="hidden lg:block">
+            <Sidebar upcomingBooking={upcomingBooking} />
+          </div>
+
+          {/* Main content area */}
+          <main className="min-h-[calc(100vh-64px)]">
+            <Outlet />
+          </main>
         </div>
 
-        {/* Main content area */}
-        <main className="min-h-[calc(100vh-64px)]">
-          <Outlet />
-        </main>
+        {/* Global map dialog */}
+        <MapDialog isOpen={isMapOpen} onClose={() => setIsMapOpen(false)} />
       </div>
-    </div>
+    </MapContext.Provider>
   );
 }

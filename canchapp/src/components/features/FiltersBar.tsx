@@ -1,15 +1,14 @@
 import React, { useState } from 'react';
 
 const filters = [
-  { id: 'all',       icon: 'fa-border-all',                    label: 'Todas' },
-  { id: 'futbol',    icon: 'fa-futbol',                        label: 'Fútbol' },
-  { id: 'basket',    icon: 'fa-basketball',                    label: 'Baloncesto' },
-  { id: 'padel',     icon: 'fa-table-tennis-paddle-ball',      label: 'Pádel' },
-  { id: 'voleibol',  icon: 'fa-volleyball',                    label: 'Voleibol' },
-  { id: 'techada',   icon: 'fa-umbrella',                      label: 'Techada' },
-  { id: 'airelibre', icon: 'fa-sun',                           label: 'Al aire libre' },
-  { id: 'disponible',icon: 'fa-bolt',                          label: 'Disponible ya' },
-  { id: 'fecha',     icon: 'fa-calendar',                      label: 'Sáb, 29 Feb' },
+  { id: 'all',        icon: 'fa-border-all',   label: 'Todas' },
+  { id: 'futbol5',    icon: 'fa-futbol',        label: 'Fútbol 5' },
+  { id: 'futbol7',    icon: 'fa-futbol',        label: 'Fútbol 7' },
+  { id: 'microfutbol',icon: 'fa-circle-dot',    label: 'Microfútbol' },
+  { id: 'futbol11',   icon: 'fa-futbol',        label: 'Fútbol 11' },
+  { id: 'techada',    icon: 'fa-umbrella',      label: 'Techada' },
+  { id: 'airelibre',  icon: 'fa-sun',           label: 'Al aire libre' },
+  { id: 'disponible', icon: 'fa-bolt',          label: 'Disponible ya' },
 ];
 
 export const FiltersBar: React.FC = () => {

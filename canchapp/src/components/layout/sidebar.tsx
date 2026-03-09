@@ -3,6 +3,7 @@ import { NavLink } from 'react-router-dom';
 import { Typography } from '../ui/typography';
 import { Badge } from '../ui/badge';
 import { useEffect, useState } from 'react';
+import { useMapContext } from '../../context/MapContext';
 
 interface SidebarProps {
   upcomingBooking?: {
@@ -15,6 +16,7 @@ interface SidebarProps {
 
 export function Sidebar({ upcomingBooking }: SidebarProps) {
   const [countdown, setCountdown] = useState('02:14:33 remaining');
+  const { openMap } = useMapContext();
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -111,7 +113,10 @@ export function Sidebar({ upcomingBooking }: SidebarProps) {
         Favoritos
       </NavLink>
 
-      <button className="flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold text-[var(--color-text-2)] transition-all duration-[var(--duration-fast)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]">
+      <button
+        className="flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold text-[var(--color-text-2)] transition-all duration-[var(--duration-fast)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]"
+        onClick={openMap}
+      >
         <MapPin className="w-[18px] h-[18px] flex-shrink-0" />
         Mapa Cercano
       </button>

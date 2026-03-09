@@ -1,7 +1,7 @@
 /**
  * Tipo de deporte disponible
  */
-export type SportType = 'futbol' | 'basketball' | 'tennis' | 'volleyball' | 'paddle';
+export type SportType = 'futbol5' | 'futbol7' | 'microfutbol' | 'futbol11';
 
 /**
  * Interfaz para representar una cancha deportiva

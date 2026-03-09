@@ -34,10 +34,12 @@ export interface RegisterPayload {
   username: string;
 }
 
-// Wrapper que usa el backend: { data: ..., message: ... }
+// Wrapper que usa el backend: { data, success, message, meta }
 interface ApiResponse<T> {
   data: T;
+  success?: boolean;
   message: string;
+  meta?: Record<string, string | number | boolean>;
 }
 
 // ─── Token helpers ────────────────────────────────────────────────────────────

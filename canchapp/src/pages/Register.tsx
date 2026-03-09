@@ -206,6 +206,11 @@ const Register: React.FC = () => {
               Inicia sesión
             </Link>
           </p>
+          <p className="text-center mt-3">
+            <Link to="/" className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+              Explorar canchas sin registrarse →
+            </Link>
+          </p>
         </div>
       </div>
     );
@@ -354,6 +359,11 @@ const Register: React.FC = () => {
           ¿Ya tienes una cuenta?{" "}
           <Link to="/login" className="font-semibold text-green-600 hover:text-green-700">
             Inicia sesión
+          </Link>
+        </p>
+        <p className="text-center mt-3">
+          <Link to="/" className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
+            Explorar canchas sin registrarse →
           </Link>
         </p>
       </div>

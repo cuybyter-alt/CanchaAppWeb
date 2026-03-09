@@ -1,4 +1,5 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom'
+import { Toaster } from 'sonner'
 import './App.css'
 import Login from './pages/Login'
 import Home from './pages/Home'
@@ -8,6 +9,17 @@ import Register from './pages/Register'
 function App() {
   return (
     <BrowserRouter>
+      <Toaster
+        position="top-center"
+        richColors
+        toastOptions={{
+          className: 'font-sans',
+          style: {
+            fontFamily: 'Nunito, sans-serif',
+            borderRadius: '16px',
+          },
+        }}
+      />
       <Routes>
         {/* Public routes */}
         <Route path="/login" element={<Login />} />

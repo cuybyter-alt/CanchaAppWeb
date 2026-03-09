@@ -3,17 +3,17 @@ import { MapPin, ArrowRight } from 'lucide-react';
 import { Typography } from '../components/ui/typography';
 import { PromoBanner } from '../components/sections/PromoBanner';
 import { MapCard } from '../components/sections/MapCard';
-import { MapDialog } from '../components/sections/MapDialog';
 import { FiltersBar } from '../components/features/FiltersBar';
 import { BookingPanel } from '../components/features/BookingPanel';
 import { FieldCard } from '../components/features/FieldCard';
 import { BookingCard } from '../components/features/BookingCard';
 import { mockFields, mockBookings } from '../mock/fields';
 import type { Field } from '../types/field';
+import { useMapContext } from '../context/MapContext';
 
 const Home: React.FC = () => {
-  const [isMapDialogOpen, setIsMapDialogOpen] = useState(false);
   const [selectedField, setSelectedField] = useState<Field>(mockFields[0]);
+  const { openMap } = useMapContext();
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
@@ -35,14 +35,14 @@ const Home: React.FC = () => {
               </Typography>
               <button
                 className="flex items-center gap-1 text-[13px] font-extrabold text-[var(--color-primary-dark)] cursor-pointer hover:underline"
-                onClick={() => setIsMapDialogOpen(true)}
+                onClick={openMap}
               >
                 Ver mapa completo <ArrowRight className="w-3 h-3" />
               </button>
             </div>
             <FiltersBar />
             <div className="mt-4">
-              <MapCard onOpenMap={() => setIsMapDialogOpen(true)} />
+              <MapCard onOpenMap={openMap} />
             </div>
           </div>
 
@@ -95,12 +95,6 @@ const Home: React.FC = () => {
         </div>
 
       </div>
-
-      {/* Map Dialog */}
-      <MapDialog
-        isOpen={isMapDialogOpen}
-        onClose={() => setIsMapDialogOpen(false)}
-      />
     </div>
   );
 };

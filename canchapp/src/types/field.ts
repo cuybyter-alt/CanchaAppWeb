@@ -1,4 +1,4 @@
-export type Sport = 'soccer' | 'basketball' | 'padel' | 'volleyball' | 'tennis';
+export type Sport = 'futbol5' | 'futbol7' | 'microfutbol' | 'futbol11';
 
 export type FieldType = 'indoor' | 'outdoor' | 'turf' | 'premium';
 

@@ -1,4 +1,6 @@
 import ApiClient from './ApiClient';
+import authService from './AuthService';
+import type { ApiError } from './ApiClient';
 
 interface ApiResponse<T> {
   data: T;
@@ -17,13 +19,28 @@ export interface BookingOutput {
 
 const bookingService = {
   createBooking: async (timeSlotId: string): Promise<BookingOutput> => {
-    const res = await ApiClient.post<ApiResponse<BookingOutput>>('/bookings/', {
-      time_slot_id: timeSlotId,
-    }, {
-      withAuth: true,
-    });
+    try {
+      const res = await ApiClient.post<ApiResponse<BookingOutput>>('/bookings/', {
+        time_slot_id: timeSlotId,
+      }, {
+        withAuth: true,
+      });
 
-    return res.data;
+      return res.data;
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 401) {
+        await authService.refreshToken();
+        const retry = await ApiClient.post<ApiResponse<BookingOutput>>('/bookings/', {
+          time_slot_id: timeSlotId,
+        }, {
+          withAuth: true,
+        });
+        return retry.data;
+      }
+
+      throw error;
+    }
   },
 };
 

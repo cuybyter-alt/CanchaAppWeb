@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { ArrowLeft, Heart } from 'lucide-react';
+import { ArrowLeft, Star } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { FieldCard } from '../components/features/FieldCard';
 import { Typography } from '../components/ui/typography';
@@ -9,7 +9,7 @@ import demoReservationService from '../services/DemoReservationService';
 import demoFavoritesService from '../services/DemoFavoritesService';
 import complexesService from '../services/ComplexesService';
 
-const Favorites: React.FC = () => {
+const Fields: React.FC = () => {
   const navigate = useNavigate();
 
   const initialCachedFields = complexesService.getCachedFieldsSync();
@@ -57,7 +57,7 @@ const Favorites: React.FC = () => {
           return preparedFields[0]?.id ?? '';
         });
       } catch (error) {
-        console.error('No se pudieron cargar las canchas favoritas desde API. Usando mock.', error);
+        console.error('No se pudieron cargar todas las canchas. Usando mock.', error);
         if (!receivedAnyBatch) {
           const fallbackFields = demoFavoritesService.applyFavorites(
             mockFields.map((field) => demoReservationService.applyLockedSlots(field)),
@@ -76,8 +76,6 @@ const Favorites: React.FC = () => {
       mounted = false;
     };
   }, []);
-
-  const favoriteFields = fields.filter((f) => f.isFavorite);
 
   const handleToggleFavorite = (fieldId: string) => {
     const favoriteIds = new Set(demoFavoritesService.toggleFavorite(fieldId));
@@ -101,40 +99,30 @@ const Favorites: React.FC = () => {
         </button>
 
         <Typography variant="h3" color="text" className="text-right">
-          <Heart className="inline w-5 h-5 text-red-500 mr-2" />
-          Mis Favoritos
+          <Star className="inline w-5 h-5 text-[var(--color-primary)] mr-2" />
+          Todas las Canchas
         </Typography>
       </div>
 
-      {favoriteFields.length === 0 ? (
-        <div className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-8 text-center">
-          {isLoading && (
-            <Typography variant="small" color="text-3" className="mb-3">
-              Cargando canchas desde complejos...
-            </Typography>
-          )}
-          <Typography variant="h4" color="text" className="mb-2">
-            Aún no tienes complejos favoritos
-          </Typography>
-          <Typography variant="small" color="text-3">
-            Marca con el corazón los complejos que quieras guardar.
-          </Typography>
-        </div>
-      ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-          {favoriteFields.map((field) => (
-            <FieldCard
-              key={field.id}
-              field={field}
-              isSelected={selectedFieldId === field.id}
-              onSelect={(next) => setSelectedFieldId(next.id)}
-              onToggleFavorite={handleToggleFavorite}
-            />
-          ))}
-        </div>
+      {isLoading && (
+        <p className="text-xs font-bold text-[var(--color-text-3)]">
+          Cargando canchas desde complejos...
+        </p>
       )}
+
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+        {fields.map((field) => (
+          <FieldCard
+            key={field.id}
+            field={field}
+            isSelected={selectedFieldId === field.id}
+            onSelect={(next) => setSelectedFieldId(next.id)}
+            onToggleFavorite={handleToggleFavorite}
+          />
+        ))}
+      </div>
     </div>
   );
 };
 
-export default Favorites;
+export default Fields;

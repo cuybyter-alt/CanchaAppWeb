@@ -6,6 +6,9 @@ import { MiniFieldSVG } from '../ui/svg-assets';
 import { formatPrice, formatPriceFull } from '../../lib/utils';
 import authService from '../../services/AuthService';
 import notify from '../../services/toast';
+import schedulingService from '../../services/SchedulingService';
+import bookingService from '../../services/BookingService';
+import type { ApiError } from '../../services/ApiClient';
 
 interface BookingPanelProps {
   field: Field | null;
@@ -53,6 +56,18 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
   );
   const [playerCount, setPlayerCount] = useState(field?.capacity ?? 10);
   const [slots, setSlots] = useState(field?.availability ?? []);
+  const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+  const [isBooking, setIsBooking] = useState(false);
+
+  const getDateISO = (dateId: string): string => {
+    const idx = Math.max(0, dates.findIndex((d) => d.id === dateId));
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() + idx);
+    return date.toISOString().slice(0, 10);
+  };
+
+  const isMockFieldId = (fieldId: string): boolean => /^field-\d+/i.test(fieldId);
 
   useEffect(() => {
     setSlots(field?.availability ?? []);
@@ -60,8 +75,60 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
     setPlayerCount(field?.capacity ?? 10);
   }, [field]);
 
+  useEffect(() => {
+    let mounted = true;
+
+    const loadTimeSlots = async () => {
+      if (!field) return;
+
+      if (isMockFieldId(field.id)) {
+        setSlots(field.availability ?? []);
+        setSelectedSlot(field.availability.find((slot) => slot.status !== 'taken')?.id ?? null);
+        return;
+      }
+
+      setIsLoadingSlots(true);
+      try {
+        const dateISO = getDateISO(selectedDate);
+        const apiSlots = await schedulingService.getFieldTimeSlots(field.id, dateISO);
+        if (!mounted) return;
+
+        if (apiSlots.length > 0) {
+          setSlots(apiSlots);
+          setSelectedSlot((current) => {
+            if (current && apiSlots.some((slot) => slot.id === current && slot.status !== 'taken')) {
+              return current;
+            }
+            return apiSlots.find((slot) => slot.status !== 'taken')?.id ?? null;
+          });
+        } else {
+          setSlots(field.availability ?? []);
+          setSelectedSlot(field.availability.find((slot) => slot.status !== 'taken')?.id ?? null);
+        }
+      } catch {
+        if (!mounted) return;
+        setSlots(field.availability ?? []);
+        setSelectedSlot(field.availability.find((slot) => slot.status !== 'taken')?.id ?? null);
+      } finally {
+        if (mounted) setIsLoadingSlots(false);
+      }
+    };
+
+    loadTimeSlots();
+
+    return () => {
+      mounted = false;
+    };
+  }, [field, selectedDate]);
+
   const handleBookNow = async () => {
     if (!field) return;
+    if (isBooking) return;
+
+    if (isMockFieldId(field.id)) {
+      notify.info('Espera un momento', 'Aún cargando canchas reales. Intenta reservar en unos segundos.');
+      return;
+    }
 
     const isAuthenticated = authService.isAuthenticated();
     if (!isAuthenticated) {
@@ -77,11 +144,15 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
     }
 
     try {
+      setIsBooking(true);
       const date = dates.find(d => d.id === selectedDate);
       const duration = durations.find(d => d.id === selectedDuration);
+      const dateISO = getDateISO(selectedDate);
+
+      const bookingResponse = await bookingService.createBooking(slot.id);
 
       const newBooking: Booking = {
-        id: `demo-${Date.now()}`,
+        id: bookingResponse.booking_id ?? `booking-${Date.now()}`,
         fieldId: field.id,
         fieldName: field.name,
         sport: field.sport,
@@ -90,18 +161,40 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
         time: `${slot.time} ${slot.period}`,
         duration: duration?.label ?? '1 hr',
         players: playerCount,
-        status: 'confirmed',
+        status: bookingResponse.status === 'cancelled' ? 'cancelled' : 'confirmed',
         price: slot.price + 2000,
       };
 
       onBookingCreated?.(newBooking);
       onSlotBooked?.(field.id, slot.id);
-      setSlots(prev => prev.map(s => (s.id === slot.id ? { ...s, status: 'taken', spotsLeft: undefined } : s)));
-      setSelectedSlot((prev) => (prev === slot.id ? null : prev));
 
-      notify.success('Reserva creada (demo)', 'La hora reservada quedó bloqueada en esta cancha.');
-    } catch (e) {
-      notify.error('No se pudo crear la reserva', 'Inténtalo nuevamente en unos segundos.');
+      try {
+        const updatedSlots = await schedulingService.getFieldTimeSlots(field.id, dateISO);
+        if (updatedSlots.length > 0) {
+          setSlots(updatedSlots);
+          setSelectedSlot(updatedSlots.find((s) => s.status !== 'taken')?.id ?? null);
+        } else {
+          setSlots(prev => prev.map(s => (s.id === slot.id ? { ...s, status: 'taken', spotsLeft: undefined } : s)));
+          setSelectedSlot((prev) => (prev === slot.id ? null : prev));
+        }
+      } catch {
+        setSlots(prev => prev.map(s => (s.id === slot.id ? { ...s, status: 'taken', spotsLeft: undefined } : s)));
+        setSelectedSlot((prev) => (prev === slot.id ? null : prev));
+      }
+
+      notify.success('Reserva creada', 'Tu reserva fue registrada y el horario quedó bloqueado.');
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 409) {
+        notify.error('Horario no disponible', 'Ese horario acaba de ser tomado. Selecciona otro e intenta de nuevo.');
+      } else if (apiError?.status === 401) {
+        notify.error('Sesión expirada', 'Inicia sesión nuevamente para completar la reserva.');
+        setTimeout(() => navigate('/login'), 800);
+      } else {
+        notify.error('No se pudo crear la reserva', 'Revisa sesión activa y disponibilidad del horario.');
+      }
+    } finally {
+      setIsBooking(false);
     }
   };
 
@@ -240,6 +333,11 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
           <Clock className="inline w-3 h-3 mr-1" />
           HORARIOS
         </p>
+        {isLoadingSlots && (
+          <p className="text-[10px] font-bold text-[var(--color-text-3)] mb-2">
+            Cargando horarios de esta cancha...
+          </p>
+        )}
         <div className="grid grid-cols-3 gap-2 mb-5">
           {slots.map((slot) => {
             const isTaken   = slot.status === 'taken';
@@ -348,14 +446,15 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
         {/* CTAs */}
         <button
           onClick={handleBookNow}
+          disabled={isLoadingSlots || isBooking || !selectedSlot}
           className="inline-flex items-center justify-center gap-2 w-full px-8 py-4 rounded-[var(--radius-xl)] mb-2
             font-[var(--font-display)] text-[22px] tracking-wider text-white font-black cursor-pointer
             bg-gradient-to-br from-[var(--color-primary-light)] via-[var(--color-primary)] to-[var(--color-primary-dark)]
             shadow-[var(--shadow-primary)] hover:scale-105 hover:-translate-y-0.5 active:scale-95
-            transition-all duration-[var(--duration-fast)]"
+            transition-all duration-[var(--duration-fast)] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:translate-y-0"
         >
           <Zap className="w-5 h-5" />
-          RESERVAR AHORA
+          {isBooking ? 'RESERVANDO...' : 'RESERVAR AHORA'}
         </button>
         <button
           onClick={handleSaveToFavorites}

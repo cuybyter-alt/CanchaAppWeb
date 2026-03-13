@@ -14,6 +14,7 @@ interface TimeSlotOutput {
   end_datetime?: string;
   price?: number;
   status?: string;
+  is_available?: boolean;
 }
 
 interface FieldAvailabilityOutput {
@@ -25,6 +26,27 @@ interface FieldAvailabilityOutput {
   distance_km?: number;
   min_slot_price?: number;
   max_slot_price?: number;
+}
+
+type RawRecord = Record<string, unknown>;
+
+function extractArray(value: unknown): RawRecord[] {
+  if (Array.isArray(value)) {
+    return value.filter((item): item is RawRecord => !!item && typeof item === 'object');
+  }
+
+  if (value && typeof value === 'object') {
+    const obj = value as RawRecord;
+    const keys = ['items', 'results', 'data', 'fields', 'time_slots'];
+    for (const key of keys) {
+      const candidate = obj[key];
+      if (Array.isArray(candidate)) {
+        return candidate.filter((item): item is RawRecord => !!item && typeof item === 'object');
+      }
+    }
+  }
+
+  return [];
 }
 
 const FALLBACK_TIMES = [
@@ -61,12 +83,20 @@ function toTimeSlotData(item: TimeSlotOutput, idx: number): TimeSlotData {
   const period: 'AM' | 'PM' = hh >= 12 ? 'PM' : 'AM';
   const hour12 = ((hh + 11) % 12) + 1;
 
+  const status = String(item.status ?? '').toLowerCase();
+  const isTaken =
+    item.is_available === false ||
+    status === 'booked' ||
+    status === 'taken' ||
+    status === 'reserved' ||
+    status === 'unavailable';
+
   return {
     id: item.time_slot_id ?? `slot-${idx}`,
     time: `${hour12}:${mm}`,
     period,
     price: Number(item.price ?? 0),
-    status: item.status === 'booked' || item.status === 'taken' ? 'taken' : 'available',
+    status: isTaken ? 'taken' : 'available',
   };
 }
 
@@ -114,8 +144,8 @@ const schedulingService = {
     const query = new URLSearchParams({ date: dateISO }).toString();
     const res = await ApiClient.get<ApiResponse<TimeSlotOutput[]>>(`/scheduling/fields/${fieldId}/time-slots/?${query}`);
 
-    const slots = Array.isArray(res.data) ? res.data : [];
-    return slots.map((item, idx) => toTimeSlotData(item, idx));
+    const slotsRaw = extractArray(res.data) as TimeSlotOutput[];
+    return slotsRaw.map((item, idx) => toTimeSlotData(item, idx));
   },
 };
 

@@ -7,6 +7,7 @@ import AppLayout from './layouts/AppLayout'
 import Register from './pages/Register'
 import Bookings from './pages/Bookings'
 import Favorites from './pages/Favorites'
+import Fields from './pages/Fields'
 
 function App() {
   return (
@@ -30,7 +31,7 @@ function App() {
         {/* Home and layout routes - accessible to all */}
         <Route element={<AppLayout />}>
           <Route path="/" element={<Home />} />
-          <Route path="/fields" element={<div className="p-8">Buscar Canchas - Próximamente</div>} />
+          <Route path="/fields" element={<Fields />} />
           <Route path="/bookings" element={<Bookings />} />
           <Route path="/favorites" element={<Favorites />} />
           <Route path="/profile" element={<div className="p-8">Configuración - Próximamente</div>} />

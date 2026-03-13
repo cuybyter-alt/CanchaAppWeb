@@ -8,6 +8,7 @@ import Register from './pages/Register'
 import Bookings from './pages/Bookings'
 import Favorites from './pages/Favorites'
 import Fields from './pages/Fields'
+import ComplexDetail from './pages/ComplexDetail'
 
 function App() {
   return (
@@ -32,6 +33,7 @@ function App() {
         <Route element={<AppLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/fields" element={<Fields />} />
+          <Route path="/complexes/:id" element={<ComplexDetail />} />
           <Route path="/bookings" element={<Bookings />} />
           <Route path="/favorites" element={<Favorites />} />
           <Route path="/profile" element={<div className="p-8">Configuración - Próximamente</div>} />

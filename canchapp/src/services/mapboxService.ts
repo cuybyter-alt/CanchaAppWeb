@@ -1,6 +1,6 @@
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
-import type { SportsField, MapConfig, UserLocation } from '../types/map';
+import type { SportsField, MapConfig, UserLocation, ComplexMarker } from '../types/map';
 
 /**
  * Token de acceso de Mapbox desde las variables de entorno
@@ -287,6 +287,162 @@ export function calculateDistance(
       Math.sin(dLon / 2);
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
+}
+
+// ── Complex markers (complejos deportivos desde la API) ─────────────────────
+
+function createComplexMarkerElement(
+  complex: ComplexMarker,
+  onNavigate?: (id: string) => void,
+): HTMLElement {
+  // el must NOT have position:relative — Mapbox positions its markers with
+  // transform:translate on a wrapper div inside the map canvas. Adding
+  // position:relative here makes the browser anchor child absolutely-
+  // positioned elements to el instead of to the map canvas, which causes
+  // markers to drift when the page (not the map) is scrolled.
+  // We give el explicit dimensions equal to the pin so Mapbox anchor logic works.
+  const el = document.createElement('div');
+  el.style.cssText = 'width:40px;height:40px;cursor:pointer;overflow:visible;';
+
+  const color = complex.fieldsCount > 0 ? '#62bf3b' : '#ff9f43';
+  const minK = Math.round(complex.minPrice / 1000);
+  const maxK = Math.round(complex.maxPrice / 1000);
+  const priceRange = minK === maxK ? `$${minK}k/h` : `$${minK}k–$${maxK}k/h`;
+
+  // ── Tooltip — appended to document.body so it escapes any overflow:hidden ──
+  // Positioned with position:fixed, coordinates updated on each mouseover.
+  const tooltip = document.createElement('div');
+  tooltip.style.cssText = [
+    'position:fixed',
+    'opacity:0',
+    'pointer-events:none',
+    'transition:opacity 0.18s ease,transform 0.18s ease',
+    'background:#0D1F08',
+    'border:1.5px solid rgba(98,191,59,0.35)',
+    'border-radius:14px',
+    'padding:10px 12px 9px',
+    'min-width:170px',
+    'max-width:210px',
+    'box-shadow:0 8px 28px rgba(0,0,0,0.65)',
+    'font-family:Nunito,sans-serif',
+    'z-index:9999',
+    'white-space:normal',
+    'transform:translateY(8px)',
+  ].join(';');
+
+  tooltip.innerHTML = `
+    <p style="color:#62bf3b;font-size:12px;font-weight:800;margin:0 0 6px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:186px;">${complex.name}</p>
+    <div style="display:flex;align-items:center;gap:5px;margin-bottom:9px;flex-wrap:wrap;">
+      <span style="display:inline-flex;align-items:center;gap:3px;background:rgba(98,191,59,0.12);border:1px solid rgba(98,191,59,0.25);border-radius:20px;padding:2px 8px;">
+        <i class="fa-solid fa-futbol" style="color:#62bf3b;font-size:9px;"></i>
+        <span style="color:#a7d99a;font-size:10px;font-weight:700;">${complex.fieldsCount} cancha${complex.fieldsCount !== 1 ? 's' : ''}</span>
+      </span>
+      <span style="display:inline-flex;align-items:center;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:2px 8px;">
+        <span style="color:#8cb87d;font-size:10px;font-weight:600;">${priceRange}</span>
+      </span>
+    </div>
+    <div style="display:flex;align-items:center;justify-content:center;gap:5px;background:rgba(98,191,59,0.15);border:1px solid rgba(98,191,59,0.3);border-radius:8px;padding:5px 10px;color:#62bf3b;font-size:11px;font-weight:800;">
+      Ver canchas <i class="fa-solid fa-arrow-right" style="font-size:9px;"></i>
+    </div>
+    <div style="position:absolute;bottom:-5px;left:50%;width:9px;height:9px;background:#0D1F08;border-right:1.5px solid rgba(98,191,59,0.35);border-bottom:1.5px solid rgba(98,191,59,0.35);transform:translateX(-50%) rotate(45deg);"></div>
+  `;
+
+  document.body.appendChild(tooltip);
+
+  // ── Pin circle ─────────────────────────────────────────────────────────
+  const circle = document.createElement('div');
+  circle.style.cssText = [
+    `background:${color}`,
+    'width:40px',
+    'height:40px',
+    'border-radius:50%',
+    'display:flex',
+    'align-items:center',
+    'justify-content:center',
+    'border:3px solid #1a2e14',
+    'box-shadow:0 4px 12px rgba(0,0,0,0.4)',
+    'transition:transform 0.18s ease,box-shadow 0.18s ease',
+  ].join(';');
+  circle.innerHTML = `<i class="fa-solid fa-futbol" style="color:white;font-size:15px;pointer-events:none;"></i>`;
+
+  el.appendChild(circle);
+
+  // ── Hover: position tooltip via getBoundingClientRect ──────────────────
+  el.addEventListener('mouseover', () => {
+    const rect = el.getBoundingClientRect();
+    const tooltipWidth = 210;
+    let left = rect.left + rect.width / 2 - tooltipWidth / 2;
+    // Clamp to viewport
+    left = Math.max(8, Math.min(left, window.innerWidth - tooltipWidth - 8));
+    const top = rect.top - 10; // will be shifted up by tooltip height via bottom anchor
+
+    // We want the tooltip bottom to sit 10px above the pin top
+    tooltip.style.left = `${left}px`;
+    tooltip.style.top = `${rect.top - 10}px`;
+    tooltip.style.transform = 'translateY(-100%)';
+    tooltip.style.opacity = '1';
+    circle.style.transform = 'scale(1.18)';
+    circle.style.boxShadow = '0 6px 22px rgba(98,191,59,0.5)';
+    // suppress unused var warning
+    void top;
+  });
+
+  el.addEventListener('mouseout', (e: MouseEvent) => {
+    if (!el.contains(e.relatedTarget as Node | null)) {
+      tooltip.style.opacity = '0';
+      tooltip.style.transform = 'translateY(calc(-100% + 8px))';
+      circle.style.transform = 'scale(1)';
+      circle.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
+    }
+  });
+
+  // ── Cleanup: remove tooltip from body when marker is destroyed ─────────
+  // Mapbox calls element.remove() when the marker is removed from the map.
+  const observer = new MutationObserver(() => {
+    if (!document.body.contains(el)) {
+      tooltip.remove();
+      observer.disconnect();
+    }
+  });
+  observer.observe(document.body, { childList: true, subtree: true });
+
+  // ── Click → navigate ──────────────────────────────────────────────────
+  el.addEventListener('click', () => onNavigate?.(complex.id));
+
+  return el;
+}
+
+export function addComplexMarkers(
+  map: mapboxgl.Map,
+  complexes: ComplexMarker[],
+  onNavigate?: (complexId: string) => void,
+): mapboxgl.Marker[] {
+  const markers: mapboxgl.Marker[] = [];
+
+  complexes.forEach((complex) => {
+    const el = createComplexMarkerElement(complex, onNavigate);
+    const marker = new mapboxgl.Marker({ element: el })
+      .setLngLat([complex.longitude, complex.latitude])
+      .addTo(map);
+    markers.push(marker);
+  });
+
+  return markers;
+}
+
+export function fitMapToComplexMarkers(
+  map: mapboxgl.Map,
+  complexes: ComplexMarker[],
+): void {
+  if (complexes.length === 0) return;
+
+  const bounds = new mapboxgl.LngLatBounds();
+  complexes.forEach((c) => bounds.extend([c.longitude, c.latitude]));
+
+  map.fitBounds(bounds, {
+    padding: { top: 50, bottom: 50, left: 50, right: 50 },
+    maxZoom: 14,
+  });
 }
 
 /**

@@ -1,19 +1,17 @@
 import { MapCard } from '../sections/MapCard';
 import { Dialog } from '../ui/dialog';
-import type { SportsField } from '../../types/map';
 
 interface MapDialogProps {
   isOpen: boolean;
   onClose: () => void;
-  fields?: SportsField[];
 }
 
-export function MapDialog({ isOpen, onClose, fields = [] }: MapDialogProps) {
+export function MapDialog({ isOpen, onClose }: MapDialogProps) {
   return (
     <Dialog isOpen={isOpen} onClose={onClose} title="🗺️ Mapa de Canchas Cercanas" size="full">
       <div className="w-full h-[75vh] p-0 relative">
         <div className="absolute inset-0 m-4">
-          <MapCard fields={fields} showMiniMap={false} />
+          <MapCard showMiniMap={false} />
         </div>
       </div>
 

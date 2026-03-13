@@ -46,3 +46,18 @@ export interface MarkerData {
   field: SportsField;
   element: HTMLElement;
 }
+
+/**
+ * Complejo deportivo para mostrar en el mapa (viene de GET /api/complexes/)
+ */
+export interface ComplexMarker {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  latitude: number;
+  longitude: number;
+  minPrice: number;
+  maxPrice: number;
+  fieldsCount: number;
+}

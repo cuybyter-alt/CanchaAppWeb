@@ -1,5 +1,6 @@
 import ApiClient from './ApiClient';
 import type { Field, FieldType, Sport, TimeSlotData } from '../types/field';
+import type { ComplexMarker } from '../types/map';
 
 interface ApiResponse<T> {
   data: T;
@@ -235,6 +236,32 @@ const complexesService = {
     } finally {
       inFlightRequest = null;
     }
+  },
+
+  async getComplexMarkers(): Promise<ComplexMarker[]> {
+    const res = await ApiClient.get<ApiResponse<unknown>>('/complexes/?page_size=100');
+    const items = extractArray(res.data);
+
+    return items
+      .map((item): ComplexMarker | null => {
+        const id = asString(item.complex_id) ?? asString(item.id);
+        const lat = asNumber(item.latitude);
+        const lng = asNumber(item.longitude);
+        if (!id || lat === undefined || lng === undefined) return null;
+
+        return {
+          id,
+          name: asString(item.name) ?? 'Complejo deportivo',
+          address: asString(item.address) ?? '',
+          city: asString(item.city) ?? '',
+          latitude: lat,
+          longitude: lng,
+          minPrice: asNumber(item.min_price) ?? 0,
+          maxPrice: asNumber(item.max_price) ?? 0,
+          fieldsCount: asNumber(item.fields_count) ?? 0,
+        };
+      })
+      .filter((m): m is ComplexMarker => m !== null);
   },
 
   async loadAllFieldsFromApi(onBatch?: (fields: Field[]) => void): Promise<Field[]> {

@@ -5,10 +5,7 @@ import type { Booking, Field } from '../../types/field';
 import { MiniFieldSVG } from '../ui/svg-assets';
 import { formatPrice, formatPriceFull } from '../../lib/utils';
 import authService from '../../services/AuthService';
-import bookingService from '../../services/BookingService';
 import notify from '../../services/toast';
-import type { ApiError } from '../../services/ApiClient';
-import schedulingService from '../../services/SchedulingService';
 
 interface BookingPanelProps {
   field: Field | null;
@@ -63,28 +60,6 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
     setPlayerCount(field?.capacity ?? 10);
   }, [field]);
 
-  useEffect(() => {
-    const loadSlots = async () => {
-      if (!field) return;
-      try {
-        const todayISO = new Date().toISOString().slice(0, 10);
-        const apiSlots = await schedulingService.getFieldTimeSlots(field.id, todayISO);
-        if (apiSlots.length > 0) {
-          setSlots(apiSlots);
-          setSelectedSlot(apiSlots.find(s => s.status !== 'taken')?.id ?? null);
-          return;
-        }
-      } catch {
-        // Keep fallback to provided field availability.
-      }
-
-      setSlots(field.availability);
-      setSelectedSlot(field.availability.find(s => s.status !== 'taken')?.id ?? null);
-    };
-
-    loadSlots();
-  }, [field?.id, selectedDate]);
-
   const handleBookNow = async () => {
     if (!field) return;
 
@@ -102,13 +77,11 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
     }
 
     try {
-      const booked = await bookingService.createBooking(slot.id);
-
       const date = dates.find(d => d.id === selectedDate);
       const duration = durations.find(d => d.id === selectedDuration);
 
       const newBooking: Booking = {
-        id: booked.booking_id,
+        id: `demo-${Date.now()}`,
         fieldId: field.id,
         fieldName: field.name,
         sport: field.sport,
@@ -117,37 +90,18 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
         time: `${slot.time} ${slot.period}`,
         duration: duration?.label ?? '1 hr',
         players: playerCount,
-        status: booked.is_approved ? 'confirmed' : 'pending',
-        price: booked.total_price ?? (slot.price + 2000),
+        status: 'confirmed',
+        price: slot.price + 2000,
       };
 
       onBookingCreated?.(newBooking);
       onSlotBooked?.(field.id, slot.id);
       setSlots(prev => prev.map(s => (s.id === slot.id ? { ...s, status: 'taken', spotsLeft: undefined } : s)));
-      notify.success('Reserva creada', 'Tu reserva fue registrada correctamente.');
+      setSelectedSlot((prev) => (prev === slot.id ? null : prev));
+
+      notify.success('Reserva creada (demo)', 'La hora reservada quedó bloqueada en esta cancha.');
     } catch (e) {
-      const err = e as ApiError;
-      const date = dates.find(d => d.id === selectedDate);
-      const duration = durations.find(d => d.id === selectedDuration);
-
-      const localBooking: Booking = {
-        id: `local-${Date.now()}`,
-        fieldId: field.id,
-        fieldName: field.name,
-        sport: field.sport,
-        sportLabel: field.sportLabel,
-        date: `${date?.name ?? 'DÍA'}, ${date?.day ?? ''}`,
-        time: `${slot.time} ${slot.period}`,
-        duration: duration?.label ?? '1 hr',
-        players: playerCount,
-        status: 'pending',
-        price: slot.price + 2000,
-      };
-
-      onBookingCreated?.(localBooking);
-      onSlotBooked?.(field.id, slot.id);
-      setSlots(prev => prev.map(s => (s.id === slot.id ? { ...s, status: 'taken', spotsLeft: undefined } : s)));
-      notify.warning('Reserva guardada en modo demo', err.message ?? 'El backend rechazó el slot de prueba, pero la reserva se agregó localmente.');
+      notify.error('No se pudo crear la reserva', 'Inténtalo nuevamente en unos segundos.');
     }
   };
 

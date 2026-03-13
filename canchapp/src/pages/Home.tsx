@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { MapPin, ArrowRight } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
 import { Typography } from '../components/ui/typography';
 import { PromoBanner } from '../components/sections/PromoBanner';
 import { MapCard } from '../components/sections/MapCard';
@@ -7,41 +8,29 @@ import { FiltersBar } from '../components/features/FiltersBar';
 import { BookingPanel } from '../components/features/BookingPanel';
 import { FieldCard } from '../components/features/FieldCard';
 import { BookingCard } from '../components/features/BookingCard';
-import { mockFields, mockBookings } from '../mock/fields';
+import { mockFields } from '../mock/fields';
 import type { Booking, Field } from '../types/field';
 import { useMapContext } from '../context/MapContext';
-import schedulingService from '../services/SchedulingService';
+import demoReservationService from '../services/DemoReservationService';
 
 const Home: React.FC = () => {
-  const [fields, setFields] = useState<Field[]>(mockFields);
-  const [selectedFieldId, setSelectedFieldId] = useState<string>(mockFields[0]?.id ?? '');
-  const [bookings, setBookings] = useState<Booking[]>(mockBookings);
+  const initialFields = mockFields.map((f) => demoReservationService.applyLockedSlots(f));
+  const [fields, setFields] = useState<Field[]>(initialFields);
+  const [selectedFieldId, setSelectedFieldId] = useState<string>(initialFields[0]?.id ?? '');
+  const [bookings, setBookings] = useState<Booking[]>(demoReservationService.getBookings());
   const { openMap } = useMapContext();
+  const navigate = useNavigate();
 
   const selectedField = fields.find((f) => f.id === selectedFieldId) ?? fields[0] ?? null;
 
-  React.useEffect(() => {
-    const loadAvailableFields = async () => {
-      try {
-        const dateISO = new Date().toISOString().slice(0, 10);
-        const apiFields = await schedulingService.searchAvailableFields(dateISO);
-        if (apiFields.length > 0) {
-          setFields(apiFields);
-          setSelectedFieldId(apiFields[0].id);
-        }
-      } catch {
-        // Keep fallback mock fields in dev if endpoint is unavailable.
-      }
-    };
-
-    loadAvailableFields();
-  }, []);
-
   const handleBookingCreated = (booking: Booking) => {
-    setBookings(prev => [booking, ...prev]);
+    const updated = demoReservationService.addBooking(booking);
+    setBookings(updated);
   };
 
   const handleSlotBooked = (fieldId: string, slotId: string) => {
+    demoReservationService.lockSlot(fieldId, slotId);
+
     setFields((prev) =>
       prev.map((field) =>
         field.id === fieldId
@@ -117,15 +106,29 @@ const Home: React.FC = () => {
                 <i className="fa-regular fa-calendar-check text-[var(--color-primary)] mr-2" />
                 Mis Reservas
               </Typography>
-              <button className="flex items-center gap-1 text-[13px] font-extrabold text-[var(--color-primary-dark)] cursor-pointer hover:underline">
+              <button
+                onClick={() => navigate('/bookings')}
+                className="flex items-center gap-1 text-[13px] font-extrabold text-[var(--color-primary-dark)] cursor-pointer hover:underline"
+              >
                 Ver todas <ArrowRight className="w-3 h-3" />
               </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {bookings.map(booking => (
+              {bookings.slice(0, 3).map(booking => (
                 <BookingCard key={booking.id} booking={booking} />
               ))}
             </div>
+            {bookings.length > 3 && (
+              <div className="mt-4 flex justify-center">
+                <button
+                  onClick={() => navigate('/bookings')}
+                  className="inline-flex items-center gap-2 px-5 py-2.5 rounded-[var(--radius-lg)] border-2 border-[var(--color-primary)] text-[var(--color-primary-dark)] font-extrabold hover:bg-[var(--color-primary-tint)] transition-all duration-[var(--duration-fast)]"
+                >
+                  Ver más
+                  <ArrowRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
           </div>
 
         </div>

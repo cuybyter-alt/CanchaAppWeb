@@ -5,9 +5,11 @@ import { Sidebar } from '../components/layout/sidebar';
 import { MapDialog } from '../components/sections/MapDialog';
 import { MapContext } from '../context/MapContext';
 import { LocationBanner } from '../components/layout/LocationBanner';
+import type { ComplexMarker } from '../types/map';
 
 export default function AppLayout() {
   const [isMapOpen, setIsMapOpen] = useState(false);
+  const [complexMarkers, setComplexMarkers] = useState<ComplexMarker[]>([]);
 
   // Mock upcoming booking - puedes conectarlo a tu store más tarde
   const upcomingBooking = {
@@ -18,7 +20,7 @@ export default function AppLayout() {
   };
 
   return (
-    <MapContext.Provider value={{ openMap: () => setIsMapOpen(true) }}>
+    <MapContext.Provider value={{ openMap: () => setIsMapOpen(true), complexMarkers, setComplexMarkers }}>
       <div className="min-h-screen relative z-[1]">
         {/* Topbar - fixed at top */}
         <Topbar />

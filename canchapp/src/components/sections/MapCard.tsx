@@ -1,4 +1,5 @@
-import { useEffect, useRef, useState, useMemo, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { MapPin, Expand, AlertCircle, Navigation } from 'lucide-react';
 import type { Map as MapboxMap } from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
@@ -6,89 +7,24 @@ import {
   initializeMapbox,
   createMap,
   setupGeolocateControl,
-  addMarkers,
-  fitMapToMarkers,
+  addComplexMarkers,
+  fitMapToComplexMarkers,
   getUserLocation,
-  calculateDistance,
   MAPBOX_STYLES,
 } from '../../services/mapboxService';
-import type { SportsField, UserLocation } from '../../types/map';
-
-// Datos mock de canchas cercanas (definidos fuera del componente para evitar recreación)
-const DEFAULT_FIELDS: SportsField[] = [
-  {
-    id: '1',
-    name: 'Cancha El Diamante',
-    sport: 'futbol5',
-    latitude: 40.7589,
-    longitude: -73.9851,
-    address: 'Times Square, Manhattan',
-    price: 28000,
-    rating: 4.9,
-    available: true,
-    distance: 0.8,
-  },
-  {
-    id: '2',
-    name: 'El Porvenir F7',
-    sport: 'futbol7',
-    latitude: 40.7489,
-    longitude: -73.9680,
-    address: 'Grand Central, Manhattan',
-    price: 35000,
-    rating: 4.7,
-    available: true,
-    distance: 1.2,
-  },
-  {
-    id: '3',
-    name: 'Micro Los Pinos',
-    sport: 'microfutbol',
-    latitude: 40.7614,
-    longitude: -73.9776,
-    address: 'Central Park South',
-    price: 22000,
-    rating: 4.6,
-    available: false,
-    distance: 0.5,
-  },
-  {
-    id: '4',
-    name: 'Estadio Norte F11',
-    sport: 'futbol11',
-    latitude: 40.7580,
-    longitude: -73.9855,
-    address: 'West 42nd St, Manhattan',
-    price: 55000,
-    rating: 4.8,
-    available: true,
-    distance: 0.9,
-  },
-  {
-    id: '5',
-    name: 'Cancha Centenario',
-    sport: 'futbol5',
-    latitude: 40.7689,
-    longitude: -73.9794,
-    address: 'Columbus Circle',
-    price: 28000,
-    rating: 4.5,
-    available: true,
-    distance: 1.5,
-  },
-];
+import type { ComplexMarker, UserLocation } from '../../types/map';
+import { useMapContext } from '../../context/MapContext';
+import complexesService from '../../services/ComplexesService';
 
 type LocationState = 'checking' | 'prompt' | 'loading-loc' | 'map-loading' | 'map-ready' | 'error';
 
 interface MapCardProps {
-  fields?: SportsField[];
   onOpenMap?: () => void;
   style?: string;
   showMiniMap?: boolean;
 }
 
 export function MapCard({
-  fields = [],
   onOpenMap,
   style = MAPBOX_STYLES.dark,
   showMiniMap = true,
@@ -100,10 +36,13 @@ export function MapCard({
   const autoGeolocateRef = useRef(false);
 
   const [locationState, setLocationState] = useState<LocationState>('checking');
-  const [nearbyFields, setNearbyFields] = useState<SportsField[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const fieldsToUse = useMemo(() => fields.length > 0 ? fields : DEFAULT_FIELDS, [fields]);
+  const navigate = useNavigate();
+  const { complexMarkers: contextComplexMarkers, setComplexMarkers } = useMapContext();
+  // Use a ref so startMap always reads the latest context markers without re-creating
+  const contextMarkersRef = useRef<ComplexMarker[]>(contextComplexMarkers);
+  useEffect(() => { contextMarkersRef.current = contextComplexMarkers; }, [contextComplexMarkers]);
 
   // ── Initialize map once location is resolved ──────────────────────────
   const startMap = useCallback(async (userLoc: UserLocation | null) => {
@@ -113,26 +52,31 @@ export function MapCard({
 
     initializeMapbox();
 
-    let fieldsToDisplay = [...fieldsToUse];
-    if (userLoc && fields.length === 0) {
-      fieldsToDisplay = fieldsToUse.map((f) => ({
-        ...f,
-        distance: calculateDistance(userLoc.latitude, userLoc.longitude, f.latitude, f.longitude),
-      }));
+    // Use cached markers from context or load from API
+    let markersToDisplay: ComplexMarker[] = contextMarkersRef.current;
+    if (markersToDisplay.length === 0) {
+      try {
+        const loaded = await complexesService.getComplexMarkers();
+        if (loaded.length > 0) {
+          markersToDisplay = loaded;
+          setComplexMarkers(loaded);
+        }
+      } catch {
+        // API unavailable — map still renders without pins
+      }
     }
-    setNearbyFields(fieldsToDisplay);
 
     const center: [number, number] = userLoc
       ? [userLoc.longitude, userLoc.latitude]
-      : fieldsToDisplay.length > 0
-      ? [fieldsToDisplay[0].longitude, fieldsToDisplay[0].latitude]
-      : [-74.006, 40.7128];
+      : markersToDisplay.length > 0
+      ? [markersToDisplay[0].longitude, markersToDisplay[0].latitude]
+      : [-74.0721, 4.711];
 
     try {
       const mapInstance = createMap(mapContainer.current, {
         style,
         center,
-        zoom: userLoc ? 14 : 13,
+        zoom: userLoc ? 13 : 11,
         pitch: showMiniMap ? 30 : 45,
       });
 
@@ -150,26 +94,25 @@ export function MapCard({
           // a CSS animation (e.g. dialog open transition)
           mapInstance.resize();
 
-          // Add markers first so they're visible during the fly animation
-          const markers = addMarkers(mapInstance, fieldsToDisplay);
+          const markers = addComplexMarkers(
+            mapInstance,
+            markersToDisplay,
+            (id) => navigate(`/complexes/${id}`),
+          );
           markersRef.current = markers;
 
           if (userLoc) {
-            // Pre-granted permission: fly to known coords, then show live dot
             mapInstance.flyTo({
               center: [userLoc.longitude, userLoc.latitude],
-              zoom: 14,
+              zoom: 13,
               speed: 1.4,
               essential: true,
             });
             setTimeout(() => geoCtrl.trigger(), 1000);
           } else if (autoGeolocateRef.current) {
-            // User just granted via our banner — let GeolocateControl request
-            // position and fly there automatically (permission already granted,
-            // so no browser dialog will appear again).
             setTimeout(() => geoCtrl.trigger(), 300);
-          } else if (fieldsToDisplay.length > 1) {
-            fitMapToMarkers(mapInstance, fieldsToDisplay);
+          } else if (markersToDisplay.length > 1) {
+            fitMapToComplexMarkers(mapInstance, markersToDisplay);
             if (!showMiniMap) setTimeout(() => geoCtrl.trigger(), 600);
           }
 
@@ -186,7 +129,7 @@ export function MapCard({
       setError('Error al inicializar el mapa');
       setLocationState('error');
     }
-  }, [fieldsToUse, fields.length, style, showMiniMap]);
+  }, [style, showMiniMap, setComplexMarkers, navigate]);
 
   // ── Check geolocation permission silently on mount ────────────────────
   useEffect(() => {
@@ -301,11 +244,11 @@ export function MapCard({
         </div>
       )}
 
-      {/* Badge: contador de canchas */}
-      {locationState === 'map-ready' && nearbyFields.length > 0 && (
+      {/* Badge: contador de complejos */}
+      {locationState === 'map-ready' && contextComplexMarkers.length > 0 && (
         <div className="absolute top-3 left-3 bg-black/50 backdrop-blur rounded-full px-3 py-1 text-xs font-extrabold text-white flex items-center gap-1 z-10">
           <MapPin className="w-3 h-3 text-[var(--color-primary)]" />
-          {nearbyFields.length} canchas cercanas
+          {contextComplexMarkers.length} complejos cercanos
         </div>
       )}
 

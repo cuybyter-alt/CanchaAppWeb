@@ -1,13 +1,19 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Calendar, Clock, MapPin, Minus, Plus, Star, Users, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import type { Field } from '../../types/field';
+import type { Booking, Field } from '../../types/field';
 import { MiniFieldSVG } from '../ui/svg-assets';
 import { formatPrice, formatPriceFull } from '../../lib/utils';
+import authService from '../../services/AuthService';
+import notify from '../../services/toast';
+import schedulingService from '../../services/SchedulingService';
+import bookingService from '../../services/BookingService';
+import type { ApiError } from '../../services/ApiClient';
 
 interface BookingPanelProps {
   field: Field | null;
-  isAuthenticated?: boolean;
+  onBookingCreated?: (booking: Booking) => void;
+  onSlotBooked?: (fieldId: string, slotId: string) => void;
 }
 
 const dates = [
@@ -28,22 +34,20 @@ const durations = [
 ];
 
 const sportIcons: Record<string, string> = {
-  soccer:     'fa-futbol',
-  basketball: 'fa-basketball',
-  padel:      'fa-table-tennis-paddle-ball',
-  volleyball: 'fa-volleyball',
-  tennis:     'fa-tennis-ball',
+  futbol5:    'fa-futbol',
+  futbol7:    'fa-futbol',
+  microfutbol:'fa-circle-dot',
+  futbol11:   'fa-futbol',
 };
 
 const sportNames: Record<string, string> = {
-  soccer:     'Fútbol',
-  basketball: 'Baloncesto',
-  padel:      'Pádel',
-  volleyball: 'Voleibol',
-  tennis:     'Tenis',
+  futbol5:    'Fútbol',
+  futbol7:    'Fútbol',
+  microfutbol:'Microfútbol',
+  futbol11:   'Fútbol',
 };
 
-export const BookingPanel: React.FC<BookingPanelProps> = ({ field, isAuthenticated = false }) => {
+export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCreated, onSlotBooked }) => {
   const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState('sat');
   const [selectedDuration, setSelectedDuration] = useState('1h');
@@ -51,16 +55,153 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, isAuthenticat
     field?.availability.find(s => s.status !== 'taken')?.id ?? null
   );
   const [playerCount, setPlayerCount] = useState(field?.capacity ?? 10);
+  const [slots, setSlots] = useState(field?.availability ?? []);
+  const [isLoadingSlots, setIsLoadingSlots] = useState(false);
+  const [isBooking, setIsBooking] = useState(false);
 
-  const handleBookNow = () => {
-    if (!isAuthenticated) {
-      navigate('/login');
+  const getDateISO = (dateId: string): string => {
+    const idx = Math.max(0, dates.findIndex((d) => d.id === dateId));
+    const date = new Date();
+    date.setHours(0, 0, 0, 0);
+    date.setDate(date.getDate() + idx);
+    return date.toISOString().slice(0, 10);
+  };
+
+  const isMockFieldId = (fieldId: string): boolean => /^field-\d+/i.test(fieldId);
+
+  useEffect(() => {
+    setSlots(field?.availability ?? []);
+    setSelectedSlot(field?.availability.find(s => s.status !== 'taken')?.id ?? null);
+    setPlayerCount(field?.capacity ?? 10);
+  }, [field]);
+
+  useEffect(() => {
+    let mounted = true;
+
+    const loadTimeSlots = async () => {
+      if (!field) return;
+
+      if (isMockFieldId(field.id)) {
+        setSlots(field.availability ?? []);
+        setSelectedSlot(field.availability.find((slot) => slot.status !== 'taken')?.id ?? null);
+        return;
+      }
+
+      setIsLoadingSlots(true);
+      try {
+        const dateISO = getDateISO(selectedDate);
+        const apiSlots = await schedulingService.getFieldTimeSlots(field.id, dateISO);
+        if (!mounted) return;
+
+        if (apiSlots.length > 0) {
+          setSlots(apiSlots);
+          setSelectedSlot((current) => {
+            if (current && apiSlots.some((slot) => slot.id === current && slot.status !== 'taken')) {
+              return current;
+            }
+            return apiSlots.find((slot) => slot.status !== 'taken')?.id ?? null;
+          });
+        } else {
+          setSlots(field.availability ?? []);
+          setSelectedSlot(field.availability.find((slot) => slot.status !== 'taken')?.id ?? null);
+        }
+      } catch {
+        if (!mounted) return;
+        setSlots(field.availability ?? []);
+        setSelectedSlot(field.availability.find((slot) => slot.status !== 'taken')?.id ?? null);
+      } finally {
+        if (mounted) setIsLoadingSlots(false);
+      }
+    };
+
+    loadTimeSlots();
+
+    return () => {
+      mounted = false;
+    };
+  }, [field, selectedDate]);
+
+  const handleBookNow = async () => {
+    if (!field) return;
+    if (isBooking) return;
+
+    if (isMockFieldId(field.id)) {
+      notify.info('Espera un momento', 'Aún cargando canchas reales. Intenta reservar en unos segundos.');
       return;
+    }
+
+    const isAuthenticated = authService.isAuthenticated();
+    if (!isAuthenticated) {
+      notify.warning('Debes iniciar sesión para reservar', 'Regístrate o inicia sesión para continuar con tu reserva.');
+      setTimeout(() => navigate('/login'), 900);
+      return;
+    }
+
+    const slot = slots.find(s => s.id === selectedSlot);
+    if (!slot) {
+      notify.error('Selecciona un horario', 'Debes elegir un horario disponible antes de reservar.');
+      return;
+    }
+
+    try {
+      setIsBooking(true);
+      const date = dates.find(d => d.id === selectedDate);
+      const duration = durations.find(d => d.id === selectedDuration);
+      const dateISO = getDateISO(selectedDate);
+
+      const bookingResponse = await bookingService.createBooking(slot.id);
+
+      const newBooking: Booking = {
+        id: bookingResponse.booking_id ?? `booking-${Date.now()}`,
+        fieldId: field.id,
+        fieldName: field.name,
+        sport: field.sport,
+        sportLabel: field.sportLabel,
+        date: `${date?.name ?? 'DÍA'}, ${date?.day ?? ''}`,
+        time: `${slot.time} ${slot.period}`,
+        duration: duration?.label ?? '1 hr',
+        players: playerCount,
+        status: bookingResponse.status === 'cancelled' ? 'cancelled' : 'confirmed',
+        price: slot.price + 2000,
+      };
+
+      onBookingCreated?.(newBooking);
+      onSlotBooked?.(field.id, slot.id);
+
+      try {
+        const updatedSlots = await schedulingService.getFieldTimeSlots(field.id, dateISO);
+        if (updatedSlots.length > 0) {
+          setSlots(updatedSlots);
+          setSelectedSlot(updatedSlots.find((s) => s.status !== 'taken')?.id ?? null);
+        } else {
+          setSlots(prev => prev.map(s => (s.id === slot.id ? { ...s, status: 'taken', spotsLeft: undefined } : s)));
+          setSelectedSlot((prev) => (prev === slot.id ? null : prev));
+        }
+      } catch {
+        setSlots(prev => prev.map(s => (s.id === slot.id ? { ...s, status: 'taken', spotsLeft: undefined } : s)));
+        setSelectedSlot((prev) => (prev === slot.id ? null : prev));
+      }
+
+      notify.success('Reserva creada', 'Tu reserva fue registrada y el horario quedó bloqueado.');
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 409) {
+        notify.error('Horario no disponible', 'Ese horario acaba de ser tomado. Selecciona otro e intenta de nuevo.');
+      } else if (apiError?.status === 401) {
+        notify.error('Sesión expirada', 'Inicia sesión nuevamente para completar la reserva.');
+        setTimeout(() => navigate('/login'), 800);
+      } else {
+        notify.error('No se pudo crear la reserva', 'Revisa sesión activa y disponibilidad del horario.');
+      }
+    } finally {
+      setIsBooking(false);
     }
   };
 
   const handleSaveToFavorites = () => {
+    const isAuthenticated = authService.isAuthenticated();
     if (!isAuthenticated) {
+      notify.info('Inicia sesión para guardar favoritos');
       navigate('/login');
     }
   };
@@ -75,7 +216,7 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, isAuthenticat
     );
   }
 
-  const selectedSlotData = field.availability.find(s => s.id === selectedSlot);
+  const selectedSlotData = slots.find(s => s.id === selectedSlot);
   const basePrice = selectedSlotData?.price ?? field.price;
   const weekendSurcharge = 2000;
   const total = basePrice + weekendSurcharge;
@@ -192,8 +333,13 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, isAuthenticat
           <Clock className="inline w-3 h-3 mr-1" />
           HORARIOS
         </p>
+        {isLoadingSlots && (
+          <p className="text-[10px] font-bold text-[var(--color-text-3)] mb-2">
+            Cargando horarios de esta cancha...
+          </p>
+        )}
         <div className="grid grid-cols-3 gap-2 mb-5">
-          {field.availability.map((slot) => {
+          {slots.map((slot) => {
             const isTaken   = slot.status === 'taken';
             const isActive  = selectedSlot === slot.id;
             const isAlmost  = slot.status === 'almost-full';
@@ -300,14 +446,15 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, isAuthenticat
         {/* CTAs */}
         <button
           onClick={handleBookNow}
+          disabled={isLoadingSlots || isBooking || !selectedSlot}
           className="inline-flex items-center justify-center gap-2 w-full px-8 py-4 rounded-[var(--radius-xl)] mb-2
             font-[var(--font-display)] text-[22px] tracking-wider text-white font-black cursor-pointer
             bg-gradient-to-br from-[var(--color-primary-light)] via-[var(--color-primary)] to-[var(--color-primary-dark)]
             shadow-[var(--shadow-primary)] hover:scale-105 hover:-translate-y-0.5 active:scale-95
-            transition-all duration-[var(--duration-fast)]"
+            transition-all duration-[var(--duration-fast)] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:translate-y-0"
         >
           <Zap className="w-5 h-5" />
-          RESERVAR AHORA
+          {isBooking ? 'RESERVANDO...' : 'RESERVAR AHORA'}
         </button>
         <button
           onClick={handleSaveToFavorites}

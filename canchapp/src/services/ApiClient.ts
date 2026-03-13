@@ -49,11 +49,15 @@ async function request<T>(
   });
 
   if (!response.ok) {
-    let errorBody: unknown;
-    try {
-      errorBody = await response.json();
-    } catch {
-      errorBody = await response.text();
+    // Read body only once to avoid "body stream already read" errors.
+    const rawText = await response.text();
+    let errorBody: unknown = rawText;
+    if (rawText) {
+      try {
+        errorBody = JSON.parse(rawText);
+      } catch {
+        // Keep plain text (or HTML) response as-is.
+      }
     }
 
     const error: ApiError = {
@@ -99,6 +103,22 @@ function parseErrorBody(
     // Legacy DRF: { message } or { detail }
     if (typeof b.message === "string") return { message: b.message };
     if (typeof b.detail === "string")  return { message: b.detail };
+  }
+
+  if (typeof body === "string") {
+    const trimmed = body.trim().toLowerCase();
+    if (trimmed.startsWith("<!doctype") || trimmed.startsWith("<html")) {
+      return {
+        message:
+          status === 404
+            ? "Endpoint no encontrado. Verifica que la ruta exista en el backend y que el proxy de Vite esté activo."
+            : fallbackMessage(status),
+      };
+    }
+
+    if (body.trim().length > 0) {
+      return { message: body };
+    }
   }
 
   return { message: fallbackMessage(status) };

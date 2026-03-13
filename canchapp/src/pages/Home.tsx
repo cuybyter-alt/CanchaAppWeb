@@ -8,12 +8,17 @@ import { BookingPanel } from '../components/features/BookingPanel';
 import { FieldCard } from '../components/features/FieldCard';
 import { BookingCard } from '../components/features/BookingCard';
 import { mockFields, mockBookings } from '../mock/fields';
-import type { Field } from '../types/field';
+import type { Booking, Field } from '../types/field';
 import { useMapContext } from '../context/MapContext';
 
 const Home: React.FC = () => {
   const [selectedField, setSelectedField] = useState<Field>(mockFields[0]);
+  const [bookings, setBookings] = useState<Booking[]>(mockBookings);
   const { openMap } = useMapContext();
+
+  const handleBookingCreated = (booking: Booking) => {
+    setBookings(prev => [booking, ...prev]);
+  };
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
@@ -81,7 +86,7 @@ const Home: React.FC = () => {
               </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {mockBookings.map(booking => (
+              {bookings.map(booking => (
                 <BookingCard key={booking.id} booking={booking} />
               ))}
             </div>
@@ -91,7 +96,7 @@ const Home: React.FC = () => {
 
         {/* Columna derecha: panel de reserva sticky (solo desktop) */}
         <div className="hidden lg:block w-80 sticky top-20 flex-shrink-0">
-          <BookingPanel field={selectedField} />
+          <BookingPanel field={selectedField} onBookingCreated={handleBookingCreated} />
         </div>
 
       </div>

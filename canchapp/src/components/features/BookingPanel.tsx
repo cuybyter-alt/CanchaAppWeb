@@ -1,13 +1,17 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Calendar, Clock, MapPin, Minus, Plus, Star, Users, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
-import type { Field } from '../../types/field';
+import type { Booking, Field } from '../../types/field';
 import { MiniFieldSVG } from '../ui/svg-assets';
 import { formatPrice, formatPriceFull } from '../../lib/utils';
+import authService from '../../services/AuthService';
+import bookingService from '../../services/BookingService';
+import notify from '../../services/toast';
+import type { ApiError } from '../../services/ApiClient';
 
 interface BookingPanelProps {
   field: Field | null;
-  isAuthenticated?: boolean;
+  onBookingCreated?: (booking: Booking) => void;
 }
 
 const dates = [
@@ -28,22 +32,20 @@ const durations = [
 ];
 
 const sportIcons: Record<string, string> = {
-  soccer:     'fa-futbol',
-  basketball: 'fa-basketball',
-  padel:      'fa-table-tennis-paddle-ball',
-  volleyball: 'fa-volleyball',
-  tennis:     'fa-tennis-ball',
+  futbol5:    'fa-futbol',
+  futbol7:    'fa-futbol',
+  microfutbol:'fa-circle-dot',
+  futbol11:   'fa-futbol',
 };
 
 const sportNames: Record<string, string> = {
-  soccer:     'Fútbol',
-  basketball: 'Baloncesto',
-  padel:      'Pádel',
-  volleyball: 'Voleibol',
-  tennis:     'Tenis',
+  futbol5:    'Fútbol',
+  futbol7:    'Fútbol',
+  microfutbol:'Microfútbol',
+  futbol11:   'Fútbol',
 };
 
-export const BookingPanel: React.FC<BookingPanelProps> = ({ field, isAuthenticated = false }) => {
+export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCreated }) => {
   const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState('sat');
   const [selectedDuration, setSelectedDuration] = useState('1h');
@@ -52,15 +54,77 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, isAuthenticat
   );
   const [playerCount, setPlayerCount] = useState(field?.capacity ?? 10);
 
-  const handleBookNow = () => {
+  useEffect(() => {
+    setSelectedSlot(field?.availability.find(s => s.status !== 'taken')?.id ?? null);
+    setPlayerCount(field?.capacity ?? 10);
+  }, [field]);
+
+  const handleBookNow = async () => {
+    if (!field) return;
+
+    const isAuthenticated = authService.isAuthenticated();
     if (!isAuthenticated) {
-      navigate('/login');
+      notify.warning('Debes iniciar sesión para reservar', 'Regístrate o inicia sesión para continuar con tu reserva.');
+      setTimeout(() => navigate('/login'), 900);
       return;
+    }
+
+    const slot = field.availability.find(s => s.id === selectedSlot);
+    if (!slot) {
+      notify.error('Selecciona un horario', 'Debes elegir un horario disponible antes de reservar.');
+      return;
+    }
+
+    try {
+      const booked = await bookingService.createBooking(slot.id);
+
+      const date = dates.find(d => d.id === selectedDate);
+      const duration = durations.find(d => d.id === selectedDuration);
+
+      const newBooking: Booking = {
+        id: booked.booking_id,
+        fieldId: field.id,
+        fieldName: field.name,
+        sport: field.sport,
+        sportLabel: field.sportLabel,
+        date: `${date?.name ?? 'DÍA'}, ${date?.day ?? ''}`,
+        time: `${slot.time} ${slot.period}`,
+        duration: duration?.label ?? '1 hr',
+        players: playerCount,
+        status: booked.is_approved ? 'confirmed' : 'pending',
+        price: booked.total_price ?? (slot.price + 2000),
+      };
+
+      onBookingCreated?.(newBooking);
+      notify.success('Reserva creada', 'Tu reserva fue registrada correctamente.');
+    } catch (e) {
+      const err = e as ApiError;
+      const date = dates.find(d => d.id === selectedDate);
+      const duration = durations.find(d => d.id === selectedDuration);
+
+      const localBooking: Booking = {
+        id: `local-${Date.now()}`,
+        fieldId: field.id,
+        fieldName: field.name,
+        sport: field.sport,
+        sportLabel: field.sportLabel,
+        date: `${date?.name ?? 'DÍA'}, ${date?.day ?? ''}`,
+        time: `${slot.time} ${slot.period}`,
+        duration: duration?.label ?? '1 hr',
+        players: playerCount,
+        status: 'pending',
+        price: slot.price + 2000,
+      };
+
+      onBookingCreated?.(localBooking);
+      notify.warning('Reserva guardada en modo demo', err.message ?? 'El backend rechazó el slot de prueba, pero la reserva se agregó localmente.');
     }
   };
 
   const handleSaveToFavorites = () => {
+    const isAuthenticated = authService.isAuthenticated();
     if (!isAuthenticated) {
+      notify.info('Inicia sesión para guardar favoritos');
       navigate('/login');
     }
   };

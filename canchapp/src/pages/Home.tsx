@@ -10,14 +10,50 @@ import { BookingCard } from '../components/features/BookingCard';
 import { mockFields, mockBookings } from '../mock/fields';
 import type { Booking, Field } from '../types/field';
 import { useMapContext } from '../context/MapContext';
+import schedulingService from '../services/SchedulingService';
 
 const Home: React.FC = () => {
-  const [selectedField, setSelectedField] = useState<Field>(mockFields[0]);
+  const [fields, setFields] = useState<Field[]>(mockFields);
+  const [selectedFieldId, setSelectedFieldId] = useState<string>(mockFields[0]?.id ?? '');
   const [bookings, setBookings] = useState<Booking[]>(mockBookings);
   const { openMap } = useMapContext();
 
+  const selectedField = fields.find((f) => f.id === selectedFieldId) ?? fields[0] ?? null;
+
+  React.useEffect(() => {
+    const loadAvailableFields = async () => {
+      try {
+        const dateISO = new Date().toISOString().slice(0, 10);
+        const apiFields = await schedulingService.searchAvailableFields(dateISO);
+        if (apiFields.length > 0) {
+          setFields(apiFields);
+          setSelectedFieldId(apiFields[0].id);
+        }
+      } catch {
+        // Keep fallback mock fields in dev if endpoint is unavailable.
+      }
+    };
+
+    loadAvailableFields();
+  }, []);
+
   const handleBookingCreated = (booking: Booking) => {
     setBookings(prev => [booking, ...prev]);
+  };
+
+  const handleSlotBooked = (fieldId: string, slotId: string) => {
+    setFields((prev) =>
+      prev.map((field) =>
+        field.id === fieldId
+          ? {
+              ...field,
+              availability: field.availability.map((slot) =>
+                slot.id === slotId ? { ...slot, status: 'taken', spotsLeft: undefined } : slot,
+              ),
+            }
+          : field,
+      ),
+    );
   };
 
   return (
@@ -63,12 +99,12 @@ const Home: React.FC = () => {
               </button>
             </div>
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-              {mockFields.map(field => (
+              {fields.map(field => (
                 <FieldCard
                   key={field.id}
                   field={field}
-                  isSelected={selectedField.id === field.id}
-                  onSelect={setSelectedField}
+                  isSelected={selectedField?.id === field.id}
+                  onSelect={(next) => setSelectedFieldId(next.id)}
                 />
               ))}
             </div>
@@ -96,7 +132,11 @@ const Home: React.FC = () => {
 
         {/* Columna derecha: panel de reserva sticky (solo desktop) */}
         <div className="hidden lg:block w-80 sticky top-20 flex-shrink-0">
-          <BookingPanel field={selectedField} onBookingCreated={handleBookingCreated} />
+          <BookingPanel
+            field={selectedField}
+            onBookingCreated={handleBookingCreated}
+            onSlotBooked={handleSlotBooked}
+          />
         </div>
 
       </div>

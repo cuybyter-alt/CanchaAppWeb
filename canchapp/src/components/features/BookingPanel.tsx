@@ -8,10 +8,12 @@ import authService from '../../services/AuthService';
 import bookingService from '../../services/BookingService';
 import notify from '../../services/toast';
 import type { ApiError } from '../../services/ApiClient';
+import schedulingService from '../../services/SchedulingService';
 
 interface BookingPanelProps {
   field: Field | null;
   onBookingCreated?: (booking: Booking) => void;
+  onSlotBooked?: (fieldId: string, slotId: string) => void;
 }
 
 const dates = [
@@ -45,7 +47,7 @@ const sportNames: Record<string, string> = {
   futbol11:   'Fútbol',
 };
 
-export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCreated }) => {
+export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCreated, onSlotBooked }) => {
   const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState('sat');
   const [selectedDuration, setSelectedDuration] = useState('1h');
@@ -53,11 +55,35 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
     field?.availability.find(s => s.status !== 'taken')?.id ?? null
   );
   const [playerCount, setPlayerCount] = useState(field?.capacity ?? 10);
+  const [slots, setSlots] = useState(field?.availability ?? []);
 
   useEffect(() => {
+    setSlots(field?.availability ?? []);
     setSelectedSlot(field?.availability.find(s => s.status !== 'taken')?.id ?? null);
     setPlayerCount(field?.capacity ?? 10);
   }, [field]);
+
+  useEffect(() => {
+    const loadSlots = async () => {
+      if (!field) return;
+      try {
+        const todayISO = new Date().toISOString().slice(0, 10);
+        const apiSlots = await schedulingService.getFieldTimeSlots(field.id, todayISO);
+        if (apiSlots.length > 0) {
+          setSlots(apiSlots);
+          setSelectedSlot(apiSlots.find(s => s.status !== 'taken')?.id ?? null);
+          return;
+        }
+      } catch {
+        // Keep fallback to provided field availability.
+      }
+
+      setSlots(field.availability);
+      setSelectedSlot(field.availability.find(s => s.status !== 'taken')?.id ?? null);
+    };
+
+    loadSlots();
+  }, [field?.id, selectedDate]);
 
   const handleBookNow = async () => {
     if (!field) return;
@@ -69,7 +95,7 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
       return;
     }
 
-    const slot = field.availability.find(s => s.id === selectedSlot);
+    const slot = slots.find(s => s.id === selectedSlot);
     if (!slot) {
       notify.error('Selecciona un horario', 'Debes elegir un horario disponible antes de reservar.');
       return;
@@ -96,6 +122,8 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
       };
 
       onBookingCreated?.(newBooking);
+      onSlotBooked?.(field.id, slot.id);
+      setSlots(prev => prev.map(s => (s.id === slot.id ? { ...s, status: 'taken', spotsLeft: undefined } : s)));
       notify.success('Reserva creada', 'Tu reserva fue registrada correctamente.');
     } catch (e) {
       const err = e as ApiError;
@@ -117,6 +145,8 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
       };
 
       onBookingCreated?.(localBooking);
+      onSlotBooked?.(field.id, slot.id);
+      setSlots(prev => prev.map(s => (s.id === slot.id ? { ...s, status: 'taken', spotsLeft: undefined } : s)));
       notify.warning('Reserva guardada en modo demo', err.message ?? 'El backend rechazó el slot de prueba, pero la reserva se agregó localmente.');
     }
   };
@@ -139,7 +169,7 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
     );
   }
 
-  const selectedSlotData = field.availability.find(s => s.id === selectedSlot);
+  const selectedSlotData = slots.find(s => s.id === selectedSlot);
   const basePrice = selectedSlotData?.price ?? field.price;
   const weekendSurcharge = 2000;
   const total = basePrice + weekendSurcharge;
@@ -257,7 +287,7 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
           HORARIOS
         </p>
         <div className="grid grid-cols-3 gap-2 mb-5">
-          {field.availability.map((slot) => {
+          {slots.map((slot) => {
             const isTaken   = slot.status === 'taken';
             const isActive  = selectedSlot === slot.id;
             const isAlmost  = slot.status === 'almost-full';

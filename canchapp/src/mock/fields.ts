@@ -39,7 +39,7 @@ export const mockFields: Field[] = [
       { icon: 'shirt', label: 'Petos' },
     ],
     availability: generateTimeSlots(),
-    isFavorite: true,
+    isFavorite: false,
     capacity: 10,
     description: 'Cancha de grama sintética con iluminación profesional',
   },

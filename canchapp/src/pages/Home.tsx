@@ -12,9 +12,12 @@ import { mockFields } from '../mock/fields';
 import type { Booking, Field } from '../types/field';
 import { useMapContext } from '../context/MapContext';
 import demoReservationService from '../services/DemoReservationService';
+import demoFavoritesService from '../services/DemoFavoritesService';
 
 const Home: React.FC = () => {
-  const initialFields = mockFields.map((f) => demoReservationService.applyLockedSlots(f));
+  const initialFields = demoFavoritesService.applyFavorites(
+    mockFields.map((f) => demoReservationService.applyLockedSlots(f)),
+  );
   const [fields, setFields] = useState<Field[]>(initialFields);
   const [selectedFieldId, setSelectedFieldId] = useState<string>(initialFields[0]?.id ?? '');
   const [bookings, setBookings] = useState<Booking[]>(demoReservationService.getBookings());
@@ -42,6 +45,16 @@ const Home: React.FC = () => {
             }
           : field,
       ),
+    );
+  };
+
+  const handleToggleFavorite = (fieldId: string) => {
+    const favoriteIds = new Set(demoFavoritesService.toggleFavorite(fieldId));
+    setFields((prev) =>
+      prev.map((field) => ({
+        ...field,
+        isFavorite: favoriteIds.has(field.id),
+      })),
     );
   };
 
@@ -94,6 +107,7 @@ const Home: React.FC = () => {
                   field={field}
                   isSelected={selectedField?.id === field.id}
                   onSelect={(next) => setSelectedFieldId(next.id)}
+                  onToggleFavorite={handleToggleFavorite}
                 />
               ))}
             </div>

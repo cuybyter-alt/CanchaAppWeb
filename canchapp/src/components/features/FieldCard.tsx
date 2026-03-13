@@ -1,5 +1,4 @@
 import { Heart, MapPin, Star } from 'lucide-react';
-import { useState } from 'react';
 import type { Field } from '../../types/field';
 import { Badge } from '../ui/badge';
 import { Typography } from '../ui/typography';
@@ -10,31 +9,35 @@ interface FieldCardProps {
   field: Field;
   isSelected?: boolean;
   onSelect?: (field: Field) => void;
+  onToggleFavorite?: (fieldId: string) => void;
 }
 
 const getSportGradient = (sport: string) => {
   switch (sport) {
-    case 'soccer':     return 'linear-gradient(145deg, #1a3810, #2d5a1a)';
-    case 'basketball': return 'linear-gradient(145deg, #0d1f3c, #1a3a6b)';
-    case 'padel':      return 'linear-gradient(145deg, #2a1a10, #5a3a1a)';
+    case 'futbol11':   return 'linear-gradient(145deg, #1a3810, #2d5a1a)';
+    case 'futbol7':    return 'linear-gradient(145deg, #1a3810, #2d5a1a)';
+    case 'microfutbol':return 'linear-gradient(145deg, #19383a, #1f5a60)';
+    case 'futbol5':    return 'linear-gradient(145deg, #1a3810, #2d5a1a)';
     default:           return 'linear-gradient(145deg, #1a3810, #2d5a1a)';
   }
 };
 
 const getFieldSVG = (sport: string) => {
   switch (sport) {
-    case 'soccer':     return <FieldPitchSVG />;
-    case 'basketball': return <BasketballCourtSVG />;
-    case 'padel':      return <PadelCourtSVG />;
+    case 'futbol11': return <FieldPitchSVG />;
+    case 'futbol7': return <FieldPitchSVG />;
+    case 'microfutbol': return <BasketballCourtSVG />;
+    case 'futbol5': return <FieldPitchSVG />;
     default:           return <FieldPitchSVG />;
   }
 };
 
 const getSportIcon = (sport: string) => {
   switch (sport) {
-    case 'soccer':     return 'futbol';
-    case 'basketball': return 'basketball';
-    case 'padel':      return 'table-tennis-paddle-ball';
+    case 'futbol11': return 'futbol';
+    case 'futbol7': return 'futbol';
+    case 'microfutbol': return 'circle-dot';
+    case 'futbol5': return 'futbol';
     default:           return 'futbol';
   }
 };
@@ -49,12 +52,12 @@ const getTagBadge = (tag: string) => {
   }
 };
 
-export function FieldCard({ field, isSelected, onSelect }: FieldCardProps) {
-  const [isFavorite, setIsFavorite] = useState(field.isFavorite);
+export function FieldCard({ field, isSelected, onSelect, onToggleFavorite }: FieldCardProps) {
+  const isFavorite = field.isFavorite;
 
   const handleFavoriteClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    setIsFavorite(!isFavorite);
+    onToggleFavorite?.(field.id);
   };
 
   return (
@@ -94,8 +97,8 @@ export function FieldCard({ field, isSelected, onSelect }: FieldCardProps) {
             transition-all duration-[var(--duration-fast)] z-10
             ${
               isFavorite
-                ? 'bg-[var(--color-accent)]/25 border-[var(--color-accent)]/20 text-[var(--color-accent)]'
-                : 'bg-white/12 border-white/20 text-white/60 hover:bg-[var(--color-accent)]/30 hover:text-[var(--color-accent)]'
+                ? 'bg-red-500/25 border-red-400/40 text-red-500'
+                : 'bg-white/12 border-white/20 text-white/60 hover:bg-red-500/25 hover:text-red-400 hover:border-red-400/40'
             }
             hover:scale-110 active:scale-95
           `}

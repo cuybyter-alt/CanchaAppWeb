@@ -8,24 +8,26 @@ interface BookingCardProps {
 
 const getSportGradient = (sport: string) => {
   switch (sport) {
-    case 'soccer':     return 'linear-gradient(145deg, #1a3810, #2d5a1a)';
-    case 'basketball': return 'linear-gradient(145deg, #0d1f3c, #1a3a6b)';
-    case 'padel':      return 'linear-gradient(145deg, #2a1a10, #5a3a1a)';
+    case 'futbol11':   return 'linear-gradient(145deg, #1a3810, #2d5a1a)';
+    case 'futbol7':    return 'linear-gradient(145deg, #1a3810, #2d5a1a)';
+    case 'microfutbol':return 'linear-gradient(145deg, #19383a, #1f5a60)';
+    case 'futbol5':    return 'linear-gradient(145deg, #1a3810, #2d5a1a)';
     default:           return 'linear-gradient(145deg, #1a3810, #2d5a1a)';
   }
 };
 
 const getSportIcon = (sport: string) => {
   switch (sport) {
-    case 'soccer':     return 'futbol';
-    case 'basketball': return 'basketball';
-    case 'padel':      return 'table-tennis-paddle-ball';
+    case 'futbol11':    return 'futbol';
+    case 'futbol7':     return 'futbol';
+    case 'microfutbol': return 'circle-dot';
+    case 'futbol5':     return 'futbol';
     default:           return 'futbol';
   }
 };
 
 const getSportIconColor = (sport: string) => {
-  if (sport === 'padel') return 'linear-gradient(145deg, #FFE84D, var(--color-score-dark))';
+  if (sport === 'microfutbol') return 'linear-gradient(145deg, #68d7de, #1f5a60)';
   return 'linear-gradient(145deg, var(--color-primary-light), var(--color-primary-dark))';
 };
 

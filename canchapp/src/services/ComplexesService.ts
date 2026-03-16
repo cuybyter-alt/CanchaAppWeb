@@ -196,6 +196,18 @@ const mapField = (item: RawRecord, complex: ComplexContext, index: number): Fiel
   };
 };
 
+const haversineKm = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+  const R = 6371;
+  const dLat = ((lat2 - lat1) * Math.PI) / 180;
+  const dLng = ((lng2 - lng1) * Math.PI) / 180;
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos((lat1 * Math.PI) / 180) *
+      Math.cos((lat2 * Math.PI) / 180) *
+      Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
+
 const complexesService = {
   getCachedFieldsSync(): Field[] {
     if (memoryCache && isCacheFresh(memoryCache.timestamp)) {
@@ -262,6 +274,51 @@ const complexesService = {
         };
       })
       .filter((m): m is ComplexMarker => m !== null);
+  },
+
+  async getNearbyFields(userLat: number, userLng: number, maxComplexes = 8): Promise<Field[]> {
+    const markers = await this.getComplexMarkers();
+
+    const sorted = markers
+      .slice()
+      .sort(
+        (a, b) =>
+          haversineKm(userLat, userLng, a.latitude, a.longitude) -
+          haversineKm(userLat, userLng, b.latitude, b.longitude),
+      )
+      .slice(0, maxComplexes);
+
+    const seen = new Set<string>();
+    const results: Field[] = [];
+
+    // Promise.allSettled preserves input order, so results[0] = nearest complex
+    const settled = await Promise.allSettled(
+      sorted.map(async (complex, complexIndex) => {
+        const distKm = haversineKm(userLat, userLng, complex.latitude, complex.longitude);
+        const distLabel = `${distKm.toFixed(1)} km`;
+        const ctx: ComplexContext = { id: complex.id, name: complex.name, city: complex.city };
+        const response = await ApiClient.get<ApiResponse<unknown>>(`/complexes/${complex.id}/fields/`);
+        const fieldItems = extractArray(response.data);
+        return fieldItems
+          .map((item, idx) => {
+            const field = mapField(item, ctx, complexIndex * 20 + idx);
+            if (!field) return null;
+            return { ...field, distance: distLabel };
+          })
+          .filter((f): f is Field => f !== null);
+      }),
+    );
+
+    for (const result of settled) {
+      if (result.status !== 'fulfilled') continue;
+      for (const field of result.value) {
+        if (seen.has(field.id)) continue;
+        seen.add(field.id);
+        results.push(field);
+      }
+    }
+
+    return results;
   },
 
   async loadAllFieldsFromApi(onBatch?: (fields: Field[]) => void): Promise<Field[]> {

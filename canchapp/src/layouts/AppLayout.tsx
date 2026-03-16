@@ -10,6 +10,7 @@ import type { ComplexMarker } from '../types/map';
 export default function AppLayout() {
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [complexMarkers, setComplexMarkers] = useState<ComplexMarker[]>([]);
+  const [searchQuery, setSearchQuery] = useState('');
 
   // Mock upcoming booking - puedes conectarlo a tu store más tarde
   const upcomingBooking = {
@@ -20,10 +21,10 @@ export default function AppLayout() {
   };
 
   return (
-    <MapContext.Provider value={{ openMap: () => setIsMapOpen(true), complexMarkers, setComplexMarkers }}>
+    <MapContext.Provider value={{ openMap: () => setIsMapOpen(true), complexMarkers, setComplexMarkers, searchQuery, setSearchQuery }}>
       <div className="min-h-screen relative z-[1]">
         {/* Topbar - fixed at top */}
-        <Topbar />
+        <Topbar onSearch={setSearchQuery} searchValue={searchQuery} />
 
         {/* Location permission reminder */}
         <LocationBanner />

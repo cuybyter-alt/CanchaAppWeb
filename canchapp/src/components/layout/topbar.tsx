@@ -5,9 +5,10 @@ import authService, { tokenStorage } from '../../services/AuthService';
 
 interface TopbarProps {
   onSearch?: (query: string) => void;
+  searchValue?: string;
 }
 
-export function Topbar({ onSearch }: TopbarProps) {
+export function Topbar({ onSearch, searchValue = '' }: TopbarProps) {
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -66,9 +67,15 @@ export function Topbar({ onSearch }: TopbarProps) {
           <input
             type="text"
             placeholder="Buscar canchas, barrios..."
+            value={searchValue}
             className="flex-1 bg-transparent border-none outline-none text-white text-sm font-bold py-2.5 placeholder:text-white/30 placeholder:font-semibold"
             onChange={(e) => onSearch?.(e.target.value)}
           />
+          {searchValue && (
+            <button onClick={() => onSearch?.('')} className="text-white/40 hover:text-white/80 transition-colors">
+              <X className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
 
         {/* Actions */}

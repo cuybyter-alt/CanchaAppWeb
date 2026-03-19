@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { MapPin, ArrowRight } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Typography } from '../components/ui/typography';
@@ -6,14 +6,71 @@ import { PromoBanner } from '../components/sections/PromoBanner';
 import { MapCard } from '../components/sections/MapCard';
 import { FiltersBar } from '../components/features/FiltersBar';
 import { BookingPanel } from '../components/features/BookingPanel';
-import { FieldCard } from '../components/features/FieldCard';
 import { BookingCard } from '../components/features/BookingCard';
+import { ComplexCard } from '../components/features/ComplexCard';
+import { ComplexFieldsDialog } from '../components/features/ComplexFieldsDialog';
 import { mockFields } from '../mock/fields';
-import type { Booking, Field } from '../types/field';
+import type { Booking, ComplexField, ComplexFieldType, Field, TimeSlotData } from '../types/field';
+import type { NearbyComplex } from '../types/map';
 import { useMapContext } from '../context/MapContext';
 import demoReservationService from '../services/DemoReservationService';
 import demoFavoritesService from '../services/DemoFavoritesService';
 import complexesService from '../services/ComplexesService';
+import { formatPrice } from '../lib/utils';
+
+const FILTER_TO_API: Record<string, string | undefined> = {
+  futbol5: 'futbol_5',
+  futbol7: 'futbol_7',
+  futbol11: 'futbol_11',
+  microfutbol: 'microfutbol',
+  futsal: 'futsal',
+};
+
+const COMPLEX_TO_SPORT: Record<ComplexFieldType, Field['sport']> = {
+  futbol_5: 'futbol5',
+  futbol_7: 'futbol7',
+  futbol_11: 'futbol11',
+  microfutbol: 'microfutbol',
+  futsal: 'futbol5',
+};
+
+const COMPLEX_SPORT_LABEL: Record<ComplexFieldType, string> = {
+  futbol_5: 'F\u00fatbol 5',
+  futbol_7: 'F\u00fatbol 7',
+  futbol_11: 'F\u00fatbol 11',
+  microfutbol: 'Microf\u00fatbol',
+  futsal: 'Futsal',
+};
+
+function buildSyntheticField(cf: ComplexField, complex: import('../types/map').NearbyComplex, slot: TimeSlotData): Field {
+  return {
+    id: cf.fieldId,
+    name: cf.name,
+    sport: COMPLEX_TO_SPORT[cf.type] ?? 'futbol5',
+    sportLabel: COMPLEX_SPORT_LABEL[cf.type] ?? cf.type,
+    location: `${complex.name} \u00b7 ${complex.city}`,
+    distance: complex.distanceLabel,
+    price: slot.price,
+    priceLabel: formatPrice(slot.price),
+    rating: 0,
+    reviewCount: 0,
+    image: '',
+    tags: [],
+    amenities: [],
+    availability: [slot],
+    isFavorite: false,
+    capacity: 10,
+  };
+}
+
+const haversineKm = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+  const R = 6371, toRad = (d: number) => (d * Math.PI) / 180;
+  const dLat = toRad(lat2 - lat1), dLng = toRad(lng2 - lng1);
+  const a =
+    Math.sin(dLat / 2) ** 2 +
+    Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
+  return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+};
 
 const Home: React.FC = () => {
   const initialCachedFields = complexesService.getCachedFieldsSync();
@@ -23,41 +80,23 @@ const Home: React.FC = () => {
   const [fields, setFields] = useState<Field[]>(initialFields);
   const [selectedFieldId, setSelectedFieldId] = useState<string>(initialFields[0]?.id ?? '');
   const [bookings, setBookings] = useState<Booking[]>(demoReservationService.getBookings());
-  const [isLoadingFields, setIsLoadingFields] = useState(false);
-  const [nearbyFields, setNearbyFields] = useState<Field[]>([]);
-  const [isLoadingNearby, setIsLoadingNearby] = useState(false);
   const [locationGranted, setLocationGranted] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
-  const { openMap, searchQuery } = useMapContext();
+  // Nearby complexes
+  const [nearbyComplexes, setNearbyComplexes] = useState<NearbyComplex[]>([]);
+  const [isLoadingComplexes, setIsLoadingComplexes] = useState(false);
+  const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
+  const [selectedComplex, setSelectedComplex] = useState<NearbyComplex | null>(null);
+  const [isComplexDialogOpen, setIsComplexDialogOpen] = useState(false);
+  // Panel override: when a slot is chosen from the dialog on desktop
+  const [panelOverrideField, setPanelOverrideField] = useState<Field | null>(null);
+  const [bookingPanelFlash, setBookingPanelFlash] = useState(false);
+  // Skip first run of filter effect (initial complexes loaded by geo effect)
+  const skipFirstFilterEffect = useRef(true);
+  const { openMap } = useMapContext();
   const navigate = useNavigate();
 
   const selectedField = fields.find((f) => f.id === selectedFieldId) ?? fields[0] ?? null;
-  const nearbySource = nearbyFields.length > 0 ? nearbyFields : fields;
-
-  const filteredFields = nearbySource.filter((f) => {
-    if (searchQuery.trim()) {
-      const q = searchQuery.toLowerCase();
-      if (
-        !f.name.toLowerCase().includes(q) &&
-        !f.location.toLowerCase().includes(q) &&
-        !f.sportLabel.toLowerCase().includes(q)
-      )
-        return false;
-    }
-    if (activeFilter === 'all') return true;
-    if (['futbol5', 'futbol7', 'microfutbol', 'futbol11'].includes(activeFilter))
-      return f.sport === activeFilter;
-    if (activeFilter === 'techada') return f.tags.includes('indoor');
-    if (activeFilter === 'airelibre') return f.tags.includes('outdoor');
-    if (activeFilter === 'disponible') return f.availability.some((s) => s.status === 'available');
-    return true;
-  });
-
-  const displayNearbyFields = [
-    ...filteredFields.filter((f) => f.isFavorite),
-    ...filteredFields.filter((f) => !f.isFavorite),
-  ].slice(0, 6);
-  const showNearbyLoading = isLoadingNearby || (nearbyFields.length === 0 && isLoadingFields);
 
   const handleBookingCreated = (booking: Booking) => {
     const updated = demoReservationService.addBooking(booking);
@@ -81,18 +120,10 @@ const Home: React.FC = () => {
     );
   };
 
-  const handleToggleFavorite = (fieldId: string) => {
-    const favoriteIds = new Set(demoFavoritesService.toggleFavorite(fieldId));
-    const updater = (prev: Field[]) => prev.map((f) => ({ ...f, isFavorite: favoriteIds.has(f.id) }));
-    setFields(updater);
-    setNearbyFields(updater);
-  };
-
   useEffect(() => {
     let mounted = true;
 
     const loadFields = async () => {
-      setIsLoadingFields(true);
       let receivedAnyBatch = false;
 
       try {
@@ -134,7 +165,7 @@ const Home: React.FC = () => {
         }
       } finally {
         if (mounted) {
-          setIsLoadingFields(false);
+          // loading complete
         }
       }
     };
@@ -150,28 +181,27 @@ const Home: React.FC = () => {
     if (!navigator.geolocation) return;
 
     let cancelled = false;
-    setIsLoadingNearby(true);
+    setIsLoadingComplexes(true);
 
     navigator.geolocation.getCurrentPosition(
       async ({ coords }) => {
         if (cancelled) return;
         setLocationGranted(true);
+        setUserCoords({ lat: coords.latitude, lng: coords.longitude });
         try {
-          const nearby = await complexesService.getNearbyFields(coords.latitude, coords.longitude);
-          if (cancelled) return;
-          const prepared = demoFavoritesService.applyFavorites(
-            nearby.map((f) => demoReservationService.applyLockedSlots(f)),
+          const complexes = await complexesService.getNearbyComplexes(
+            coords.latitude,
+            coords.longitude,
           );
-          setNearbyFields(prepared);
+          if (cancelled) return;
+          setNearbyComplexes(complexes);
         } catch (err) {
-          console.error('Error cargando canchas cercanas:', err);
+          console.error('Error cargando complejos cercanos:', err);
         } finally {
-          if (!cancelled) setIsLoadingNearby(false);
+          if (!cancelled) setIsLoadingComplexes(false);
         }
       },
-      () => {
-        if (!cancelled) setIsLoadingNearby(false);
-      },
+      () => { if (!cancelled) setIsLoadingComplexes(false); },
       { timeout: 8000, enableHighAccuracy: false },
     );
 
@@ -179,6 +209,37 @@ const Home: React.FC = () => {
       cancelled = true;
     };
   }, []);
+
+  // Re-fetch complexes when the active sport filter changes
+  useEffect(() => {
+    if (skipFirstFilterEffect.current) {
+      skipFirstFilterEffect.current = false;
+      return;
+    }
+    if (!userCoords) return;
+
+    const fieldType = FILTER_TO_API[activeFilter];
+    let cancelled = false;
+    setIsLoadingComplexes(true);
+
+    complexesService
+      .getNearbyComplexes(userCoords.lat, userCoords.lng, 6, fieldType)
+      .then((results) => { if (!cancelled) setNearbyComplexes(results); })
+      .catch(console.error)
+      .finally(() => { if (!cancelled) setIsLoadingComplexes(false); });
+
+    return () => { cancelled = true; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeFilter]);
+
+  const handleSlotFromDialog = (complexField: ComplexField, slot: TimeSlotData, _date: string) => {
+    if (!selectedComplex) return;
+    const synthField = buildSyntheticField(complexField, selectedComplex, slot);
+    setPanelOverrideField(synthField);
+    setIsComplexDialogOpen(false);
+    setBookingPanelFlash(true);
+    setTimeout(() => setBookingPanelFlash(false), 2500);
+  };
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
@@ -210,25 +271,38 @@ const Home: React.FC = () => {
               onFilterChange={setActiveFilter}
             />
             <div className="mt-4">
-              <MapCard onOpenMap={openMap} />
+              <MapCard
+                onOpenMap={openMap}
+                onMarkerClick={(marker) => {
+                  const distKm = userCoords
+                    ? haversineKm(userCoords.lat, userCoords.lng, marker.latitude, marker.longitude)
+                    : 0;
+                  setSelectedComplex({
+                    ...marker,
+                    distanceKm: distKm,
+                    distanceLabel: distKm > 0 ? `${distKm.toFixed(1)} km` : '',
+                  });
+                  setIsComplexDialogOpen(true);
+                }}
+              />
             </div>
           </div>
 
-          {/* Sección: Canchas Cercanas */}
+          {/* Sección: Complejos Cercanos */}
           <div>
             <div className="flex items-center justify-between mb-4">
               <Typography variant="h3" color="text">
                 <i className="fa-solid fa-location-dot text-[var(--color-primary)] mr-2" />
-                Canchas Cercanas
+                Complejos Cercanos
               </Typography>
               <button
                 onClick={() => navigate('/fields')}
                 className="flex items-center gap-1 text-[13px] font-extrabold text-[var(--color-primary-dark)] cursor-pointer hover:underline"
               >
-                Ver todas <ArrowRight className="w-3 h-3" />
+                Ver todos <ArrowRight className="w-3 h-3" />
               </button>
             </div>
-            {showNearbyLoading ? (
+            {isLoadingComplexes ? (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
                 {Array.from({ length: 3 }).map((_, i) => (
                   <div
@@ -237,37 +311,38 @@ const Home: React.FC = () => {
                   />
                 ))}
               </div>
-            ) : displayNearbyFields.length === 0 ? (
+            ) : nearbyComplexes.length === 0 ? (
               <div className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-6 text-center">
                 <Typography variant="h4" color="text" className="mb-2">
-                  No se encontraron canchas cercanas
+                  No se encontraron complejos cercanos
                 </Typography>
                 <Typography variant="small" color="text-3">
-                  Activa tu ubicación para ver canchas cerca de ti, o{' '}
+                  Activa tu ubicación para ver complejos cerca de ti, o{' '}
                   <button
                     onClick={() => navigate('/fields')}
                     className="underline font-bold text-[var(--color-primary-dark)]"
                   >
-                    explora todas
+                    explora todo
                   </button>.
                 </Typography>
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                {displayNearbyFields.map(field => (
-                  <FieldCard
-                    key={field.id}
-                    field={field}
-                    isSelected={selectedField?.id === field.id}
-                    onSelect={(next) => setSelectedFieldId(next.id)}
-                    onToggleFavorite={handleToggleFavorite}
+                {nearbyComplexes.map((complex) => (
+                  <ComplexCard
+                    key={complex.id}
+                    complex={complex}
+                    onSelect={() => {
+                      setSelectedComplex(complex);
+                      setIsComplexDialogOpen(true);
+                    }}
                   />
                 ))}
               </div>
             )}
-            {locationGranted && (
+            {locationGranted && nearbyComplexes.length > 0 && (
               <p className="mt-3 text-xs font-bold text-[var(--color-text-3)]">
-                Ordenado por distancia · Favoritas primero
+                Ordenados por distancia
               </p>
             )}
           </div>
@@ -308,14 +383,39 @@ const Home: React.FC = () => {
 
         {/* Columna derecha: panel de reserva sticky (solo desktop) */}
         <div className="hidden lg:block w-80 sticky top-20 flex-shrink-0">
-          <BookingPanel
-            field={selectedField}
-            onBookingCreated={handleBookingCreated}
-            onSlotBooked={handleSlotBooked}
-          />
+          {/* Flash hint when a slot is pre-selected from the complex dialog */}
+          {bookingPanelFlash && (
+            <div className="mb-2 flex items-center gap-2 px-3 py-2 rounded-[var(--radius-lg)]
+              bg-[var(--color-primary)]/20 border border-[var(--color-primary)]/40 animate-pulse">
+              <i className="fa-solid fa-arrow-down text-[var(--color-primary)] animate-bounce text-sm" />
+              <span className="text-[11px] font-extrabold text-[var(--color-primary-dark)]">
+                Horario preseleccionado — confirma aqu\u00ed
+              </span>
+            </div>
+          )}
+          <div className={`transition-all duration-300 ${
+            bookingPanelFlash
+              ? 'ring-2 ring-[var(--color-primary)] ring-offset-2 ring-offset-[var(--color-surface)] rounded-[var(--radius-2xl)]'
+              : ''
+          }`}>
+            <BookingPanel
+              field={panelOverrideField ?? selectedField}
+              onBookingCreated={handleBookingCreated}
+              onSlotBooked={handleSlotBooked}
+            />
+          </div>
         </div>
 
       </div>
+
+      {/* Dialog: canchas de un complejo */}
+      <ComplexFieldsDialog
+        isOpen={isComplexDialogOpen}
+        onClose={() => setIsComplexDialogOpen(false)}
+        complex={selectedComplex}
+        onSlotSelected={handleSlotFromDialog}
+        onBookingCreated={handleBookingCreated}
+      />
     </div>
   );
 };

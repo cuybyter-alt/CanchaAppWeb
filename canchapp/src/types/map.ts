@@ -61,3 +61,20 @@ export interface ComplexMarker {
   maxPrice: number;
   fieldsCount: number;
 }
+
+/**
+ * Complejo deportivo cercano con distancia calculada al usuario
+ */
+export interface NearbyComplex {
+  id: string;
+  name: string;
+  address: string;
+  city: string;
+  latitude: number;
+  longitude: number;
+  minPrice: number;
+  maxPrice: number;
+  fieldsCount: number;
+  distanceKm: number;
+  distanceLabel: string;
+}

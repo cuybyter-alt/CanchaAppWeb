@@ -97,6 +97,7 @@ function toTimeSlotData(item: TimeSlotOutput, idx: number): TimeSlotData {
     period,
     price: Number(item.price ?? 0),
     status: isTaken ? 'taken' : 'available',
+    startIso: item.start_datetime,
   };
 }
 

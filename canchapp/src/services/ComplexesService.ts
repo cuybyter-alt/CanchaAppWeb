@@ -1,6 +1,6 @@
 import ApiClient from './ApiClient';
-import type { Field, FieldType, Sport, TimeSlotData } from '../types/field';
-import type { ComplexMarker } from '../types/map';
+import type { Field, FieldType, Sport, TimeSlotData, ComplexField } from '../types/field';
+import type { ComplexMarker, NearbyComplex } from '../types/map';
 
 interface ApiResponse<T> {
   data: T;
@@ -319,6 +319,64 @@ const complexesService = {
     }
 
     return results;
+  },
+
+  async getNearbyComplexes(
+    userLat: number,
+    userLng: number,
+    max = 6,
+    fieldType?: string,
+  ): Promise<NearbyComplex[]> {
+    const params = new URLSearchParams({ page_size: '100' });
+    if (fieldType) params.set('field_type', fieldType);
+    const res = await ApiClient.get<ApiResponse<unknown>>(`/complexes/?${params.toString()}`);
+    const items = extractArray(res.data);
+
+    return items
+      .map((item): NearbyComplex | null => {
+        const id = asString(item.complex_id) ?? asString(item.id);
+        const lat = asNumber(item.latitude);
+        const lng = asNumber(item.longitude);
+        if (!id || lat === undefined || lng === undefined) return null;
+        const distKm = haversineKm(userLat, userLng, lat, lng);
+        return {
+          id,
+          name: asString(item.name) ?? 'Complejo deportivo',
+          address: asString(item.address) ?? '',
+          city: asString(item.city) ?? '',
+          latitude: lat,
+          longitude: lng,
+          minPrice: asNumber(item.min_price) ?? 0,
+          maxPrice: asNumber(item.max_price) ?? 0,
+          fieldsCount: asNumber(item.fields_count) ?? 0,
+          distanceKm: distKm,
+          distanceLabel: `${distKm.toFixed(1)} km`,
+        };
+      })
+      .filter((m): m is NearbyComplex => m !== null)
+      .sort((a, b) => a.distanceKm - b.distanceKm)
+      .slice(0, max);
+  },
+
+  async getComplexFields(complexId: string): Promise<ComplexField[]> {
+    const res = await ApiClient.get<ApiResponse<unknown>>(`/complexes/${complexId}/fields/`);
+    const items = extractArray(res.data);
+
+    return items
+      .map((item): ComplexField | null => {
+        const fieldId = asString(item.field_id) ?? asString(item.id);
+        if (!fieldId) return null;
+        return {
+          fieldId,
+          complexId: asString(item.complex_id) ?? complexId,
+          name: asString(item.name) ?? 'Cancha',
+          status: (asString(item.status) ?? 'active') as ComplexField['status'],
+          type: (asString(item.type) ?? 'futbol_5') as ComplexField['type'],
+          length: asNumber(item.length),
+          width: asNumber(item.width),
+        };
+      })
+      .filter((f): f is ComplexField => f !== null);
   },
 
   async loadAllFieldsFromApi(onBatch?: (fields: Field[]) => void): Promise<Field[]> {

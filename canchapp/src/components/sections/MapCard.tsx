@@ -22,18 +22,24 @@ interface MapCardProps {
   onOpenMap?: () => void;
   style?: string;
   showMiniMap?: boolean;
+  /** Called when a complex marker is clicked. If omitted, navigates to /complexes/:id. */
+  onMarkerClick?: (marker: ComplexMarker) => void;
 }
 
 export function MapCard({
   onOpenMap,
   style = MAPBOX_STYLES.dark,
   showMiniMap = true,
+  onMarkerClick,
 }: MapCardProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<MapboxMap | null>(null);
   const markersRef = useRef<any[]>([]);
   const isInitialized = useRef(false);
   const autoGeolocateRef = useRef(false);
+  // Keep a stable ref so startMap (useCallback) never needs onMarkerClick in its deps
+  const onMarkerClickRef = useRef(onMarkerClick);
+  useEffect(() => { onMarkerClickRef.current = onMarkerClick; }, [onMarkerClick]);
 
   const [locationState, setLocationState] = useState<LocationState>('checking');
   const [error, setError] = useState<string | null>(null);
@@ -94,10 +100,17 @@ export function MapCard({
           // a CSS animation (e.g. dialog open transition)
           mapInstance.resize();
 
+          const markerClickHandler = (marker: ComplexMarker) => {
+            if (onMarkerClickRef.current) {
+              onMarkerClickRef.current(marker);
+            } else {
+              navigate(`/complexes/${marker.id}`);
+            }
+          };
           const markers = addComplexMarkers(
             mapInstance,
             markersToDisplay,
-            (id) => navigate(`/complexes/${id}`),
+            markerClickHandler,
           );
           markersRef.current = markers;
 

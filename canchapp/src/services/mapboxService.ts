@@ -293,7 +293,7 @@ export function calculateDistance(
 
 function createComplexMarkerElement(
   complex: ComplexMarker,
-  onNavigate?: (id: string) => void,
+  onNavigate?: (complex: ComplexMarker) => void,
 ): HTMLElement {
   // el must NOT have position:relative — Mapbox positions its markers with
   // transform:translate on a wrapper div inside the map canvas. Adding
@@ -406,8 +406,8 @@ function createComplexMarkerElement(
   });
   observer.observe(document.body, { childList: true, subtree: true });
 
-  // ── Click → navigate ──────────────────────────────────────────────────
-  el.addEventListener('click', () => onNavigate?.(complex.id));
+  // ── Click → open dialog ─────────────────────────────────────────────────
+  el.addEventListener('click', () => onNavigate?.(complex));
 
   return el;
 }
@@ -415,7 +415,7 @@ function createComplexMarkerElement(
 export function addComplexMarkers(
   map: mapboxgl.Map,
   complexes: ComplexMarker[],
-  onNavigate?: (complexId: string) => void,
+  onNavigate?: (complex: ComplexMarker) => void,
 ): mapboxgl.Marker[] {
   const markers: mapboxgl.Marker[] = [];
 

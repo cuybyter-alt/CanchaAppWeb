@@ -14,6 +14,8 @@ export interface TimeSlotData {
   price: number;
   status: 'available' | 'taken' | 'almost-full';
   spotsLeft?: number;
+  /** ISO 8601 start datetime for past-slot detection */
+  startIso?: string;
 }
 
 export interface Field {
@@ -48,4 +50,17 @@ export interface Booking {
   players: number;
   status: 'confirmed' | 'pending' | 'cancelled';
   price: number;
+}
+
+export type ComplexFieldType = 'futbol_5' | 'futbol_7' | 'futbol_11' | 'microfutbol' | 'futsal';
+export type ComplexFieldStatus = 'active' | 'maintenance' | 'inactive';
+
+export interface ComplexField {
+  fieldId: string;
+  complexId: string;
+  name: string;
+  status: ComplexFieldStatus;
+  type: ComplexFieldType;
+  length?: number;
+  width?: number;
 }

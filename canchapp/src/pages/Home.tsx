@@ -9,7 +9,6 @@ import { BookingPanel } from '../components/features/BookingPanel';
 import { BookingCard } from '../components/features/BookingCard';
 import { ComplexCard } from '../components/features/ComplexCard';
 import { ComplexFieldsDialog } from '../components/features/ComplexFieldsDialog';
-import { mockFields } from '../mock/fields';
 import type { Booking, ComplexField, ComplexFieldType, Field, TimeSlotData } from '../types/field';
 import type { NearbyComplex } from '../types/map';
 import { useMapContext } from '../context/MapContext';
@@ -146,22 +145,16 @@ const Home: React.FC = () => {
         if (!mounted || apiFields.length === 0) return;
 
         const preparedFields = demoFavoritesService.applyFavorites(
-          apiFields.map((field) => demoReservationService.applyLockedSlots(field)),
-        );
 
+          apiFields.map((field) => demoReservationService.applyLockedSlots(field))
+        );
         setFields(preparedFields);
-        setSelectedFieldId((current) => {
-          if (preparedFields.some((field) => field.id === current)) return current;
-          return preparedFields[0]?.id ?? '';
-        });
+        setSelectedFieldId(preparedFields[0]?.id ?? '');
       } catch (error) {
         console.error('No se pudieron cargar las canchas desde complexes/fields. Usando mock.', error);
         if (!receivedAnyBatch) {
-          const fallbackFields = demoFavoritesService.applyFavorites(
-            mockFields.map((f) => demoReservationService.applyLockedSlots(f)),
-          );
-          setFields(fallbackFields);
-          setSelectedFieldId(fallbackFields[0]?.id ?? '');
+          setFields([]);
+          setSelectedFieldId('');
         }
       } finally {
         if (mounted) {

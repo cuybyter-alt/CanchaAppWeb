@@ -15,6 +15,15 @@ interface ComplexContext {
   city?: string;
 }
 
+export interface ComplexListItem {
+  id: string;
+  name: string;
+  city: string;
+  minPrice: number;
+  maxPrice: number;
+  fieldsCount: number;
+}
+
 type RawRecord = Record<string, unknown>;
 
 interface FieldsCachePayload {
@@ -109,11 +118,20 @@ const asNumber = (value: unknown): number | undefined => {
   return undefined;
 };
 
-const parseSport = (rawType?: string): { sport: Sport; sportLabel: string } => {
+const parseSport = (rawType?: string): { sport: Sport; sportLabel: string } | null => {
   const t = (rawType ?? '').toLowerCase();
+  const isFootballLike =
+    t.includes('fut') ||
+    t.includes('football') ||
+    t.includes('soccer') ||
+    t.includes('micro') ||
+    t.includes('futsal');
+
+  if (!isFootballLike) return null;
+
   if (t.includes('11')) return { sport: 'futbol11', sportLabel: 'Fútbol 11' };
   if (t.includes('7')) return { sport: 'futbol7', sportLabel: 'Fútbol 7' };
-  if (t.includes('micro')) return { sport: 'microfutbol', sportLabel: 'Microfútbol' };
+  if (t.includes('micro') || t.includes('futsal')) return { sport: 'microfutbol', sportLabel: 'Microfútbol' };
   return { sport: 'futbol5', sportLabel: 'Fútbol 5' };
 };
 
@@ -159,7 +177,9 @@ const mapField = (item: RawRecord, complex: ComplexContext, index: number): Fiel
   if (!id) return null;
 
   const rawType = asString(item.field_type) ?? asString(item.sport_type) ?? asString(item.sport);
-  const { sport, sportLabel } = parseSport(rawType);
+  const sportInfo = parseSport(rawType);
+  if (!sportInfo) return null;
+  const { sport, sportLabel } = sportInfo;
 
   const rawPrice =
     asNumber(item.price_per_hour) ??
@@ -196,6 +216,12 @@ const mapField = (item: RawRecord, complex: ComplexContext, index: number): Fiel
   };
 };
 
+const normalizeText = (value: string): string =>
+  value
+    .normalize('NFD')
+    .replace(/\p{Diacritic}/gu, '')
+    .toLowerCase();
+
 const haversineKm = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
   const R = 6371;
   const dLat = ((lat2 - lat1) * Math.PI) / 180;
@@ -209,6 +235,115 @@ const haversineKm = (lat1: number, lng1: number, lat2: number, lng2: number): nu
 };
 
 const complexesService = {
+  async getComplexes(params: { search?: string; pageSize?: number } = {}): Promise<ComplexListItem[]> {
+    const query = new URLSearchParams();
+    query.set('page_size', String(params.pageSize ?? 100));
+    if (params.search && params.search.trim().length > 0) {
+      query.set('search', params.search.trim());
+    }
+
+    const res = await ApiClient.get<ApiResponse<unknown>>(`/complexes/?${query.toString()}`);
+    const items = extractArray(res.data);
+
+    return items
+      .map((item): ComplexListItem | null => {
+        const id = asString(item.complex_id) ?? asString(item.id) ?? asString(item.uuid);
+        if (!id) return null;
+
+        return {
+          id,
+          name: asString(item.name) ?? 'Complejo deportivo',
+          city: asString(item.city) ?? '',
+          minPrice: asNumber(item.min_price) ?? 0,
+          maxPrice: asNumber(item.max_price) ?? 0,
+          fieldsCount: asNumber(item.fields_count) ?? 0,
+        };
+      })
+      .filter((item): item is ComplexListItem => item !== null);
+  },
+
+  async getComplexNameSuggestions(search: string, limit = 8): Promise<string[]> {
+    const term = search.trim();
+    if (!term) return [];
+
+    const complexes = await this.getComplexes({ search: term, pageSize: 20 });
+    const normalized = term.toLowerCase();
+
+    const ranked = complexes
+      .map((c) => {
+        const n = c.name.toLowerCase();
+        const starts = n.startsWith(normalized) ? 0 : 1;
+        const includes = n.includes(normalized) ? 0 : 1;
+        return { name: c.name, score: starts * 10 + includes };
+      })
+      .sort((a, b) => a.score - b.score)
+      .map((x) => x.name);
+
+    return [...new Set(ranked)].slice(0, limit);
+  },
+
+  async getFootballFieldsByComplexSearch(
+    search: string,
+    options: { onBatch?: (fields: Field[]) => void } = {},
+  ): Promise<Field[]> {
+    const term = search.trim();
+    if (!term) return [];
+
+    const normalizedTerm = normalizeText(term);
+
+    const localMatches = this.getCachedFieldsSync().filter((field) => {
+      const haystack = [field.name, field.location, field.sportLabel, field.description ?? '']
+        .map((x) => normalizeText(String(x)))
+        .join(' ');
+      return haystack.includes(normalizedTerm);
+    });
+
+    if (localMatches.length > 0) {
+      options.onBatch?.([...localMatches]);
+    }
+
+    const complexes = await this.getComplexes({ search: term, pageSize: 40 });
+    if (complexes.length === 0) return localMatches;
+
+    const merged: Field[] = [...localMatches];
+    const seen = new Set<string>(localMatches.map((field) => field.id));
+
+    for (let i = 0; i < complexes.length; i += FIELDS_CONCURRENCY) {
+      const batch = complexes.slice(i, i + FIELDS_CONCURRENCY);
+      const settled = await Promise.allSettled(
+        batch.map(async (complex) => {
+          const response = await ApiClient.get<ApiResponse<unknown>>(`/complexes/${complex.id}/fields/`);
+          const fieldItems = extractArray(response.data);
+
+          return fieldItems
+            .map((item, idx) =>
+              mapField(item, { id: complex.id, name: complex.name, city: complex.city }, idx),
+            )
+            .filter((field): field is Field => field !== null);
+        }),
+      );
+
+      for (const result of settled) {
+        if (result.status !== 'fulfilled') continue;
+        for (const field of result.value) {
+          if (seen.has(field.id)) continue;
+          const haystack = [field.name, field.location, field.sportLabel, field.description ?? '']
+            .map((x) => normalizeText(String(x)))
+            .join(' ');
+          if (!haystack.includes(normalizedTerm)) continue;
+          seen.add(field.id);
+          merged.push(field);
+        }
+      }
+
+      if (merged.length > 0) {
+        options.onBatch?.([...merged]);
+      }
+    }
+
+    return merged;
+  },
+
   getCachedFieldsSync(): Field[] {
     if (memoryCache && isCacheFresh(memoryCache.timestamp)) {
       return memoryCache.data;

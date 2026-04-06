@@ -138,17 +138,13 @@ const Home: React.FC = () => {
 
         const preparedFields = demoFavoritesService.applyFavorites(apiFields);
 
-          apiFields.map((field) => demoReservationService.applyLockedSlots(field))
-        );
         setFields(preparedFields);
-        setSelectedFieldId(preparedFields[0]?.id ?? '');
+        setSelectedFieldId((current) => {
+          if (preparedFields.some((field) => field.id === current)) return current;
+          return preparedFields[0]?.id ?? '';
+        });
       } catch (error) {
-        console.error('No se pudieron cargar las canchas desde complexes/fields. Usando mock.', error);
-        if (!receivedAnyBatch) {
-          const fallbackFields = demoFavoritesService.applyFavorites(mockFields);
-          setFields(fallbackFields);
-          setSelectedFieldId(fallbackFields[0]?.id ?? '');
-        }
+        console.error('No se pudieron cargar las canchas desde complexes/fields.', error);
       } finally {
         if (mounted) {
           // loading complete

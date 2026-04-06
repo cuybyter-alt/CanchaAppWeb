@@ -17,7 +17,7 @@ interface ComplexFieldsDialogProps {
   onClose: () => void;
   complex: NearbyComplex | null;
   /** Called on desktop when user picks a slot – parent should pre-fill BookingPanel */
-  onSlotSelected?: (field: ComplexField, slot: TimeSlotData, date: string) => void;
+  onSlotSelected?: (field: ComplexField, slot: TimeSlotData, date: string, allSlots: TimeSlotData[]) => void;
   /** Called after a successful inline booking (mobile flow) */
   onBookingCreated?: (booking: Booking) => void;
 }
@@ -593,7 +593,7 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
 
               {/* Desktop CTA — opens in the right panel */}
               <button
-                onClick={() => onSlotSelected?.(selectedFieldForSlot, selectedTimeSlot, selectedDate)}
+                onClick={() => onSlotSelected?.(selectedFieldForSlot, selectedTimeSlot, selectedDate, slotsMap[selectedFieldForSlot.fieldId]?.slots ?? [selectedTimeSlot])}
                 className="hidden lg:inline-flex items-center gap-1.5 px-4 py-2 rounded-[var(--radius-lg)]
                   bg-[var(--color-primary)] text-white text-[12px] font-extrabold
                   hover:opacity-90 active:scale-95 transition-all flex-shrink-0 shadow-sm"

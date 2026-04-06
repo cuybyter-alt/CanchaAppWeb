@@ -86,6 +86,8 @@ const Home: React.FC = () => {
   const [isComplexDialogOpen, setIsComplexDialogOpen] = useState(false);
   // Panel override: when a slot is chosen from the dialog on desktop
   const [panelOverrideField, setPanelOverrideField] = useState<Field | null>(null);
+  const [panelPreselectedSlotId, setPanelPreselectedSlotId] = useState<string | undefined>(undefined);
+  const [panelPreselectedDate, setPanelPreselectedDate] = useState<string | undefined>(undefined);
   const [bookingPanelFlash, setBookingPanelFlash] = useState(false);
   // Skip first run of filter effect (initial complexes loaded by geo effect)
   const skipFirstFilterEffect = useRef(true);
@@ -250,10 +252,12 @@ const Home: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFilter]);
 
-  const handleSlotFromDialog = (complexField: ComplexField, slot: TimeSlotData, _date: string) => {
+  const handleSlotFromDialog = (complexField: ComplexField, slot: TimeSlotData, date: string) => {
     if (!selectedComplex) return;
     const synthField = buildSyntheticField(complexField, selectedComplex, slot);
     setPanelOverrideField(synthField);
+    setPanelPreselectedSlotId(slot.id);
+    setPanelPreselectedDate(date);
     setIsComplexDialogOpen(false);
     setBookingPanelFlash(true);
     setTimeout(() => setBookingPanelFlash(false), 2500);
@@ -446,6 +450,8 @@ const Home: React.FC = () => {
               field={panelOverrideField ?? selectedField}
               onBookingCreated={handleBookingCreated}
               onSlotBooked={handleSlotBooked}
+              preselectedSlotId={panelPreselectedSlotId}
+              preselectedDate={panelPreselectedDate}
             />
           </div>
         </div>

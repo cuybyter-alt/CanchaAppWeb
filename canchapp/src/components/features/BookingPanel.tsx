@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Calendar, Clock, MapPin, Star, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Booking, Field } from '../../types/field';
@@ -14,6 +14,10 @@ interface BookingPanelProps {
   field: Field | null;
   onBookingCreated?: (booking: Booking) => void;
   onSlotBooked?: (fieldId: string, slotId: string) => void;
+  /** Slot id to pre-select (from ComplexFieldsDialog) */
+  preselectedSlotId?: string;
+  /** ISO date string to pre-select (from ComplexFieldsDialog) */
+  preselectedDate?: string;
 }
 
 const DAY_NAMES = ['DOM', 'LUN', 'MAR', 'MIE', 'JUE', 'VIE', 'SAB'];
@@ -50,7 +54,7 @@ const sportNames: Record<string, string> = {
   futbol11:   'Fútbol',
 };
 
-export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCreated, onSlotBooked }) => {
+export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCreated, onSlotBooked, preselectedSlotId, preselectedDate }) => {
   const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(dates[0].id);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(
@@ -59,10 +63,22 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
   const [slots, setSlots] = useState(field?.availability ?? []);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [isBooking, setIsBooking] = useState(false);
+  // Tracks whether the next slot-load should honour preselectedSlotId
+  const applyPreselection = useRef(false);
 
   const getDateISO = (dateId: string): string => dateId;
 
   const isMockFieldId = (fieldId: string): boolean => /^field-\d+/i.test(fieldId);
+
+  useEffect(() => {
+    // Sync date when preselection changes (new slot chosen from dialog)
+    if (preselectedDate && dates.some(d => d.id === preselectedDate)) {
+      setSelectedDate(preselectedDate);
+    }
+    if (preselectedSlotId) {
+      applyPreselection.current = true;
+    }
+  }, [preselectedSlotId, preselectedDate]);
 
   useEffect(() => {
     setSlots(field?.availability ?? []);
@@ -90,6 +106,12 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
         if (apiSlots.length > 0) {
           setSlots(apiSlots);
           setSelectedSlot((current) => {
+            // Honour preselection from dialog (first load after dialog interaction)
+            if (applyPreselection.current && preselectedSlotId) {
+              applyPreselection.current = false;
+              const target = apiSlots.find(s => s.id === preselectedSlotId && s.status !== 'taken');
+              if (target) return target.id;
+            }
             if (current && apiSlots.some((slot) => slot.id === current && slot.status !== 'taken')) {
               return current;
             }

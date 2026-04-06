@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Calendar, Clock, MapPin, Minus, Plus, Star, Users, Zap } from 'lucide-react';
+import { Calendar, Clock, MapPin, Star, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Booking, Field } from '../../types/field';
 import { MiniFieldSVG } from '../ui/svg-assets';
@@ -16,22 +16,25 @@ interface BookingPanelProps {
   onSlotBooked?: (fieldId: string, slotId: string) => void;
 }
 
-const dates = [
-  { id: 'mon',  name: 'LUN', day: 24 },
-  { id: 'tue',  name: 'MAR', day: 25 },
-  { id: 'wed',  name: 'MIE', day: 26 },
-  { id: 'thu',  name: 'JUE', day: 27 },
-  { id: 'fri',  name: 'VIE', day: 28 },
-  { id: 'sat',  name: 'SAB', day: 29, isToday: true },
-  { id: 'sun',  name: 'DOM', day: 1 },
-  { id: 'mon2', name: 'LUN', day: 2 },
-];
+const DAY_NAMES = ['DOM', 'LUN', 'MAR', 'MIE', 'JUE', 'VIE', 'SAB'];
 
-const durations = [
-  { id: '1h',  label: '1 hr' },
-  { id: '90m', label: '1.5 hrs' },
-  { id: '2h',  label: '2 hrs' },
-];
+function generateDates(count = 7) {
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Array.from({ length: count }, (_, i) => {
+    const d = new Date(today);
+    d.setDate(today.getDate() + i);
+    const iso = d.toISOString().slice(0, 10);
+    return {
+      id: iso,
+      name: DAY_NAMES[d.getDay()],
+      day: d.getDate(),
+      isToday: i === 0,
+    };
+  });
+}
+
+const dates = generateDates();
 
 const sportIcons: Record<string, string> = {
   futbol5:    'fa-futbol',
@@ -49,30 +52,21 @@ const sportNames: Record<string, string> = {
 
 export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCreated, onSlotBooked }) => {
   const navigate = useNavigate();
-  const [selectedDate, setSelectedDate] = useState('sat');
-  const [selectedDuration, setSelectedDuration] = useState('1h');
+  const [selectedDate, setSelectedDate] = useState(dates[0].id);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(
     field?.availability.find(s => s.status !== 'taken')?.id ?? null
   );
-  const [playerCount, setPlayerCount] = useState(field?.capacity ?? 10);
   const [slots, setSlots] = useState(field?.availability ?? []);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [isBooking, setIsBooking] = useState(false);
 
-  const getDateISO = (dateId: string): string => {
-    const idx = Math.max(0, dates.findIndex((d) => d.id === dateId));
-    const date = new Date();
-    date.setHours(0, 0, 0, 0);
-    date.setDate(date.getDate() + idx);
-    return date.toISOString().slice(0, 10);
-  };
+  const getDateISO = (dateId: string): string => dateId;
 
   const isMockFieldId = (fieldId: string): boolean => /^field-\d+/i.test(fieldId);
 
   useEffect(() => {
     setSlots(field?.availability ?? []);
     setSelectedSlot(field?.availability.find(s => s.status !== 'taken')?.id ?? null);
-    setPlayerCount(field?.capacity ?? 10);
   }, [field]);
 
   useEffect(() => {
@@ -146,7 +140,6 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
     try {
       setIsBooking(true);
       const date = dates.find(d => d.id === selectedDate);
-      const duration = durations.find(d => d.id === selectedDuration);
       const dateISO = getDateISO(selectedDate);
 
       const bookingResponse = await bookingService.createBooking(slot.id);
@@ -159,10 +152,10 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
         sportLabel: field.sportLabel,
         date: `${date?.name ?? 'DÍA'}, ${date?.day ?? ''}`,
         time: `${slot.time} ${slot.period}`,
-        duration: duration?.label ?? '1 hr',
-        players: playerCount,
+        duration: '60 min',
+        players: 0,
         status: bookingResponse.status === 'cancelled' ? 'cancelled' : 'confirmed',
-        price: slot.price + 2000,
+        price: slot.price,
       };
 
       onBookingCreated?.(newBooking);
@@ -218,8 +211,6 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
 
   const selectedSlotData = slots.find(s => s.id === selectedSlot);
   const basePrice = selectedSlotData?.price ?? field.price;
-  const weekendSurcharge = 2000;
-  const total = basePrice + weekendSurcharge;
 
   return (
     <div className="bg-[var(--color-surface)] rounded-[var(--radius-2xl)] border-[1.5px] border-[var(--color-border)] shadow-[var(--shadow-lg)] overflow-hidden flex flex-col">
@@ -301,33 +292,6 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
           })}
         </div>
 
-        {/* Duración */}
-        <p className="font-[var(--font-pixel)] text-[6px] tracking-widest uppercase text-[var(--color-text-3)] mb-3">
-          <Clock className="inline w-3 h-3 mr-1" />
-          DURACIÓN
-        </p>
-        <div className="flex gap-2 mb-4">
-          {durations.map((dur) => {
-            const isActive = selectedDuration === dur.id;
-            return (
-              <button
-                key={dur.id}
-                onClick={() => setSelectedDuration(dur.id)}
-                className={`
-                  flex-1 px-3 py-2 rounded-[var(--radius-md)] cursor-pointer text-[13px] font-extrabold text-center
-                  border-[1.5px] transition-all duration-[var(--duration-fast)]
-                  ${isActive
-                    ? 'bg-[var(--color-primary)] border-[var(--color-primary)] text-white shadow-[var(--shadow-primary)]'
-                    : 'bg-[var(--color-surface)] border-[var(--color-border)] text-[var(--color-text-2)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary-dark)] hover:bg-[var(--color-primary-tint)]'
-                  }
-                `}
-              >
-                {dur.label}
-              </button>
-            );
-          })}
-        </div>
-
         {/* Horarios */}
         <p className="font-[var(--font-pixel)] text-[6px] tracking-widest uppercase text-[var(--color-text-3)] mb-3">
           <Clock className="inline w-3 h-3 mr-1" />
@@ -382,63 +346,19 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
           })}
         </div>
 
-        {/* Jugadores */}
-        <p className="font-[var(--font-pixel)] text-[6px] tracking-widest uppercase text-[var(--color-text-3)] mb-3">
-          <Users className="inline w-3 h-3 mr-1" />
-          JUGADORES
-        </p>
-        <div className="flex items-center gap-3 bg-[var(--color-surf2)] rounded-[var(--radius-xl)] p-4 border-[1.5px] border-[var(--color-border)] mb-5">
-          <Users className="w-5 h-5 text-[var(--color-primary)]" />
-          <div className="flex-1">
-            <p className="text-sm font-bold text-[var(--color-text)] leading-tight">Cantidad de Jugadores</p>
-            <p className="text-xs font-bold text-[var(--color-text-3)]">Capacidad máx: {field.capacity} jugadores</p>
-          </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={() => setPlayerCount(Math.max(2, playerCount - 1))}
-              className="w-8 h-8 rounded-[var(--radius-md)] border-[1.5px] border-[var(--color-border)] bg-[var(--color-surface)] cursor-pointer flex items-center justify-center text-[var(--color-text-2)] transition-all duration-[var(--duration-fast)] hover:bg-[var(--color-primary)] hover:border-[var(--color-primary)] hover:text-white hover:scale-110 active:scale-90"
-            >
-              <Minus className="w-4 h-4" />
-            </button>
-            <div className="font-[var(--font-display)] text-2xl font-black min-w-8 text-center text-[var(--color-text)]">
-              {playerCount}
-            </div>
-            <button
-              onClick={() => setPlayerCount(Math.min(field.capacity, playerCount + 1))}
-              className="w-8 h-8 rounded-[var(--radius-md)] border-[1.5px] border-[var(--color-border)] bg-[var(--color-surface)] cursor-pointer flex items-center justify-center text-[var(--color-text-2)] transition-all duration-[var(--duration-fast)] hover:bg-[var(--color-primary)] hover:border-[var(--color-primary)] hover:text-white hover:scale-110 active:scale-90"
-            >
-              <Plus className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-
         {/* Resumen de precio */}
         <div className="bg-[var(--color-surf2)] rounded-[var(--radius-xl)] p-4 border-[1.5px] border-[var(--color-border)] mb-4">
           <div className="flex justify-between items-center py-2 text-[13px] font-bold text-[var(--color-text-2)] border-b border-[var(--color-border)]">
             <span>
               <i className="fa-solid fa-futbol text-[var(--color-primary)] mr-1" />
-              Alquiler de cancha (1h)
+              Alquiler de cancha
             </span>
             <span>{formatPriceFull(basePrice)}</span>
-          </div>
-          <div className="flex justify-between items-center py-2 text-[13px] font-bold text-[var(--color-text-2)] border-b border-[var(--color-border)]">
-            <span>
-              <Zap className="inline w-3 h-3 text-[var(--color-primary)] mr-1" />
-              Recargo fin de semana
-            </span>
-            <span>{formatPriceFull(weekendSurcharge)}</span>
-          </div>
-          <div className="flex justify-between items-center py-2 text-[13px] font-bold text-[var(--color-text-2)] border-b border-[var(--color-border)]">
-            <span>
-              <i className="fa-solid fa-shirt text-[var(--color-primary)] mr-1" />
-              Petos (opc.)
-            </span>
-            <span>$0</span>
           </div>
           <div className="flex justify-between items-center pt-3 mt-1 text-base font-black text-[var(--color-text)]">
             <span>TOTAL</span>
             <span className="font-[var(--font-display)] text-[28px] text-[var(--color-primary)] leading-none">
-              {formatPriceFull(total)}
+              {formatPriceFull(basePrice)}
             </span>
           </div>
         </div>

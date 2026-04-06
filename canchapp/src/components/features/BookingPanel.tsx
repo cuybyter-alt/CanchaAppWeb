@@ -142,7 +142,7 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
     if (isBooking) return;
 
     if (isMockFieldId(field.id)) {
-      notify.info('Espera un momento', 'Aún cargando canchas reales. Intenta reservar en unos segundos.');
+      notify.info('Espera un momento', 'Aún cargando canchas. Intenta reservar en unos segundos.');
       return;
     }
 

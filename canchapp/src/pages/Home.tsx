@@ -40,7 +40,7 @@ const COMPLEX_SPORT_LABEL: Record<ComplexFieldType, string> = {
   futsal: 'Futsal',
 };
 
-function buildSyntheticField(cf: ComplexField, complex: import('../types/map').NearbyComplex, slot: TimeSlotData): Field {
+function buildSyntheticField(cf: ComplexField, complex: import('../types/map').NearbyComplex, slot: TimeSlotData, allSlots: TimeSlotData[]): Field {
   return {
     id: cf.fieldId,
     name: cf.name,
@@ -55,7 +55,7 @@ function buildSyntheticField(cf: ComplexField, complex: import('../types/map').N
     image: '',
     tags: [],
     amenities: [],
-    availability: [slot],
+    availability: allSlots.length > 0 ? allSlots : [slot],
     isFavorite: false,
     capacity: 10,
   };
@@ -252,9 +252,9 @@ const Home: React.FC = () => {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeFilter]);
 
-  const handleSlotFromDialog = (complexField: ComplexField, slot: TimeSlotData, date: string) => {
+  const handleSlotFromDialog = (complexField: ComplexField, slot: TimeSlotData, date: string, allSlots: TimeSlotData[]) => {
     if (!selectedComplex) return;
-    const synthField = buildSyntheticField(complexField, selectedComplex, slot);
+    const synthField = buildSyntheticField(complexField, selectedComplex, slot, allSlots);
     setPanelOverrideField(synthField);
     setPanelPreselectedSlotId(slot.id);
     setPanelPreselectedDate(date);

@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Calendar, Clock, MapPin, Star, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Booking, Field } from '../../types/field';
@@ -14,6 +14,10 @@ interface BookingPanelProps {
   field: Field | null;
   onBookingCreated?: (booking: Booking) => void;
   onSlotBooked?: (fieldId: string, slotId: string) => void;
+  /** Slot id to pre-select (from ComplexFieldsDialog) */
+  preselectedSlotId?: string;
+  /** ISO date string to pre-select (from ComplexFieldsDialog) */
+  preselectedDate?: string;
 }
 
 const DAY_NAMES = ['DOM', 'LUN', 'MAR', 'MIE', 'JUE', 'VIE', 'SAB'];
@@ -36,6 +40,11 @@ function generateDates(count = 7) {
 
 const dates = generateDates();
 
+function isSlotPast(slot: import('../../types/field').TimeSlotData, isToday: boolean): boolean {
+  if (!isToday || !slot.startIso) return false;
+  return new Date(slot.startIso) < new Date();
+}
+
 const sportIcons: Record<string, string> = {
   futbol5:    'fa-futbol',
   futbol7:    'fa-futbol',
@@ -50,7 +59,7 @@ const sportNames: Record<string, string> = {
   futbol11:   'Fútbol',
 };
 
-export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCreated, onSlotBooked }) => {
+export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCreated, onSlotBooked, preselectedSlotId, preselectedDate }) => {
   const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(dates[0].id);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(
@@ -59,10 +68,25 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
   const [slots, setSlots] = useState(field?.availability ?? []);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [isBooking, setIsBooking] = useState(false);
+  // Tracks whether the next slot-load should honour preselectedSlotId
+  const applyPreselection = useRef(false);
 
   const getDateISO = (dateId: string): string => dateId;
 
   const isMockFieldId = (fieldId: string): boolean => /^field-\d+/i.test(fieldId);
+
+  const todayISO = dates[0].id;
+  const isToday = selectedDate === todayISO;
+
+  useEffect(() => {
+    // Sync date when preselection changes (new slot chosen from dialog)
+    if (preselectedDate && dates.some(d => d.id === preselectedDate)) {
+      setSelectedDate(preselectedDate);
+    }
+    if (preselectedSlotId) {
+      applyPreselection.current = true;
+    }
+  }, [preselectedSlotId, preselectedDate]);
 
   useEffect(() => {
     setSlots(field?.availability ?? []);
@@ -89,15 +113,27 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
 
         if (apiSlots.length > 0) {
           setSlots(apiSlots);
+          const todayCheck = getDateISO(selectedDate) === dates[0].id;
+          const isAvailable = (s: import('../../types/field').TimeSlotData) =>
+            s.status !== 'taken' && !isSlotPast(s, todayCheck);
           setSelectedSlot((current) => {
-            if (current && apiSlots.some((slot) => slot.id === current && slot.status !== 'taken')) {
+            // Honour preselection from dialog (first load after dialog interaction)
+            if (applyPreselection.current && preselectedSlotId) {
+              applyPreselection.current = false;
+              const target = apiSlots.find(s => s.id === preselectedSlotId && isAvailable(s));
+              if (target) return target.id;
+            }
+            if (current && apiSlots.some((slot) => slot.id === current && isAvailable(slot))) {
               return current;
             }
-            return apiSlots.find((slot) => slot.status !== 'taken')?.id ?? null;
+            return apiSlots.find(isAvailable)?.id ?? null;
           });
         } else {
+          const todayCheck = getDateISO(selectedDate) === dates[0].id;
+          const isAvailable = (s: import('../../types/field').TimeSlotData) =>
+            s.status !== 'taken' && !isSlotPast(s, todayCheck);
           setSlots(field.availability ?? []);
-          setSelectedSlot(field.availability.find((slot) => slot.status !== 'taken')?.id ?? null);
+          setSelectedSlot(field.availability.find(isAvailable)?.id ?? null);
         }
       } catch {
         if (!mounted) return;
@@ -120,7 +156,7 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
     if (isBooking) return;
 
     if (isMockFieldId(field.id)) {
-      notify.info('Espera un momento', 'Aún cargando canchas reales. Intenta reservar en unos segundos.');
+      notify.info('Espera un momento', 'Aún cargando canchas. Intenta reservar en unos segundos.');
       return;
     }
 
@@ -305,17 +341,19 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
         <div className="grid grid-cols-3 gap-2 mb-5">
           {slots.map((slot) => {
             const isTaken   = slot.status === 'taken';
+            const isPast    = isSlotPast(slot, isToday);
+            const isBlocked = isTaken || isPast;
             const isActive  = selectedSlot === slot.id;
             const isAlmost  = slot.status === 'almost-full';
             return (
               <button
                 key={slot.id}
-                disabled={isTaken}
-                onClick={() => !isTaken && setSelectedSlot(slot.id)}
+                disabled={isBlocked}
+                onClick={() => !isBlocked && setSelectedSlot(slot.id)}
                 className={`
                   relative px-2 py-2 rounded-[var(--radius-md)] cursor-pointer text-center
                   border-[1.5px] transition-all duration-[var(--duration-fast)]
-                  ${isTaken
+                  ${isBlocked
                     ? 'bg-[var(--color-surf2)] cursor-not-allowed opacity-55'
                     : isActive
                     ? 'bg-[var(--color-primary)] border-[var(--color-primary)] shadow-[var(--shadow-primary)] scale-105'
@@ -325,18 +363,18 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
                   }
                 `}
               >
-                {isAlmost && slot.spotsLeft && (
+                {isAlmost && slot.spotsLeft && !isBlocked && (
                   <span className="absolute -top-2 right-1 font-[var(--font-pixel)] text-[5px] bg-[var(--color-score)] text-[var(--color-text)] px-1 py-0.5 rounded-[var(--radius-xs)]">
                     {slot.spotsLeft} quedan
                   </span>
                 )}
-                <div className={`font-[var(--font-display)] text-base font-extrabold leading-none ${isTaken ? 'text-[var(--color-muted)]' : isActive ? 'text-white' : 'text-[var(--color-text)]'}`}>
+                <div className={`font-[var(--font-display)] text-base font-extrabold leading-none ${isBlocked ? 'text-[var(--color-muted)]' : isActive ? 'text-white' : 'text-[var(--color-text)]'}`}>
                   {slot.time}
                 </div>
                 <div className={`text-[10px] font-bold ${isActive ? 'text-white' : 'text-[var(--color-text-3)]'}`}>
                   {slot.period}
                 </div>
-                {!isTaken && (
+                {!isBlocked && (
                   <div className={`font-[var(--font-pixel)] text-[7px] mt-0.5 ${isActive ? 'text-white' : 'text-[var(--color-primary-dark)]'}`}>
                     {formatPrice(slot.price)}
                   </div>

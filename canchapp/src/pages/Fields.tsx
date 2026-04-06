@@ -385,7 +385,7 @@ const Fields: React.FC = () => {
 
       {(isLoading || isSearching) && (
         <p className="text-xs font-bold text-[var(--color-text-3)]">
-          {isSearching ? 'Buscando en backend...' : 'Cargando canchas desde backend...'}
+          {isSearching ? 'Buscando en backend...' : 'Cargando canchas...'}
         </p>
       )}
 

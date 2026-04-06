@@ -12,7 +12,6 @@ import { ComplexFieldsDialog } from '../components/features/ComplexFieldsDialog'
 import type { Booking, ComplexField, ComplexFieldType, Field, TimeSlotData } from '../types/field';
 import type { NearbyComplex } from '../types/map';
 import { useMapContext } from '../context/MapContext';
-import demoReservationService from '../services/DemoReservationService';
 import demoFavoritesService from '../services/DemoFavoritesService';
 import complexesService from '../services/ComplexesService';
 import { formatPrice } from '../lib/utils';
@@ -73,12 +72,10 @@ const haversineKm = (lat1: number, lng1: number, lat2: number, lng2: number): nu
 
 const Home: React.FC = () => {
   const initialCachedFields = complexesService.getCachedFieldsSync();
-  const initialFields = demoFavoritesService.applyFavorites(
-    initialCachedFields.map((f) => demoReservationService.applyLockedSlots(f)),
-  );
+  const initialFields = demoFavoritesService.applyFavorites(initialCachedFields);
   const [fields, setFields] = useState<Field[]>(initialFields);
   const [selectedFieldId, setSelectedFieldId] = useState<string>(initialFields[0]?.id ?? '');
-  const [bookings, setBookings] = useState<Booking[]>(demoReservationService.getBookings());
+  const [bookings, setBookings] = useState<Booking[]>([]);
   const [locationGranted, setLocationGranted] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
   // Nearby complexes
@@ -98,13 +95,10 @@ const Home: React.FC = () => {
   const selectedField = fields.find((f) => f.id === selectedFieldId) ?? fields[0] ?? null;
 
   const handleBookingCreated = (booking: Booking) => {
-    const updated = demoReservationService.addBooking(booking);
-    setBookings(updated);
+    setBookings((prev) => [booking, ...prev]);
   };
 
   const handleSlotBooked = (fieldId: string, slotId: string) => {
-    demoReservationService.lockSlot(fieldId, slotId);
-
     setFields((prev) =>
       prev.map((field) =>
         field.id === fieldId
@@ -131,9 +125,7 @@ const Home: React.FC = () => {
             if (!mounted || batchFields.length === 0) return;
             receivedAnyBatch = true;
 
-            const preparedBatch = demoFavoritesService.applyFavorites(
-              batchFields.map((field) => demoReservationService.applyLockedSlots(field)),
-            );
+            const preparedBatch = demoFavoritesService.applyFavorites(batchFields);
 
             setFields(preparedBatch);
             setSelectedFieldId((current) => {
@@ -144,7 +136,7 @@ const Home: React.FC = () => {
         });
         if (!mounted || apiFields.length === 0) return;
 
-        const preparedFields = demoFavoritesService.applyFavorites(
+        const preparedFields = demoFavoritesService.applyFavorites(apiFields);
 
           apiFields.map((field) => demoReservationService.applyLockedSlots(field))
         );
@@ -153,8 +145,9 @@ const Home: React.FC = () => {
       } catch (error) {
         console.error('No se pudieron cargar las canchas desde complexes/fields. Usando mock.', error);
         if (!receivedAnyBatch) {
-          setFields([]);
-          setSelectedFieldId('');
+          const fallbackFields = demoFavoritesService.applyFavorites(mockFields);
+          setFields(fallbackFields);
+          setSelectedFieldId(fallbackFields[0]?.id ?? '');
         }
       } finally {
         if (mounted) {
@@ -354,11 +347,37 @@ const Home: React.FC = () => {
                 Ver todas <ArrowRight className="w-3 h-3" />
               </button>
             </div>
-            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-              {bookings.slice(0, 3).map(booking => (
-                <BookingCard key={booking.id} booking={booking} />
-              ))}
-            </div>
+            {bookings.length === 0 ? (
+              <div className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-8 flex flex-col items-center gap-3 text-center">
+                <div className="w-14 h-14 rounded-full bg-[var(--color-primary-tint)] flex items-center justify-center">
+                  <i className="fa-regular fa-calendar-xmark text-2xl text-[var(--color-primary)]" />
+                </div>
+                <div>
+                  <Typography variant="h4" color="text" className="mb-1">
+                    Aún no tienes reservas
+                  </Typography>
+                  <Typography variant="small" color="text-3">
+                    Encuentra una cancha cerca de ti y haz tu primera reserva.
+                  </Typography>
+                </div>
+                <button
+                  onClick={() => navigate('/fields')}
+                  className="mt-1 inline-flex items-center gap-2 px-5 py-2.5 rounded-[var(--radius-lg)]
+                    bg-gradient-to-br from-[var(--color-primary-light)] via-[var(--color-primary)] to-[var(--color-primary-dark)]
+                    text-white font-extrabold text-sm shadow-[var(--shadow-primary)]
+                    hover:scale-105 active:scale-95 transition-all duration-[var(--duration-fast)]"
+                >
+                  <i className="fa-solid fa-futbol" />
+                  Reserva ahora
+                </button>
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {bookings.slice(0, 3).map(booking => (
+                  <BookingCard key={booking.id} booking={booking} />
+                ))}
+              </div>
+            )}
             {bookings.length > 3 && (
               <div className="mt-4 flex justify-center">
                 <button

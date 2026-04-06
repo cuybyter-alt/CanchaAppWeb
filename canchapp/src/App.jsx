@@ -9,6 +9,9 @@ import Bookings from './pages/Bookings'
 import Favorites from './pages/Favorites'
 import Fields from './pages/Fields'
 import ComplexDetail from './pages/ComplexDetail'
+import Profile from './pages/Profile'
+import Settings from './pages/Settings'
+import Payments from './pages/Payments'
 
 function App() {
   return (
@@ -36,7 +39,9 @@ function App() {
           <Route path="/complexes/:id" element={<ComplexDetail />} />
           <Route path="/bookings" element={<Bookings />} />
           <Route path="/favorites" element={<Favorites />} />
-          <Route path="/profile" element={<div className="p-8">Configuración - Próximamente</div>} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/payments" element={<Payments />} />
+          <Route path="/settings" element={<Settings />} />
           <Route path="/history" element={<div className="p-8">Historial - Próximamente</div>} />
         </Route>
       </Routes>

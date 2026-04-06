@@ -32,7 +32,7 @@ export function PromoBanner() {
         <Typography variant="small" className="!text-white/55 max-w-[340px]">
           Reserva tu cancha en segundos. Más de 50 canchas disponibles en tu ciudad ahora mismo.
         </Typography>
-        <Button size="md" className="mt-4">
+        <Button size="md" className="mt-4 ml-6">
           <Zap className="w-4 h-4" />
           Explorar Ahora
         </Button>

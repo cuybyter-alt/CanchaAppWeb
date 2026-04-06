@@ -3,7 +3,6 @@ import { ArrowLeft, Heart } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { FieldCard } from '../components/features/FieldCard';
 import { Typography } from '../components/ui/typography';
-import { mockFields } from '../mock/fields';
 import type { Field } from '../types/field';
 import demoReservationService from '../services/DemoReservationService';
 import demoFavoritesService from '../services/DemoFavoritesService';
@@ -59,11 +58,8 @@ const Favorites: React.FC = () => {
       } catch (error) {
         console.error('No se pudieron cargar las canchas favoritas desde API. Usando mock.', error);
         if (!receivedAnyBatch) {
-          const fallbackFields = demoFavoritesService.applyFavorites(
-            mockFields.map((field) => demoReservationService.applyLockedSlots(field)),
-          );
-          setFields(fallbackFields);
-          setSelectedFieldId(fallbackFields[0]?.id ?? '');
+          setFields([]);
+          setSelectedFieldId('');
         }
       } finally {
         if (mounted) setIsLoading(false);

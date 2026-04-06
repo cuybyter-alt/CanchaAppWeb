@@ -129,23 +129,56 @@ export function Sidebar({ upcomingBooking }: SidebarProps) {
         CUENTA
       </Typography>
 
-      <button className="flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold text-[var(--color-text-2)] transition-all duration-[var(--duration-fast)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]">
+      <NavLink
+        to="/profile"
+        className={({ isActive }) =>
+          `flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold
+          transition-all duration-[var(--duration-fast)] relative no-underline
+          ${
+            isActive
+              ? 'bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)] before:absolute before:left-0 before:top-[20%] before:bottom-[20%] before:w-[3px] before:rounded-r-[var(--radius-xs)] before:bg-[var(--color-primary)]'
+              : 'text-[var(--color-text-2)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]'
+          }`
+        }
+      >
         <User className="w-[18px] h-[18px] flex-shrink-0" />
         Perfil
-      </button>
+      </NavLink>
 
-      <button className="flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold text-[var(--color-text-2)] transition-all duration-[var(--duration-fast)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]">
+      <NavLink
+        to="/payments"
+        className={({ isActive }) =>
+          `flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold
+          transition-all duration-[var(--duration-fast)] relative no-underline
+          ${
+            isActive
+              ? 'bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)] before:absolute before:left-0 before:top-[20%] before:bottom-[20%] before:w-[3px] before:rounded-r-[var(--radius-xs)] before:bg-[var(--color-primary)]'
+              : 'text-[var(--color-text-2)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]'
+          }`
+        }
+      >
         <Wallet className="w-[18px] h-[18px] flex-shrink-0" />
         Pagos
         <Badge variant="accent" className="ml-auto">
           !
         </Badge>
-      </button>
+      </NavLink>
 
-      <button className="flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold text-[var(--color-text-2)] transition-all duration-[var(--duration-fast)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]">
+      <NavLink
+        to="/settings"
+        className={({ isActive }) =>
+          `flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold
+          transition-all duration-[var(--duration-fast)] relative no-underline
+          ${
+            isActive
+              ? 'bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)] before:absolute before:left-0 before:top-[20%] before:bottom-[20%] before:w-[3px] before:rounded-r-[var(--radius-xs)] before:bg-[var(--color-primary)]'
+              : 'text-[var(--color-text-2)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]'
+          }`
+        }
+      >
         <Settings className="w-[18px] h-[18px] flex-shrink-0" />
         Configuración
-      </button>
+      </NavLink>
 
       <div className="h-[1.5px] bg-[var(--color-border)] rounded-sm my-2" />
 

@@ -268,7 +268,7 @@ export function MapCard({
       {/* CTA: abrir mapa completo */}
       {locationState === 'map-ready' && onOpenMap && (
         <button
-          className="absolute bottom-3 right-3 bg-[var(--color-primary)] text-white border-none rounded-[var(--radius-badge)] cursor-pointer px-4 py-2 font-bold text-[13px] shadow-[var(--shadow-primary)] flex items-center gap-2 transition-transform hover:scale-105 active:scale-95 z-10"
+          className="absolute bottom-3 left-3 bg-[var(--color-primary)] text-white border-none rounded-[var(--radius-badge)] cursor-pointer px-4 py-2 font-bold text-[13px] shadow-[var(--shadow-primary)] flex items-center gap-2 transition-transform hover:scale-105 active:scale-95 z-10"
           onClick={onOpenMap}
         >
           <Expand className="w-3 h-3" />

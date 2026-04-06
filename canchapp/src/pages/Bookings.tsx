@@ -1,15 +1,13 @@
-import React, { useMemo } from 'react';
+import React, { useState } from 'react';
 import { ArrowLeft, CalendarCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BookingCard } from '../components/features/BookingCard';
 import { Typography } from '../components/ui/typography';
-import demoReservationService from '../services/DemoReservationService';
 import type { Booking } from '../types/field';
 
 const Bookings: React.FC = () => {
   const navigate = useNavigate();
-
-  const bookings = useMemo<Booking[]>(() => demoReservationService.getBookings(), []);
+  const [bookings] = useState<Booking[]>([]);
 
   return (
     <div className="p-4 sm:p-6 space-y-6">

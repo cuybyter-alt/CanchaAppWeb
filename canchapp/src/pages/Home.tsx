@@ -117,13 +117,10 @@ const Home: React.FC = () => {
     let mounted = true;
 
     const loadFields = async () => {
-      let receivedAnyBatch = false;
-
       try {
         const apiFields = await complexesService.getAllFieldsFromAllComplexes({
           onBatch: (batchFields) => {
             if (!mounted || batchFields.length === 0) return;
-            receivedAnyBatch = true;
 
             const preparedBatch = demoFavoritesService.applyFavorites(batchFields);
 
@@ -163,33 +160,72 @@ const Home: React.FC = () => {
     if (!navigator.geolocation) return;
 
     let cancelled = false;
-    setIsLoadingComplexes(true);
 
-    navigator.geolocation.getCurrentPosition(
-      async ({ coords }) => {
-        if (cancelled) return;
-        setLocationGranted(true);
-        setUserCoords({ lat: coords.latitude, lng: coords.longitude });
-        try {
-          const complexes = await complexesService.getNearbyComplexes(
-            coords.latitude,
-            coords.longitude,
-          );
-          if (cancelled) return;
-          setNearbyComplexes(complexes);
-        } catch (err) {
-          console.error('Error cargando complejos cercanos:', err);
-        } finally {
-          if (!cancelled) setIsLoadingComplexes(false);
-        }
-      },
-      () => { if (!cancelled) setIsLoadingComplexes(false); },
-      { timeout: 8000, enableHighAccuracy: false },
-    );
+    const COORDS_KEY = 'canchapp-coords';
+    const COORDS_TTL = 30 * 60 * 1000; // 30 min
 
-    return () => {
-      cancelled = true;
+    const getCachedCoords = (): { lat: number; lng: number } | null => {
+      try {
+        const raw = localStorage.getItem(COORDS_KEY);
+        if (!raw) return null;
+        const parsed = JSON.parse(raw) as { lat: number; lng: number; ts: number };
+        if (Date.now() - parsed.ts > COORDS_TTL) { localStorage.removeItem(COORDS_KEY); return null; }
+        return { lat: parsed.lat, lng: parsed.lng };
+      } catch {
+        localStorage.removeItem(COORDS_KEY);
+        return null;
+      }
     };
+
+    const loadComplexes = async (lat: number, lng: number) => {
+      setLocationGranted(true);
+      setUserCoords({ lat, lng });
+      setIsLoadingComplexes(true);
+      try {
+        const complexes = await complexesService.getNearbyComplexes(lat, lng);
+        if (!cancelled) setNearbyComplexes(complexes);
+      } catch (err) {
+        console.error('Error cargando complejos cercanos:', err);
+      } finally {
+        if (!cancelled) setIsLoadingComplexes(false);
+      }
+    };
+
+    const fetchAndCache = () => {
+      navigator.geolocation.getCurrentPosition(
+        ({ coords }) => {
+          if (cancelled) return;
+          localStorage.setItem(COORDS_KEY, JSON.stringify({ lat: coords.latitude, lng: coords.longitude, ts: Date.now() }));
+          loadComplexes(coords.latitude, coords.longitude);
+        },
+        () => { if (!cancelled) setIsLoadingComplexes(false); },
+        { timeout: 8000, enableHighAccuracy: false },
+      );
+    };
+
+    // Si hay coords recientes en caché, úsalas directamente (sin llamar a GPS)
+    const cached = getCachedCoords();
+    if (cached) {
+      loadComplexes(cached.lat, cached.lng);
+      return () => { cancelled = true; };
+    }
+
+    // Sin caché: verificar estado del permiso antes de llamar a getCurrentPosition
+    setIsLoadingComplexes(true);
+    if ('permissions' in navigator) {
+      navigator.permissions.query({ name: 'geolocation' }).then((result) => {
+        if (cancelled) return;
+        if (result.state === 'granted' || result.state === 'prompt') {
+          fetchAndCache();
+        } else {
+          setIsLoadingComplexes(false);
+        }
+      }).catch(() => { if (!cancelled) fetchAndCache(); });
+    } else {
+      fetchAndCache();
+    }
+
+    return () => { cancelled = true; };
   }, []);
 
   // Re-fetch complexes when the active sport filter changes

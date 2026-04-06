@@ -157,14 +157,9 @@ export function MapCard({
         try {
           const result = await navigator.permissions.query({ name: 'geolocation' as PermissionName });
           if (result.state === 'granted') {
-            if (showMiniMap) {
-              // Mini map: always show banner so the user can confirm location use
-              setLocationState('prompt');
-            } else {
-              // Full map dialog: silently start with existing permission
-              const loc = await getUserLocation();
-              startMap(loc);
-            }
+            // Permission already granted → start map silently in all modes
+            const loc = await getUserLocation();
+            startMap(loc);
           } else if (result.state === 'denied') {
             // Blocked → start map without location (no point prompting)
             startMap(null);

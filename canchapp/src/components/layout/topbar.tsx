@@ -17,7 +17,7 @@ export function Topbar({ onSearch, searchValue = '' }: TopbarProps) {
   // Use authService to check authentication
   const isAuthenticated = authService.isAuthenticated();
   const user = tokenStorage.getUser();
-  const isAdmin = user?.role_name === 'Admin';
+  const isAdmin = user?.role_name === 'Owner' || user?.role_name === 'Manager';
 
   const handleLogout = () => {
     // Use authService logout
@@ -158,9 +158,9 @@ export function Topbar({ onSearch, searchValue = '' }: TopbarProps) {
                           }}
                           className="w-full px-4 py-2.5 flex items-center gap-3 hover:bg-[var(--color-bg)] transition-colors text-left border-none bg-transparent cursor-pointer"
                         >
-                          <Shield className="w-4 h-4 text-[var(--color-accent)]" />
-                          <span className="font-[var(--font-body)] font-semibold text-sm text-[var(--color-accent)]">
-                            Administración
+                          <Shield className="w-4 h-4 text-[var(--color-primary)]" />
+                          <span className="font-[var(--font-body)] font-semibold text-sm text-[var(--color-primary-dark)]">
+                            Panel Admin
                           </span>
                         </button>
                       )}

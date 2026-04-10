@@ -14,6 +14,8 @@ import type { NearbyComplex } from '../types/map';
 import { useMapContext } from '../context/MapContext';
 import demoFavoritesService from '../services/DemoFavoritesService';
 import complexesService from '../services/ComplexesService';
+import favoritesService from '../services/FavoritesService';
+import notify from '../services/toast';
 import { formatPrice } from '../lib/utils';
 
 const FILTER_TO_API: Record<string, string | undefined> = {
@@ -84,6 +86,7 @@ const Home: React.FC = () => {
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [selectedComplex, setSelectedComplex] = useState<NearbyComplex | null>(null);
   const [isComplexDialogOpen, setIsComplexDialogOpen] = useState(false);
+  const [favoriteComplexIds, setFavoriteComplexIds] = useState<Set<string>>(new Set());
   // Panel override: when a slot is chosen from the dialog on desktop
   const [panelOverrideField, setPanelOverrideField] = useState<Field | null>(null);
   const [panelPreselectedSlotId, setPanelPreselectedSlotId] = useState<string | undefined>(undefined);
@@ -113,6 +116,28 @@ const Home: React.FC = () => {
           : field,
       ),
     );
+  };
+
+  // Load favorite complex IDs once on mount
+  useEffect(() => {
+    favoritesService.getFavoriteIds().then(setFavoriteComplexIds).catch(() => {});
+  }, []);
+
+  const handleToggleComplexFavorite = async (complexId: string) => {
+    try {
+      const nowFavorited = await favoritesService.toggleFavorite(complexId);
+      setFavoriteComplexIds((prev) => {
+        const next = new Set(prev);
+        if (nowFavorited) { next.add(complexId); } else { next.delete(complexId); }
+        return next;
+      });
+      notify.success(
+        nowFavorited ? 'Añadido a favoritos' : 'Eliminado de favoritos',
+        nowFavorited ? 'Complejo guardado en tus favoritos.' : 'Complejo eliminado de favoritos.',
+      );
+    } catch {
+      notify.error('Error', 'No se pudo actualizar tus favoritos.');
+    }
   };
 
   useEffect(() => {
@@ -354,6 +379,8 @@ const Home: React.FC = () => {
                   <ComplexCard
                     key={complex.id}
                     complex={complex}
+                    isFavorite={favoriteComplexIds.has(complex.id)}
+                    onToggleFavorite={handleToggleComplexFavorite}
                     onSelect={() => {
                       setSelectedComplex(complex);
                       setIsComplexDialogOpen(true);

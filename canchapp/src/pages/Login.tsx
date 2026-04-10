@@ -36,10 +36,15 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setLoading(true);
     setError(null);
     try {
-      await authService.login({ identifier, password });
+      const result = await authService.login({ identifier, password });
       notify.success("¡Bienvenido de nuevo!", "Sesión iniciada correctamente.");
       onLogin?.();
-      navigate("/");
+      const role = result.user?.role_name;
+      if (role === 'Owner' || role === 'Manager') {
+        navigate('/admin');
+      } else {
+        navigate('/');
+      }
     } catch (e) {
       const err = e as ApiError;
       const msg = err.message ?? "Error al iniciar sesión.";

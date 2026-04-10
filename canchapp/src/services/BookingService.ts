@@ -20,13 +20,26 @@ export interface BookingOutput {
 
 type RawRecord = Record<string, unknown>;
 
+function toRecords(arr: unknown[]): RawRecord[] {
+  return arr.filter((i): i is RawRecord => !!i && typeof i === 'object');
+}
+
 function extractItems(data: unknown): RawRecord[] {
-  if (Array.isArray(data)) return data.filter((i): i is RawRecord => !!i && typeof i === 'object');
+  if (Array.isArray(data)) return toRecords(data);
   if (data && typeof data === 'object') {
     const d = data as RawRecord;
-    if (Array.isArray(d.data)) return (d.data as unknown[]).filter((i): i is RawRecord => !!i && typeof i === 'object');
+    // { data: [...] }
+    if (Array.isArray(d.data)) return toRecords(d.data as unknown[]);
+    // { data: { items: [...] } }  — paginated envelope
+    if (d.data && typeof d.data === 'object') {
+      const nested = d.data as RawRecord;
+      for (const key of ['items', 'results', 'bookings']) {
+        if (Array.isArray(nested[key])) return toRecords(nested[key] as unknown[]);
+      }
+    }
+    // flat keys
     for (const key of ['results', 'items', 'bookings']) {
-      if (Array.isArray(d[key])) return (d[key] as unknown[]).filter((i): i is RawRecord => !!i && typeof i === 'object');
+      if (Array.isArray(d[key])) return toRecords(d[key] as unknown[]);
     }
   }
   return [];
@@ -123,6 +136,37 @@ const bookingService = {
         await authService.refreshToken();
         const retry = await ApiClient.get<unknown>('/bookings/', { withAuth: true });
         return extractItems(retry).map(mapBackendBooking);
+      }
+      throw error;
+    }
+  },
+
+  getMyBookings: async (params?: {
+    page?: number;
+    page_size?: number;
+    status?: 'active' | 'canceled' | 'inactive';
+    is_approved?: boolean;
+  }): Promise<Booking[]> => {
+    const query = new URLSearchParams();
+    if (params?.page !== undefined) query.set('page', String(params.page));
+    if (params?.page_size !== undefined) query.set('page_size', String(params.page_size));
+    if (params?.status !== undefined) query.set('status', params.status);
+    if (params?.is_approved !== undefined) query.set('is_approved', String(params.is_approved));
+    const qs = query.toString();
+    const path = `/bookings/my/${qs ? `?${qs}` : ''}`;
+
+    const fetchOnce = async () => {
+      const res = await ApiClient.get<unknown>(path, { withAuth: true });
+      return extractItems(res).map(mapBackendBooking);
+    };
+
+    try {
+      return await fetchOnce();
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 401) {
+        await authService.refreshToken();
+        return await fetchOnce();
       }
       throw error;
     }

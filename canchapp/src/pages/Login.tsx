@@ -6,28 +6,32 @@ import { MdEmail, MdVisibility, MdVisibilityOff } from "react-icons/md";
 import authService from "../services/AuthService";
 import notify from "../services/toast";
 import type { ApiError } from "../services/ApiClient";
-
-// ─── Icons ────────────────────────────────────────────────────────────────────
-
+import { useAuth } from "../context/AuthContext";
+ 
 // ─── Types ────────────────────────────────────────────────────────────────────
-
+ 
 type LoginView = "social" | "email";
-
+ 
 interface LoginProps {
   onLogin?: () => void;
 }
-
+ 
 // ─── Component ────────────────────────────────────────────────────────────────
-
+ 
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const navigate = useNavigate();
+  const { loginWithGoogle } = useAuth();
+ 
   const [view, setView] = useState<LoginView>("social");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
+ 
+  // ── Handlers ──────────────────────────────────────────────────────────────
+ 
   const handleEmailLogin = async () => {
     if (!identifier.trim() || !password.trim()) {
       setError("Por favor completa todos los campos.");
@@ -49,11 +53,36 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       setLoading(false);
     }
   };
-
-  const handleFirebaseLogin = async (provider: string) => {
-    console.log(`OAuth con ${provider} — integrar Firebase SDK`);
+ 
+  const handleGoogleLogin = async () => {
+    setGoogleLoading(true);
+    setError(null);
+    try {
+      await loginWithGoogle();
+      notify.success("¡Bienvenido!", "Sesión iniciada con Google.");
+      onLogin?.();
+      navigate("/");
+    } catch (e) {
+      const err = e as ApiError & { code?: string };
+      // El usuario cerró el popup → no mostrar error
+      if (err?.code === "auth/popup-closed-by-user") return;
+      const msg = err.message ?? "Error al iniciar sesión con Google.";
+      setError(msg);
+      notify.error("Error con Google", msg);
+    } finally {
+      setGoogleLoading(false);
+    }
   };
-
+ 
+  const handleUnavailableProvider = (provider: string) => {
+    notify.error(
+      `${provider} no disponible`,
+      "Por ahora solo está disponible Google. ¡Próximamente más opciones!"
+    );
+  };
+ 
+  // ── Subcomponentes ────────────────────────────────────────────────────────
+ 
   const Logo = () => (
     <div className="flex flex-col items-center mb-6">
       <div className="w-16 h-16 rounded-2xl bg-black border-2 border-green-500 flex items-center justify-center shadow-lg shadow-green-500/20 mb-4">
@@ -67,7 +96,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       </p>
     </div>
   );
-
+ 
   const Divider = () => (
     <div className="relative my-4">
       <div className="absolute inset-0 flex items-center">
@@ -78,45 +107,50 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       </div>
     </div>
   );
-
+ 
   // ── Vista 1: Selección de método ──────────────────────────────────────────
   if (view === "social") {
     return (
       <div className="min-h-screen flex items-center justify-center bg-[#f0f4f0] p-4">
         <div className="w-full max-w-sm bg-white rounded-3xl shadow-sm px-8 py-10">
           <Logo />
-
+ 
           <div className="space-y-3">
-            {/* Google */}
+            {/* Google — ACTIVO */}
             <button
-              onClick={() => handleFirebaseLogin("Google")}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white border border-gray-200 rounded-full text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all duration-150 shadow-sm"
+              onClick={handleGoogleLogin}
+              disabled={googleLoading}
+              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white border border-gray-200 rounded-full text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all duration-150 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <FcGoogle size={20} />
-              Continuar con Google
+              {googleLoading ? (
+                <span className="w-5 h-5 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin" />
+              ) : (
+                <FcGoogle size={20} />
+              )}
+              {googleLoading ? "Conectando con Google..." : "Continuar con Google"}
             </button>
-
-            {/* Instagram */}
+ 
+            {/* Instagram — próximamente */}
             <button
-              onClick={() => handleFirebaseLogin("Instagram")}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-full text-sm font-semibold text-white transition-all duration-150 hover:opacity-90 hover:shadow-md"
+              onClick={() => handleUnavailableProvider("Instagram")}
+              className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-full text-sm font-semibold text-white transition-all duration-150 hover:opacity-90 hover:shadow-md opacity-70"
               style={{ background: "linear-gradient(90deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)" }}
             >
               <SiInstagram size={20} />
               Continuar con Instagram
             </button>
-
-            {/* TikTok */}
+ 
+            {/* TikTok — próximamente */}
             <button
-              onClick={() => handleFirebaseLogin("TikTok")}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-black rounded-full text-sm font-semibold text-white hover:bg-gray-900 hover:shadow-md transition-all duration-150"
+              onClick={() => handleUnavailableProvider("TikTok")}
+              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-black rounded-full text-sm font-semibold text-white hover:bg-gray-900 hover:shadow-md transition-all duration-150 opacity-70"
             >
               <SiTiktok size={20} />
               Continuar con TikTok
             </button>
-
+ 
             <Divider />
-
+ 
             {/* Email */}
             <button
               onClick={() => setView("email")}
@@ -126,7 +160,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               Continuar con Correo
             </button>
           </div>
-
+ 
+          {error && (
+            <div className="mt-4 px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600 text-center">
+              {error}
+            </div>
+          )}
+ 
           <p className="text-center text-sm text-gray-500 mt-6">
             ¿No tienes una cuenta?{" "}
             <Link to="/register" className="font-semibold text-green-600 hover:text-green-700">
@@ -142,13 +182,13 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       </div>
     );
   }
-
+ 
   // ── Vista 2: Login con correo ─────────────────────────────────────────────
   return (
     <div className="min-h-screen flex items-center justify-center bg-[#f0f4f0] p-4">
       <div className="w-full max-w-sm bg-white rounded-3xl shadow-sm px-8 py-10">
         <Logo />
-
+ 
         <div className="space-y-4">
           {/* Correo / Identificador */}
           <div>
@@ -163,7 +203,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition-all"
             />
           </div>
-
+ 
           {/* Contraseña */}
           <div>
             <label className="block text-sm font-medium text-gray-700 mb-1.5">
@@ -187,7 +227,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               </button>
             </div>
           </div>
-
+ 
           {/* Links: Volver / Olvidaste */}
           <div className="flex items-center justify-between text-sm pt-1">
             <button
@@ -200,14 +240,14 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
               ¿Olvidaste tu contraseña?
             </button>
           </div>
-
+ 
           {/* Error */}
           {error && (
             <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">
               {error}
             </div>
           )}
-
+ 
           {/* Submit */}
           <button
             onClick={handleEmailLogin}
@@ -217,7 +257,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
             {loading ? "Ingresando..." : "Ingresar"}
           </button>
         </div>
-
+ 
         <p className="text-center text-sm text-gray-500 mt-6">
           ¿No tienes una cuenta?{" "}
           <Link to="/register" className="font-semibold text-green-600 hover:text-green-700">
@@ -233,5 +273,5 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     </div>
   );
 };
-
+ 
 export default Login;

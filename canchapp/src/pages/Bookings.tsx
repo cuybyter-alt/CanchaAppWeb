@@ -1,13 +1,34 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ArrowLeft, CalendarCheck } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BookingCard } from '../components/features/BookingCard';
 import { Typography } from '../components/ui/typography';
 import type { Booking } from '../types/field';
+import bookingService from '../services/BookingService';
 
 const Bookings: React.FC = () => {
   const navigate = useNavigate();
-  const [bookings] = useState<Booking[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    bookingService
+      .getMyBookings()
+      .then((data) => {
+        if (!cancelled) setBookings(data);
+      })
+      .catch((err) => {
+        if (!cancelled) setError((err as { message?: string })?.message ?? 'Error al cargar reservas.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, []);
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
@@ -26,7 +47,19 @@ const Bookings: React.FC = () => {
         </Typography>
       </div>
 
-      {bookings.length === 0 ? (
+      {loading ? (
+        <div className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-8 text-center">
+          <Typography variant="small" color="text-3">
+            Cargando reservas…
+          </Typography>
+        </div>
+      ) : error ? (
+        <div className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-8 text-center">
+          <Typography variant="small" color="text-3">
+            {error}
+          </Typography>
+        </div>
+      ) : bookings.length === 0 ? (
         <div className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-8 text-center">
           <Typography variant="h4" color="text" className="mb-2">
             Aún no tienes reservas

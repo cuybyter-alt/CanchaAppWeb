@@ -1,4 +1,4 @@
-import { MapPin, ArrowRight } from 'lucide-react';
+import { MapPin, ArrowRight, Heart } from 'lucide-react';
 import type { NearbyComplex } from '../../types/map';
 import { Typography } from '../ui/typography';
 import { formatPrice } from '../../lib/utils';
@@ -6,9 +6,11 @@ import { formatPrice } from '../../lib/utils';
 interface ComplexCardProps {
   complex: NearbyComplex;
   onSelect: () => void;
+  isFavorite?: boolean;
+  onToggleFavorite?: (complexId: string) => void;
 }
 
-export function ComplexCard({ complex, onSelect }: ComplexCardProps) {
+export function ComplexCard({ complex, onSelect, isFavorite, onToggleFavorite }: ComplexCardProps) {
   return (
     <div
       className="group cursor-pointer bg-[var(--color-surface)] rounded-[var(--radius-2xl)] overflow-hidden
@@ -38,11 +40,25 @@ export function ComplexCard({ complex, onSelect }: ComplexCardProps) {
         </div>
 
         {/* Distance badge — top right */}
-        <div className="absolute top-3 right-3 flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2.5 py-1">
-          <MapPin className="w-2.5 h-2.5 text-[var(--color-primary)]" />
-          <span className="font-[var(--font-pixel)] text-[7px] tracking-widest text-white">
-            {complex.distanceLabel}
-          </span>
+        <div className="absolute top-3 right-3 flex items-center gap-1.5">
+          {onToggleFavorite && (
+            <button
+              onClick={(e) => { e.stopPropagation(); onToggleFavorite(complex.id); }}
+              className={`w-7 h-7 rounded-full flex items-center justify-center transition-all active:scale-90
+                ${isFavorite
+                  ? 'bg-red-500 text-white shadow-md'
+                  : 'bg-black/50 backdrop-blur-sm text-white/70 hover:text-red-400'
+                }`}
+            >
+              <Heart className={`w-3.5 h-3.5 ${isFavorite ? 'fill-white' : ''}`} />
+            </button>
+          )}
+          <div className="flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2.5 py-1">
+            <MapPin className="w-2.5 h-2.5 text-[var(--color-primary)]" />
+            <span className="font-[var(--font-pixel)] text-[7px] tracking-widest text-white">
+              {complex.distanceLabel}
+            </span>
+          </div>
         </div>
 
         {/* Fields count — bottom right */}

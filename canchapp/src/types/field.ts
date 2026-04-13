@@ -41,11 +41,13 @@ export interface Field {
 export interface Booking {
   id: string;
   fieldId: string;
+  complexName: string;
   fieldName: string;
   sport: Sport;
   sportLabel: string;
   date: string;
   time: string;
+  endTime: string;
   duration: string;
   players: number;
   status: 'confirmed' | 'pending' | 'cancelled';

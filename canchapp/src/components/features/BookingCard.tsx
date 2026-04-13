@@ -1,4 +1,4 @@
-import { Calendar, Clock, Users, CreditCard, X as XIcon } from 'lucide-react';
+import { Calendar, Clock, CreditCard, MapPin, X as XIcon } from 'lucide-react';
 import type { Booking } from '../../types/field';
 import { Typography } from '../ui/typography';
 
@@ -47,12 +47,23 @@ export function BookingCard({ booking }: BookingCardProps) {
     >
       {/* Header con gradiente del deporte */}
       <div className="p-4 pb-5 relative overflow-hidden" style={{ background: getSportGradient(booking.sport) }}>
-        <div
-          className="w-12 h-12 rounded-[var(--radius-lg)] flex items-center justify-center text-[22px]
-            shadow-[var(--shadow-md)] relative z-10"
-          style={{ background: getSportIconColor(booking.sport) }}
-        >
-          <i className={`fa-solid fa-${getSportIcon(booking.sport)} text-white`} />
+        <div className="flex items-center gap-3 relative z-10">
+          <div
+            className="w-12 h-12 flex-shrink-0 rounded-[var(--radius-lg)] flex items-center justify-center text-[22px]
+              shadow-[var(--shadow-md)]"
+            style={{ background: getSportIconColor(booking.sport) }}
+          >
+            <i className={`fa-solid fa-${getSportIcon(booking.sport)} text-white`} />
+          </div>
+          <div className="min-w-0">
+            <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest leading-none mb-0.5 flex items-center gap-1">
+              <MapPin className="w-2.5 h-2.5" />
+              Complejo
+            </p>
+            <p className="text-white font-extrabold text-[14px] leading-tight truncate drop-shadow">
+              {booking.complexName}
+            </p>
+          </div>
         </div>
 
         {/* Estado */}
@@ -70,19 +81,22 @@ export function BookingCard({ booking }: BookingCardProps) {
         <Typography variant="h5" as="h3" className="leading-tight">
           {booking.fieldName}
         </Typography>
-        <div className="flex gap-3 mt-1 text-[12px] font-semibold text-[var(--color-text-3)] flex-wrap">
+        <div className="flex gap-3 mt-1.5 text-[12px] font-semibold text-[var(--color-text-3)] flex-wrap">
           <span className="flex items-center gap-1">
             <Calendar className="w-2.5 h-2.5 text-[var(--color-primary)]" />
             {booking.date}
           </span>
           <span className="flex items-center gap-1">
             <Clock className="w-2.5 h-2.5 text-[var(--color-primary)]" />
-            {booking.time}
+            {booking.time} – {booking.endTime}
           </span>
           <span className="flex items-center gap-1">
-            <Users className="w-2.5 h-2.5 text-[var(--color-primary)]" />
-            {booking.sportLabel}
+            <i className="fa-solid fa-futbol text-[var(--color-primary)] text-[10px]" />
+            {booking.sportLabel} · {booking.duration}
           </span>
+        </div>
+        <div className="mt-2 text-[13px] font-bold text-[var(--color-text)]">
+          {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(booking.price)}
         </div>
       </div>
 

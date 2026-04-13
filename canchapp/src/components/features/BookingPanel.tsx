@@ -68,6 +68,7 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
   const [slots, setSlots] = useState(field?.availability ?? []);
   const [isLoadingSlots, setIsLoadingSlots] = useState(false);
   const [isBooking, setIsBooking] = useState(false);
+  const [justPreselected, setJustPreselected] = useState(false);
   // Tracks whether the next slot-load should honour preselectedSlotId
   const applyPreselection = useRef(false);
 
@@ -88,10 +89,30 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
     }
   }, [preselectedSlotId, preselectedDate]);
 
+  // Auto-clear the just-preselected animation flag after 3.5 s
   useEffect(() => {
-    setSlots(field?.availability ?? []);
-    setSelectedSlot(field?.availability.find(s => s.status !== 'taken')?.id ?? null);
-  }, [field]);
+    if (!justPreselected) return;
+    const t = setTimeout(() => setJustPreselected(false), 3500);
+    return () => clearTimeout(t);
+  }, [justPreselected]);
+
+  useEffect(() => {
+    const avail = field?.availability ?? [];
+    setSlots(avail);
+    // Immediately honour preselection when the slot is already in the field's availability.
+    // The synthetic field built in Home carries allSlots from the dialog, so this always hits
+    // and avoids the race between the [field] reset and the async API call.
+    if (preselectedSlotId) {
+      const target = avail.find(s => s.id === preselectedSlotId && s.status !== 'taken');
+      if (target) {
+        setSelectedSlot(target.id);
+        setJustPreselected(true);
+        applyPreselection.current = false;
+        return;
+      }
+    }
+    setSelectedSlot(avail.find(s => s.status !== 'taken')?.id ?? null);
+  }, [field, preselectedSlotId]);
 
   useEffect(() => {
     let mounted = true;
@@ -116,18 +137,24 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
           const todayCheck = getDateISO(selectedDate) === dates[0].id;
           const isAvailable = (s: import('../../types/field').TimeSlotData) =>
             s.status !== 'taken' && !isSlotPast(s, todayCheck);
-          setSelectedSlot((current) => {
-            // Honour preselection from dialog (first load after dialog interaction)
-            if (applyPreselection.current && preselectedSlotId) {
+          // Only consume the flag when the slot is actually found
+          // (prevents eating it on a wrong-date call before selectedDate state update settles)
+          let preselectedTarget: string | null = null;
+          if (applyPreselection.current && preselectedSlotId) {
+            const target = apiSlots.find(s => s.id === preselectedSlotId && isAvailable(s));
+            if (target) {
               applyPreselection.current = false;
-              const target = apiSlots.find(s => s.id === preselectedSlotId && isAvailable(s));
-              if (target) return target.id;
+              preselectedTarget = target.id;
             }
+          }
+          setSelectedSlot((current) => {
+            if (preselectedTarget) return preselectedTarget;
             if (current && apiSlots.some((slot) => slot.id === current && isAvailable(slot))) {
               return current;
             }
             return apiSlots.find(isAvailable)?.id ?? null;
           });
+          if (preselectedTarget) setJustPreselected(true);
         } else {
           const todayCheck = getDateISO(selectedDate) === dates[0].id;
           const isAvailable = (s: import('../../types/field').TimeSlotData) =>
@@ -183,11 +210,13 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
       const newBooking: Booking = {
         id: bookingResponse.booking_id ?? `booking-${Date.now()}`,
         fieldId: field.id,
+        complexName: field.location,
         fieldName: field.name,
         sport: field.sport,
         sportLabel: field.sportLabel,
         date: `${date?.name ?? 'DÍA'}, ${date?.day ?? ''}`,
         time: `${slot.time} ${slot.period}`,
+        endTime: '',
         duration: '60 min',
         players: 0,
         status: bookingResponse.status === 'cancelled' ? 'cancelled' : 'confirmed',
@@ -338,6 +367,18 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
             Cargando horarios de esta cancha...
           </p>
         )}
+
+        {/* Preselected-slot banner — appears when coming from the complex dialog */}
+        {justPreselected && selectedSlotData && (
+          <div className="mb-3 flex items-center gap-2 px-3 py-2 rounded-[var(--radius-lg)]
+            bg-[var(--color-primary)]/20 border border-[var(--color-primary)]/50 animate-pulse">
+            <i className="fa-solid fa-wand-magic-sparkles text-[var(--color-primary)] text-xs" />
+            <span className="text-[11px] font-extrabold text-[var(--color-primary-dark)]">
+              Horario {selectedSlotData.time} {selectedSlotData.period} · {formatPrice(selectedSlotData.price)} preseleccionado
+            </span>
+          </div>
+        )}
+
         <div className="grid grid-cols-3 gap-2 mb-5">
           {slots.map((slot) => {
             const isTaken   = slot.status === 'taken';
@@ -356,7 +397,7 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
                   ${isBlocked
                     ? 'bg-[var(--color-surf2)] cursor-not-allowed opacity-55'
                     : isActive
-                    ? 'bg-[var(--color-primary)] border-[var(--color-primary)] shadow-[var(--shadow-primary)] scale-105'
+                    ? `bg-[var(--color-primary)] border-[var(--color-primary)] shadow-[var(--shadow-primary)] scale-105${justPreselected ? ' ring-2 ring-white/60 ring-offset-1 ring-offset-[var(--color-primary)]' : ''}`
                     : isAlmost
                     ? 'border-[var(--color-score)] bg-[var(--color-score)]/6'
                     : 'bg-[var(--color-surface)] border-[var(--color-border)] hover:border-[var(--color-primary)] hover:bg-[var(--color-primary-tint)] hover:scale-105'

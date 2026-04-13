@@ -7,21 +7,8 @@ import { Typography } from '../components/ui/typography';
 import type { NearbyComplex } from '../types/map';
 import type { Booking } from '../types/field';
 import favoritesService from '../services/FavoritesService';
-import complexesService from '../services/ComplexesService';
 import authService from '../services/AuthService';
 import notify from '../services/toast';
-
-/** Maps ComplexListItem → NearbyComplex (defaults for display-only fields) */
-function toNearbyComplex(c: { id: string; name: string; city: string; minPrice: number; maxPrice: number; fieldsCount: number }): NearbyComplex {
-  return {
-    ...c,
-    address: c.city,
-    latitude: 0,
-    longitude: 0,
-    distanceKm: 0,
-    distanceLabel: '',
-  };
-}
 
 const Favorites: React.FC = () => {
   const navigate = useNavigate();
@@ -45,19 +32,13 @@ const Favorites: React.FC = () => {
 
     const load = async () => {
       try {
-        const [ids, allComplexes] = await Promise.all([
+        const [favComplexes, ids] = await Promise.all([
+          favoritesService.getFavorites(),
           favoritesService.getFavoriteIds(),
-          complexesService.getComplexes({ pageSize: 200 }),
         ]);
         if (cancelled) return;
-
-        const favSet = new Set(ids);
-        const favComplexes = allComplexes
-          .filter((c) => favSet.has(c.id))
-          .map(toNearbyComplex);
-
-        setFavoriteIds(favSet);
         setFavorites(favComplexes);
+        setFavoriteIds(ids);
       } catch (err) {
         if (!cancelled) setError((err as { message?: string })?.message ?? 'Error al cargar favoritos.');
       } finally {

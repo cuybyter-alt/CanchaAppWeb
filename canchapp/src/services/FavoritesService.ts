@@ -1,11 +1,25 @@
 import ApiClient from './ApiClient';
 import authService from './AuthService';
 import type { ApiError } from './ApiClient';
+import type { NearbyComplex } from '../types/map';
 
 interface FavoriteOutput {
   user_id: string;
   complex_id: string;
   created_at: string;
+}
+
+interface FavoriteComplexItem {
+  complex_id: string;
+  name: string;
+  address: string;
+  city: string;
+  latitude: number;
+  longitude: number;
+  fields_count: number;
+  min_price: number;
+  max_price: number;
+  distance_km: number | null;
 }
 
 interface ApiResponse<T> {
@@ -119,6 +133,36 @@ const favoritesService = {
 
     memCache?.delete(complexId);
     writeLocalIds(memCache ?? new Set());
+  },
+
+  /**
+   * Returns the full list of favorited complexes as NearbyComplex[],
+   * using the list endpoint that returns complete complex data.
+   */
+  async getFavorites(): Promise<NearbyComplex[]> {
+    if (!authService.isAuthenticated()) return [];
+    try {
+      const res = await ApiClient.get<ApiResponse<FavoriteComplexItem[]>>(
+        '/user-preferences/favorites/complexes/list/',
+        { withAuth: true },
+      );
+      const items = Array.isArray(res.data) ? res.data : [];
+      return items.map((c) => ({
+        id: c.complex_id,
+        name: c.name,
+        address: c.address,
+        city: c.city,
+        latitude: c.latitude,
+        longitude: c.longitude,
+        minPrice: c.min_price,
+        maxPrice: c.max_price,
+        fieldsCount: c.fields_count,
+        distanceKm: c.distance_km ?? 0,
+        distanceLabel: c.distance_km != null ? `${c.distance_km.toFixed(1)} km` : '',
+      }));
+    } catch {
+      return [];
+    }
   },
 
   /**

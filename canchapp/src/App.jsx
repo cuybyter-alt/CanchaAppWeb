@@ -10,6 +10,7 @@ import Register from './pages/Register'
 import Bookings from './pages/Bookings'
 import Favorites from './pages/Favorites'
 import Fields from './pages/Fields'
+import Complexes from './pages/Complexes'
 import ComplexDetail from './pages/ComplexDetail'
 import Profile from './pages/Profile'
 import Settings from './pages/Settings'
@@ -54,6 +55,7 @@ function App() {
         <Route element={<AppLayout />}>
           <Route path="/" element={<Home />} />
           <Route path="/fields" element={<Fields />} />
+          <Route path="/complexes" element={<Complexes />} />
           <Route path="/complexes/:id" element={<ComplexDetail />} />
           <Route path="/bookings" element={<Bookings />} />
           <Route path="/favorites" element={<Favorites />} />

@@ -15,6 +15,7 @@ import { useMapContext } from '../context/MapContext';
 import demoFavoritesService from '../services/DemoFavoritesService';
 import complexesService from '../services/ComplexesService';
 import favoritesService from '../services/FavoritesService';
+import bookingService from '../services/BookingService';
 import notify from '../services/toast';
 import { formatPrice } from '../lib/utils';
 
@@ -78,6 +79,7 @@ const Home: React.FC = () => {
   const [fields, setFields] = useState<Field[]>(initialFields);
   const [selectedFieldId, setSelectedFieldId] = useState<string>(initialFields[0]?.id ?? '');
   const [bookings, setBookings] = useState<Booking[]>([]);
+  const [bookingsLoading, setBookingsLoading] = useState(true);
   const [locationGranted, setLocationGranted] = useState(false);
   const [activeFilter, setActiveFilter] = useState('all');
   // Nearby complexes
@@ -100,8 +102,24 @@ const Home: React.FC = () => {
   const selectedField = fields.find((f) => f.id === selectedFieldId) ?? fields[0] ?? null;
 
   const handleBookingCreated = (booking: Booking) => {
-    setBookings((prev) => [booking, ...prev]);
+    setBookings((prev) => {
+      // Avoid duplicates if API already returned this booking
+      if (prev.some((b) => b.id === booking.id)) return prev;
+      return [booking, ...prev];
+    });
   };
+
+  // Load bookings from API on mount
+  useEffect(() => {
+    let cancelled = false;
+    setBookingsLoading(true);
+    bookingService
+      .getMyBookings()
+      .then((data) => { if (!cancelled) setBookings(data); })
+      .catch(() => {/* silent – section just stays empty */})
+      .finally(() => { if (!cancelled) setBookingsLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
 
   const handleSlotBooked = (fieldId: string, slotId: string) => {
     setFields((prev) =>
@@ -343,7 +361,7 @@ const Home: React.FC = () => {
                 Complejos Cercanos
               </Typography>
               <button
-                onClick={() => navigate('/fields')}
+                onClick={() => navigate('/complexes')}
                 className="flex items-center gap-1 text-[13px] font-extrabold text-[var(--color-primary-dark)] cursor-pointer hover:underline"
               >
                 Ver todos <ArrowRight className="w-3 h-3" />
@@ -375,7 +393,11 @@ const Home: React.FC = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                {nearbyComplexes.map((complex) => (
+                {[...nearbyComplexes].sort((a, b) => {
+                  const aFav = favoriteComplexIds.has(a.id) ? 0 : 1;
+                  const bFav = favoriteComplexIds.has(b.id) ? 0 : 1;
+                  return aFav - bFav;
+                }).map((complex) => (
                   <ComplexCard
                     key={complex.id}
                     complex={complex}
@@ -410,7 +432,16 @@ const Home: React.FC = () => {
                 Ver todas <ArrowRight className="w-3 h-3" />
               </button>
             </div>
-            {bookings.length === 0 ? (
+            {bookingsLoading ? (
+              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <div
+                    key={i}
+                    className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] h-48 animate-pulse"
+                  />
+                ))}
+              </div>
+            ) : bookings.length === 0 ? (
               <div className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-8 flex flex-col items-center gap-3 text-center">
                 <div className="w-14 h-14 rounded-full bg-[var(--color-primary-tint)] flex items-center justify-center">
                   <i className="fa-regular fa-calendar-xmark text-2xl text-[var(--color-primary)]" />

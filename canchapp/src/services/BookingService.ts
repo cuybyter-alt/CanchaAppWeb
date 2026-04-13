@@ -88,11 +88,13 @@ function mapBackendBooking(raw: RawRecord): Booking {
   return {
     id: (raw.booking_id ?? raw.id ?? '') as string,
     fieldId: (raw.field_id ?? slotField?.field_id ?? '') as string,
+    complexName: (raw.complex_name ?? '—') as string,
     fieldName,
     sport,
     sportLabel,
     date: formatDate(startDt),
     time: formatTime(startDt),
+    endTime: formatTime(endDt),
     duration,
     players: (raw.players ?? 0) as number,
     status: mapStatus(raw.status as string, raw.is_approved as boolean),

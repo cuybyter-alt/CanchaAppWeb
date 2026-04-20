@@ -1,9 +1,13 @@
+import { useState } from 'react';
 import { Calendar, Clock, CreditCard, MapPin, X as XIcon } from 'lucide-react';
 import type { Booking } from '../../types/field';
 import { Typography } from '../ui/typography';
+import bookingService from '../../services/BookingService';
+import notify from '../../services/toast';
 
 interface BookingCardProps {
   booking: Booking;
+  onCancelled?: (bookingId: string) => void;
 }
 
 const getSportGradient = (sport: string) => {
@@ -31,7 +35,109 @@ const getSportIconColor = (sport: string) => {
   return 'linear-gradient(145deg, var(--color-primary-light), var(--color-primary-dark))';
 };
 
-export function BookingCard({ booking }: BookingCardProps) {
+/** Returns true when less than 60 minutes remain before the booking starts */
+const isWithinOneHour = (startIso?: string): boolean => {
+  if (!startIso) return false;
+  return new Date(startIso).getTime() - Date.now() < 60 * 60 * 1000;
+};
+
+// ── Confirmation modal ────────────────────────────────────────────────────────
+
+interface CancelModalProps {
+  booking: Booking;
+  onConfirm: () => void;
+  onClose: () => void;
+  loading: boolean;
+}
+
+function CancelModal({ booking, onConfirm, onClose, loading }: CancelModalProps) {
+  return (
+    <div
+      className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+      onClick={onClose}
+    >
+      <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+      <div
+        className="relative z-10 w-full max-w-sm bg-[var(--color-surface)] rounded-[var(--radius-2xl)] border-[1.5px] border-[var(--color-border)] shadow-[var(--shadow-xl)] p-6 space-y-4"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Icon */}
+        <div className="flex items-center justify-center w-14 h-14 mx-auto rounded-full bg-red-500/10 border-2 border-red-500/30">
+          <i className="fa-solid fa-triangle-exclamation text-2xl text-red-500" />
+        </div>
+
+        <div className="text-center space-y-1">
+          <Typography variant="h4" color="text">
+            ¿Cancelar reserva?
+          </Typography>
+          <Typography variant="small" color="text-3">
+            <span className="font-bold text-[var(--color-text-2)]">{booking.fieldName}</span>
+            {' '}en{' '}
+            <span className="font-bold text-[var(--color-text-2)]">{booking.complexName}</span>
+          </Typography>
+          <Typography variant="small" color="text-3">
+            {booking.date} · {booking.time} – {booking.endTime}
+          </Typography>
+        </div>
+
+        <div className="px-4 py-3 bg-red-500/10 border border-red-500/20 rounded-[var(--radius-lg)]">
+          <p className="text-xs font-bold text-red-400 text-center">
+            Esta acción no se puede deshacer. La reserva quedará cancelada de forma permanente.
+          </p>
+        </div>
+
+        <div className="flex gap-3 pt-1">
+          <button
+            onClick={onClose}
+            disabled={loading}
+            className="flex-1 py-2.5 rounded-[var(--radius-lg)] border-2 border-[var(--color-border)] text-sm font-extrabold text-[var(--color-text-2)] hover:bg-[var(--color-surf2)] transition-all disabled:opacity-50"
+          >
+            Mantener
+          </button>
+          <button
+            onClick={onConfirm}
+            disabled={loading}
+            className="flex-1 py-2.5 rounded-[var(--radius-lg)] bg-red-500 hover:bg-red-600 text-sm font-extrabold text-white transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {loading ? (
+              <span className="flex items-center justify-center gap-2">
+                <i className="fa-solid fa-circle-notch fa-spin text-xs" />
+                Cancelando…
+              </span>
+            ) : (
+              'Sí, cancelar'
+            )}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── BookingCard ───────────────────────────────────────────────────────────────
+
+export function BookingCard({ booking, onCancelled }: BookingCardProps) {
+  const [showModal, setShowModal] = useState(false);
+  const [cancelling, setCancelling] = useState(false);
+
+  const canCancel = booking.status !== 'cancelled';
+  const locked = isWithinOneHour(booking.startIso);
+
+  const handleConfirmCancel = async () => {
+    setCancelling(true);
+    try {
+      await bookingService.cancelBooking(booking.id);
+      notify.success('Reserva cancelada', `${booking.fieldName} ha sido cancelada.`);
+      setShowModal(false);
+      onCancelled?.(booking.id);
+    } catch (err) {
+      const msg = (err as { message?: string })?.message ?? 'No se pudo cancelar la reserva.';
+      notify.error('Error al cancelar', msg);
+    } finally {
+      setCancelling(false);
+    }
+  };
+
   const statusConfig = {
     confirmed: { label: 'CONFIRMADA', icon: 'check',  bg: 'bg-[var(--color-primary)] text-white' },
     pending:   { label: 'PENDIENTE',  icon: 'clock',  bg: 'bg-[var(--color-score)] text-[var(--color-text)]' },
@@ -40,70 +146,79 @@ export function BookingCard({ booking }: BookingCardProps) {
   const status = statusConfig[booking.status];
 
   return (
-    <div
-      className="bg-[var(--color-surface)] rounded-[var(--radius-2xl)] border-[1.5px] border-[var(--color-border)]
-        shadow-[var(--shadow-md)] overflow-hidden relative cursor-pointer
-        transition-all duration-[var(--duration-mid)] hover:-translate-y-1 hover:shadow-[var(--shadow-xl)]"
-    >
-      {/* Header con gradiente del deporte */}
-      <div className="p-4 pb-5 relative overflow-hidden" style={{ background: getSportGradient(booking.sport) }}>
-        <div className="flex items-center gap-3 relative z-10">
-          <div
-            className="w-12 h-12 flex-shrink-0 rounded-[var(--radius-lg)] flex items-center justify-center text-[22px]
-              shadow-[var(--shadow-md)]"
-            style={{ background: getSportIconColor(booking.sport) }}
-          >
-            <i className={`fa-solid fa-${getSportIcon(booking.sport)} text-white`} />
+    <>
+      {showModal && (
+        <CancelModal
+          booking={booking}
+          onConfirm={handleConfirmCancel}
+          onClose={() => !cancelling && setShowModal(false)}
+          loading={cancelling}
+        />
+      )}
+
+      <div
+        className="bg-[var(--color-surface)] rounded-[var(--radius-2xl)] border-[1.5px] border-[var(--color-border)]
+          shadow-[var(--shadow-md)] overflow-hidden relative cursor-pointer
+          transition-all duration-[var(--duration-mid)] hover:-translate-y-1 hover:shadow-[var(--shadow-xl)]"
+      >
+        {/* Header con gradiente del deporte */}
+        <div className="p-4 pb-5 relative overflow-hidden" style={{ background: getSportGradient(booking.sport) }}>
+          <div className="flex items-center gap-3 relative z-10">
+            <div
+              className="w-12 h-12 flex-shrink-0 rounded-[var(--radius-lg)] flex items-center justify-center text-[22px]
+                shadow-[var(--shadow-md)]"
+              style={{ background: getSportIconColor(booking.sport) }}
+            >
+              <i className={`fa-solid fa-${getSportIcon(booking.sport)} text-white`} />
+            </div>
+            <div className="min-w-0">
+              <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest leading-none mb-0.5 flex items-center gap-1">
+                <MapPin className="w-2.5 h-2.5" />
+                Complejo
+              </p>
+              <p className="text-white font-extrabold text-[14px] leading-tight truncate drop-shadow">
+                {booking.complexName}
+              </p>
+            </div>
           </div>
-          <div className="min-w-0">
-            <p className="text-white/60 text-[10px] font-bold uppercase tracking-widest leading-none mb-0.5 flex items-center gap-1">
-              <MapPin className="w-2.5 h-2.5" />
-              Complejo
-            </p>
-            <p className="text-white font-extrabold text-[14px] leading-tight truncate drop-shadow">
-              {booking.complexName}
-            </p>
+
+          {/* Estado */}
+          <span className={`absolute top-3 right-3 font-[var(--font-pixel)] text-[6px] px-2 py-1 rounded-full z-20 ${status.bg}`}>
+            <i className={`fa-solid fa-${status.icon} mr-1`} />
+            {status.label}
+          </span>
+
+          {/* Borde redondeado inferior blanco */}
+          <div className="absolute bottom-0 left-0 right-0 h-5 bg-[var(--color-surface)] rounded-t-[var(--radius-2xl)]" />
+        </div>
+
+        {/* Cuerpo */}
+        <div className="p-2 px-4 pb-4">
+          <Typography variant="h5" as="h3" className="leading-tight">
+            {booking.fieldName}
+          </Typography>
+          <div className="flex gap-3 mt-1.5 text-[12px] font-semibold text-[var(--color-text-3)] flex-wrap">
+            <span className="flex items-center gap-1">
+              <Calendar className="w-2.5 h-2.5 text-[var(--color-primary)]" />
+              {booking.date}
+            </span>
+            <span className="flex items-center gap-1">
+              <Clock className="w-2.5 h-2.5 text-[var(--color-primary)]" />
+              {booking.time} – {booking.endTime}
+            </span>
+            <span className="flex items-center gap-1">
+              <i className="fa-solid fa-futbol text-[var(--color-primary)] text-[10px]" />
+              {booking.sportLabel} · {booking.duration}
+            </span>
+          </div>
+          <div className="mt-2 text-[13px] font-bold text-[var(--color-text)]">
+            {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(booking.price)}
           </div>
         </div>
 
-        {/* Estado */}
-        <span className={`absolute top-3 right-3 font-[var(--font-pixel)] text-[6px] px-2 py-1 rounded-full z-20 ${status.bg}`}>
-          <i className={`fa-solid fa-${status.icon} mr-1`} />
-          {status.label}
-        </span>
-
-        {/* Borde redondeado inferior blanco */}
-        <div className="absolute bottom-0 left-0 right-0 h-5 bg-[var(--color-surface)] rounded-t-[var(--radius-2xl)]" />
-      </div>
-
-      {/* Cuerpo */}
-      <div className="p-2 px-4 pb-4">
-        <Typography variant="h5" as="h3" className="leading-tight">
-          {booking.fieldName}
-        </Typography>
-        <div className="flex gap-3 mt-1.5 text-[12px] font-semibold text-[var(--color-text-3)] flex-wrap">
-          <span className="flex items-center gap-1">
-            <Calendar className="w-2.5 h-2.5 text-[var(--color-primary)]" />
-            {booking.date}
-          </span>
-          <span className="flex items-center gap-1">
-            <Clock className="w-2.5 h-2.5 text-[var(--color-primary)]" />
-            {booking.time} – {booking.endTime}
-          </span>
-          <span className="flex items-center gap-1">
-            <i className="fa-solid fa-futbol text-[var(--color-primary)] text-[10px]" />
-            {booking.sportLabel} · {booking.duration}
-          </span>
-        </div>
-        <div className="mt-2 text-[13px] font-bold text-[var(--color-text)]">
-          {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(booking.price)}
-        </div>
-      </div>
-
-      {/* Acciones */}
-      <div className="px-4 pb-4 flex gap-2">
-        {booking.status === 'confirmed' && (
-          <>
+        {/* Acciones */}
+        <div className="px-4 pb-4 flex gap-2 flex-wrap">
+          {booking.status === 'confirmed' && (
             <button className="inline-flex items-center justify-center gap-2 font-bold transition-all duration-[var(--duration-fast)] cursor-pointer
               bg-gradient-to-br from-[var(--color-primary-light)] via-[var(--color-primary)] to-[var(--color-primary-dark)]
               text-white shadow-[var(--shadow-primary)] hover:scale-105 active:scale-95
@@ -111,17 +226,8 @@ export function BookingCard({ booking }: BookingCardProps) {
               <i className="fa-solid fa-qrcode" />
               Código QR
             </button>
-            <button className="inline-flex items-center justify-center gap-2 font-bold transition-all duration-[var(--duration-fast)] cursor-pointer
-              bg-transparent border-2 border-[var(--color-border)] text-[var(--color-text-3)]
-              hover:border-[var(--color-primary)] hover:text-[var(--color-primary-dark)] hover:bg-[var(--color-primary-tint)]
-              px-3 py-1.5 text-xs rounded-[var(--radius-md)] flex-1">
-              <i className="fa-solid fa-users-rectangle" />
-              Invitar
-            </button>
-          </>
-        )}
-        {booking.status === 'pending' && (
-          <>
+          )}
+          {booking.status === 'pending' && (
             <button className="inline-flex items-center justify-center gap-2 font-bold transition-all duration-[var(--duration-fast)] cursor-pointer
               bg-gradient-to-br from-[var(--color-primary-light)] via-[var(--color-primary)] to-[var(--color-primary-dark)]
               text-white shadow-[var(--shadow-primary)] hover:scale-105 active:scale-95
@@ -129,16 +235,38 @@ export function BookingCard({ booking }: BookingCardProps) {
               <CreditCard className="w-3 h-3" />
               Pagar Ahora
             </button>
-            <button className="inline-flex items-center justify-center gap-2 font-bold transition-all duration-[var(--duration-fast)] cursor-pointer
-              bg-transparent border-2 border-[var(--color-border)] text-[var(--color-text-3)]
-              hover:border-[var(--color-primary)] hover:text-[var(--color-primary-dark)] hover:bg-[var(--color-primary-tint)]
-              px-3 py-1.5 text-xs rounded-[var(--radius-md)] flex-1">
-              <XIcon className="w-3 h-3" />
-              Cancelar
-            </button>
-          </>
-        )}
+          )}
+
+          {/* Cancel button — shown for confirmed & pending, hidden for already cancelled */}
+          {canCancel && (
+            locked ? (
+              <button
+                disabled
+                title="No se puede cancelar con menos de 1 hora de antelación"
+                className="inline-flex items-center justify-center gap-2 font-bold
+                  bg-transparent border-2 border-[var(--color-border)] text-[var(--color-text-3)]
+                  opacity-40 cursor-not-allowed
+                  px-3 py-1.5 text-xs rounded-[var(--radius-md)] flex-1"
+              >
+                <XIcon className="w-3 h-3" />
+                Cancelar
+                <span className="text-[9px] font-extrabold text-[var(--color-accent)] ml-0.5">⚠ &lt;1h</span>
+              </button>
+            ) : (
+              <button
+                onClick={() => setShowModal(true)}
+                className="inline-flex items-center justify-center gap-2 font-bold transition-all duration-[var(--duration-fast)] cursor-pointer
+                  bg-transparent border-2 border-[var(--color-border)] text-[var(--color-text-3)]
+                  hover:border-red-500 hover:text-red-500 hover:bg-red-500/10
+                  px-3 py-1.5 text-xs rounded-[var(--radius-md)] flex-1"
+              >
+                <XIcon className="w-3 h-3" />
+                Cancelar
+              </button>
+            )
+          )}
+        </div>
       </div>
-    </div>
+    </>
   );
 }

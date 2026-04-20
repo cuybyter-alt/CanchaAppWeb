@@ -441,14 +441,14 @@ const Home: React.FC = () => {
                   />
                 ))}
               </div>
-            ) : bookings.length === 0 ? (
+            ) : bookings.filter(b => !b.startIso || new Date(b.startIso) >= new Date()).length === 0 ? (
               <div className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-8 flex flex-col items-center gap-3 text-center">
                 <div className="w-14 h-14 rounded-full bg-[var(--color-primary-tint)] flex items-center justify-center">
                   <i className="fa-regular fa-calendar-xmark text-2xl text-[var(--color-primary)]" />
                 </div>
                 <div>
                   <Typography variant="h4" color="text" className="mb-1">
-                    Aún no tienes reservas
+                    No tienes reservas próximas
                   </Typography>
                   <Typography variant="small" color="text-3">
                     Encuentra una cancha cerca de ti y haz tu primera reserva.
@@ -467,12 +467,23 @@ const Home: React.FC = () => {
               </div>
             ) : (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-                {bookings.slice(0, 3).map(booking => (
-                  <BookingCard key={booking.id} booking={booking} />
-                ))}
+                {bookings
+                  .filter(b => !b.startIso || new Date(b.startIso) >= new Date())
+                  .slice(0, 3)
+                  .map(booking => (
+                    <BookingCard
+                      key={booking.id}
+                      booking={booking}
+                      onCancelled={(id) =>
+                        setBookings((prev) =>
+                          prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' as const } : b)),
+                        )
+                      }
+                    />
+                  ))}
               </div>
             )}
-            {bookings.length > 3 && (
+            {bookings.filter(b => !b.startIso || new Date(b.startIso) >= new Date()).length > 3 && (
               <div className="mt-4 flex justify-center">
                 <button
                   onClick={() => navigate('/bookings')}

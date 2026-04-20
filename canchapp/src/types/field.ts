@@ -52,6 +52,8 @@ export interface Booking {
   players: number;
   status: 'confirmed' | 'pending' | 'cancelled';
   price: number;
+  /** ISO 8601 start datetime, used to distinguish past vs upcoming bookings */
+  startIso?: string;
 }
 
 export type ComplexFieldType = 'futbol_5' | 'futbol_7' | 'futbol_11' | 'microfutbol' | 'futsal';

@@ -23,11 +23,10 @@ const DEFAULT_MAP_CONFIG: MapConfig = {
  */
 export function initializeMapbox(): void {
   if (!MAPBOX_TOKEN) {
-    console.error('⚠️ VITE_MAPBOX_ACCESS_TOKEN no está configurado en .env.local');
+    console.error('VITE_MAPBOX_ACCESS_TOKEN no está configurado en .env');
     console.error('Token actual:', MAPBOX_TOKEN);
     return;
   }
-  console.log('✓ Inicializando Mapbox con token:', MAPBOX_TOKEN.substring(0, 20) + '...');
   mapboxgl.accessToken = MAPBOX_TOKEN;
 }
 

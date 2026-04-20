@@ -99,6 +99,7 @@ function mapBackendBooking(raw: RawRecord): Booking {
     players: (raw.players ?? 0) as number,
     status: mapStatus(raw.status as string, raw.is_approved as boolean),
     price,
+    startIso: startDt,
   };
 }
 
@@ -138,6 +139,27 @@ const bookingService = {
         await authService.refreshToken();
         const retry = await ApiClient.get<unknown>('/bookings/', { withAuth: true });
         return extractItems(retry).map(mapBackendBooking);
+      }
+      throw error;
+    }
+  },
+
+  cancelBooking: async (bookingId: string): Promise<void> => {
+    const fetchOnce = async () => {
+      await ApiClient.patch<ApiResponse<unknown>>(
+        `/bookings/${bookingId}/cancel/`,
+        {},
+        { withAuth: true },
+      );
+    };
+    try {
+      await fetchOnce();
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 401) {
+        await authService.refreshToken();
+        await fetchOnce();
+        return;
       }
       throw error;
     }

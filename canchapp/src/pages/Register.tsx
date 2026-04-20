@@ -69,7 +69,7 @@ const RoleSelector = ({
  
 const Register: React.FC = () => {
   const navigate = useNavigate();
-  const { loginWithGoogle } = useAuth();
+  useAuth(); // keep context subscription without destructuring unused fields
  
   const [view, setView] = useState<RegisterView>("social");
   const [role, setRole] = useState<Role>("Player");
@@ -136,15 +136,16 @@ const Register: React.FC = () => {
     setGoogleLoading(true);
     setError(null);
     try {
-      // loginWithGoogle internamente llama a authService.firebaseAuth()
-      // que envía { firebase_id_token, role_name } al backend.
-      // El role_name no se usa en el AuthContext, lo manejamos manualmente aquí.
+      const { auth: firebaseAuth, googleProvider: provider } = await import("../firebase");
+      if (!firebaseAuth || !provider) {
+        notify.error("No disponible", "El inicio de sesión con Google no está configurado.");
+        return;
+      }
       const { signInWithPopup } = await import("firebase/auth");
-      const { auth, googleProvider } = await import("../firebase");
-      const result = await signInWithPopup(auth, googleProvider);
+      const result = await signInWithPopup(firebaseAuth, provider);
       const idToken = await result.user.getIdToken();
  
-      const tokenPair = await authService.firebaseAuth(idToken, role);
+      await authService.firebaseAuth(idToken, role);
       notify.success(
         "¡Bienvenido!",
         `Cuenta creada como ${role === "Player" ? "Jugador" : "Dueño de Cancha"}.`

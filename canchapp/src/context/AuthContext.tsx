@@ -55,6 +55,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Escucha cambios de sesión de Firebase (ej: refresh de página)
     useEffect(() => {
+    if (!auth) {
+      // Firebase no configurado — la app funciona sin Google sign-in
+      setLoading(false);
+      return;
+    }
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
         setLoading(true);
 
@@ -73,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
                 err,
             );
             // Si falla el backend, cerramos también la sesión de Firebase
-            await signOut(auth);
+            if (auth) await signOut(auth);
             setFirebaseUser(null);
             setUser(null);
             }
@@ -97,18 +102,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // ── Acciones ────────────────────────────────────────────────────────────────
 
   const loginWithGoogle = async () => {
-    // signInWithPopup dispara onAuthStateChanged → la lógica de sync
-    // ya está ahí. Solo necesitamos abrir el popup.
+    if (!auth || !googleProvider) {
+      throw new Error('Google sign-in no está disponible: Firebase no configurado.');
+    }
     await signInWithPopup(auth, googleProvider);
   };
 
   const logout = async () => {
     try {
-      await authService.logout(); // invalida refresh en backend
+      await authService.logout();
     } catch {
       tokenStorage.clear();
     }
-    await signOut(auth); // dispara onAuthStateChanged → limpia estado
+    if (auth) await signOut(auth);
   };
 
   return (

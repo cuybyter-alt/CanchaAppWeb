@@ -270,6 +270,48 @@ body::before {
   height: 100% !important;
 }
 
+/* Mapbox Geocoder — full-width override for standalone (form) usage */
+.geocoder-admin .mapboxgl-ctrl-geocoder,
+.geocoder-admin .mapboxgl-ctrl-geocoder--input {
+  width: 100% !important;
+  max-width: 100% !important;
+}
+
+.geocoder-admin .mapboxgl-ctrl-geocoder {
+  box-shadow: none !important;
+  border: 1.5px solid var(--color-border) !important;
+  border-radius: var(--radius-lg) !important;
+  font-family: 'Nunito', sans-serif !important;
+}
+
+.geocoder-admin .mapboxgl-ctrl-geocoder--input {
+  font-weight: 700 !important;
+  font-size: 14px !important;
+  color: var(--color-text) !important;
+}
+
+.geocoder-admin .mapboxgl-ctrl-geocoder--input:focus {
+  outline: none !important;
+  border-color: var(--color-primary) !important;
+  box-shadow: 0 0 0 3px var(--color-primary-glow) !important;
+}
+
+.geocoder-admin .mapboxgl-ctrl-geocoder--suggestions {
+  border-radius: var(--radius-lg) !important;
+  border: 1.5px solid var(--color-border) !important;
+  box-shadow: var(--shadow-lg) !important;
+  z-index: 9999 !important;
+}
+
+.geocoder-admin .mapboxgl-ctrl-geocoder--suggestion-title {
+  font-family: 'Nunito', sans-serif !important;
+  font-weight: 700 !important;
+}
+
+.geocoder-admin .mapboxgl-ctrl-geocoder--suggestion-address {
+  font-family: 'Nunito', sans-serif !important;
+}
+
 /* Modal animations */
 @keyframes fade-in {
   from {

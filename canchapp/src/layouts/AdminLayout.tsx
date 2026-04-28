@@ -3,7 +3,6 @@ import { Outlet, NavLink, useNavigate } from 'react-router-dom';
 import {
   LayoutDashboard,
   Building2,
-  CircleDot,
   CalendarCheck,
   BarChart2,
   Globe,
@@ -87,15 +86,6 @@ function AdminSidebar({ onClose }: { onClose?: () => void }) {
       >
         <Building2 className="w-[18px] h-[18px] flex-shrink-0" />
         Mis Complejos
-      </NavLink>
-
-      <NavLink
-        to="/admin/fields"
-        className={({ isActive }) => `${navItem} ${isActive ? activeClass : inactiveClass}`}
-        onClick={onClose}
-      >
-        <CircleDot className="w-[18px] h-[18px] flex-shrink-0" />
-        Canchas
       </NavLink>
 
       <NavLink

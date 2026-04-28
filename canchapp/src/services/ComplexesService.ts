@@ -1,5 +1,5 @@
 import ApiClient from './ApiClient';
-import type { Field, FieldType, Sport, TimeSlotData, ComplexField } from '../types/field';
+import type { Field, FieldType, Sport, TimeSlotData, ComplexField, ComplexListItem } from '../types/field';
 import type { ComplexMarker, NearbyComplex } from '../types/map';
 
 interface ApiResponse<T> {
@@ -13,15 +13,6 @@ interface ComplexContext {
   id: string;
   name: string;
   city?: string;
-}
-
-export interface ComplexListItem {
-  id: string;
-  name: string;
-  city: string;
-  minPrice: number;
-  maxPrice: number;
-  fieldsCount: number;
 }
 
 type RawRecord = Record<string, unknown>;

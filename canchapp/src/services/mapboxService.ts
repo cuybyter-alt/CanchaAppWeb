@@ -1,5 +1,7 @@
 import mapboxgl from 'mapbox-gl';
 import 'mapbox-gl/dist/mapbox-gl.css';
+import MapboxGeocoder from '@mapbox/mapbox-gl-geocoder';
+import '@mapbox/mapbox-gl-geocoder/dist/mapbox-gl-geocoder.css';
 import type { SportsField, MapConfig, UserLocation, ComplexMarker } from '../types/map';
 
 /**
@@ -442,6 +444,55 @@ export function fitMapToComplexMarkers(
     padding: { top: 50, bottom: 50, left: 50, right: 50 },
     maxZoom: 14,
   });
+}
+
+/**
+ * Opciones para el control geocoder
+ */
+export interface GeocoderOptions {
+  /** Idioma para los resultados (default: 'es') */
+  language?: string;
+  /** Países para limitar la búsqueda (default: 'co') */
+  countries?: string;
+  /** Marcador de posición del input (default: 'Buscar lugar…') */
+  placeholder?: string;
+  /** Mapa al que adjuntar el control. Si no se pasa, el geocoder funciona standalone. */
+  map?: mapboxgl.Map;
+  /** Posición en el mapa cuando se adjunta (default: 'top-left') */
+  position?: 'top-left' | 'top-right' | 'bottom-left' | 'bottom-right';
+}
+
+/**
+ * Crea un control geocoder de Mapbox.
+ * Si se proporciona `map`, lo adjunta al mapa en la posición indicada.
+ * Si no, devuelve el control para montarlo manualmente en un div.
+ *
+ * @returns Instancia de MapboxGeocoder lista para usar.
+ */
+export function setupGeocoder(options: GeocoderOptions = {}): MapboxGeocoder {
+  const {
+    language = 'es',
+    countries = 'co',
+    placeholder = 'Buscar lugar…',
+    map,
+    position = 'top-left',
+  } = options;
+
+  const geocoder = new MapboxGeocoder({
+    accessToken: MAPBOX_TOKEN,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mapboxgl: mapboxgl as any, // Both are mapbox-gl — module vs namespace type mismatch
+    language,
+    countries,
+    placeholder,
+    marker: false, // No agregar marcador automático; lo maneja la app
+  });
+
+  if (map) {
+    map.addControl(geocoder, position);
+  }
+
+  return geocoder;
 }
 
 /**

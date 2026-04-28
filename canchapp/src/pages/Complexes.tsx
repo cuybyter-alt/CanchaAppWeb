@@ -1,13 +1,15 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ArrowLeft, Search, X } from 'lucide-react';
+import { ArrowLeft, Search, X, Map, ChevronDown, ChevronUp } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { ComplexCard } from '../components/features/ComplexCard';
 import { ComplexFieldsDialog } from '../components/features/ComplexFieldsDialog';
+import { MapCard } from '../components/sections/MapCard';
 import { Typography } from '../components/ui/typography';
-import type { NearbyComplex } from '../types/map';
+import type { NearbyComplex, ComplexMarker } from '../types/map';
 import type { Booking, ComplexListItem } from '../types/field';
 import complexesService from '../services/ComplexesService';
 import favoritesService from '../services/FavoritesService';
+import { MAPBOX_STYLES } from '../services/mapboxService';
 import notify from '../services/toast';
 
 function toNearbyComplex(c: ComplexListItem): NearbyComplex {
@@ -44,6 +46,13 @@ const Complexes: React.FC = () => {
   const [selectedComplex, setSelectedComplex] = useState<NearbyComplex | null>(null);
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [, setBookings] = useState<Booking[]>([]);
+
+  const [showMap, setShowMap] = useState(true);
+
+  const handleMapMarkerClick = (marker: ComplexMarker) => {
+    setSelectedComplex({ ...marker, distanceKm: 0, distanceLabel: '' });
+    setIsDialogOpen(true);
+  };
 
   // Debounce search query
   useEffect(() => {
@@ -158,6 +167,34 @@ const Complexes: React.FC = () => {
         )}
       </div>
 
+      {/* Embedded map */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-[var(--color-text-3)] uppercase tracking-widest">
+            <Map className="w-3 h-3 text-[var(--color-primary)]" />
+            Mapa de complejos
+          </div>
+          <button
+            onClick={() => setShowMap(p => !p)}
+            className="flex items-center gap-1 text-[11px] font-bold text-[var(--color-text-3)] hover:text-[var(--color-primary)] transition-colors"
+          >
+            {showMap
+              ? <><ChevronUp className="w-3.5 h-3.5" /> Ocultar</>
+              : <><ChevronDown className="w-3.5 h-3.5" /> Mostrar</>}
+          </button>
+        </div>
+        {showMap && (
+          <div className="h-[360px] rounded-[var(--radius-2xl)] overflow-hidden">
+            <MapCard
+              showMiniMap={false}
+              fullMapHeight="360px"
+              style={MAPBOX_STYLES.streets}
+              onMarkerClick={handleMapMarkerClick}
+            />
+          </div>
+        )}
+      </div>
+
       {/* Result count */}
       {!showSkeleton && !error && complexes.length > 0 && (
         <p className="text-xs font-bold text-[var(--color-text-3)] -mt-2">
@@ -167,8 +204,6 @@ const Complexes: React.FC = () => {
           {favoriteIds.size > 0 && ' · favoritos primero'}
         </p>
       )}
-
-      {/* Skeleton */}
       {showSkeleton && (
         <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
           {Array.from({ length: 6 }).map((_, i) => (

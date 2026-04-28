@@ -7,6 +7,7 @@ import {
   initializeMapbox,
   createMap,
   setupGeolocateControl,
+  setupGeocoder,
   addComplexMarkers,
   fitMapToComplexMarkers,
   getUserLocation,
@@ -24,6 +25,8 @@ interface MapCardProps {
   showMiniMap?: boolean;
   /** Called when a complex marker is clicked. If omitted, navigates to /complexes/:id. */
   onMarkerClick?: (marker: ComplexMarker) => void;
+  /** Override min-height when showMiniMap={false}. Default '400px'. */
+  fullMapHeight?: string;
 }
 
 export function MapCard({
@@ -31,6 +34,7 @@ export function MapCard({
   style = MAPBOX_STYLES.dark,
   showMiniMap = true,
   onMarkerClick,
+  fullMapHeight,
 }: MapCardProps) {
   const mapContainer = useRef<HTMLDivElement>(null);
   const map = useRef<MapboxMap | null>(null);
@@ -129,6 +133,11 @@ export function MapCard({
             if (!showMiniMap) setTimeout(() => geoCtrl.trigger(), 600);
           }
 
+          // Geocoder — only for the full map (dialog), not the mini-map card
+          if (!showMiniMap) {
+            setupGeocoder({ map: mapInstance, position: 'top-left' });
+          }
+
           setLocationState('map-ready');
         });
 
@@ -210,7 +219,7 @@ export function MapCard({
       className={`bg-[var(--color-text)] rounded-[var(--radius-2xl)] overflow-hidden relative ${
         showMiniMap ? 'h-[180px]' : 'h-full'
       } shadow-[var(--shadow-lg)]`}
-      style={{ minHeight: showMiniMap ? '180px' : '400px' }}
+      style={{ minHeight: showMiniMap ? '180px' : (fullMapHeight ?? '400px') }}
     >
       {/* Mapa — siempre renderizado para que el ref esté disponible */}
       <div
@@ -252,9 +261,9 @@ export function MapCard({
         </div>
       )}
 
-      {/* Badge: contador de complejos */}
+      {/* Badge: contador de complejos — top-3 en mini-mapa, top-14 en mapa completo (bajo el geocoder) */}
       {locationState === 'map-ready' && contextComplexMarkers.length > 0 && (
-        <div className="absolute top-3 left-3 bg-black/50 backdrop-blur rounded-full px-3 py-1 text-xs font-extrabold text-white flex items-center gap-1 z-10">
+        <div className={`absolute ${showMiniMap ? 'top-3' : 'top-14'} left-3 bg-black/50 backdrop-blur rounded-full px-3 py-1 text-xs font-extrabold text-white flex items-center gap-1 z-10`}>
           <MapPin className="w-3 h-3 text-[var(--color-primary)]" />
           {contextComplexMarkers.length} complejos cercanos
         </div>

@@ -1,9 +1,13 @@
 import React, { useEffect, useState, useRef } from 'react';
 import { Plus, Building2, MapPin, Phone, Target, Users, X, Loader2, AlertCircle, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import mapboxgl from 'mapbox-gl';
 import ApiClient from '../../services/ApiClient';
 import { tokenStorage } from '../../services/AuthService';
 import { toast } from 'sonner';
+import { setupGeocoder, initializeMapbox, createMap, getUserLocation, addComplexMarkers } from '../../services/mapboxService';
+import type { ComplexMarker } from '../../types/map';
+import type MapboxGeocoder from '@mapbox/mapbox-gl-geocoder';
  
 // ─── Types ────────────────────────────────────────────────────────────────────
  
@@ -17,6 +21,8 @@ interface ComplexItem {
   min_price: number | null;
   max_price: number | null;
   telephones?: string[];
+  latitude?: number | null;
+  longitude?: number | null;
 }
  
 interface ApiResponse<T> { data: T; message?: string; }
@@ -200,6 +206,136 @@ const AdminComplexes: React.FC = () => {
  
   const fetchedRef = useRef(false);
   const user = tokenStorage.getUser();
+  const geocoderContainerRef = useRef<HTMLDivElement>(null);
+  const geocoderInstanceRef = useRef<MapboxGeocoder | null>(null);
+  const mapContainerRef = useRef<HTMLDivElement>(null);
+  const mapInstanceRef = useRef<mapboxgl.Map | null>(null);
+  const markerRef = useRef<mapboxgl.Marker | null>(null);
+  const complexMarkersRef = useRef<mapboxgl.Marker[]>([]);
+  const complexesRef = useRef<ComplexItem[]>(complexes);
+  useEffect(() => { complexesRef.current = complexes; }, [complexes]);
+
+  // Mount / unmount the geocoder + map when the form toggles
+  useEffect(() => {
+    if (!showForm) {
+      if (geocoderInstanceRef.current) {
+        try { geocoderInstanceRef.current.onRemove(); } catch { /* noop */ }
+        geocoderInstanceRef.current = null;
+      }
+      if (markerRef.current) { markerRef.current.remove(); markerRef.current = null; }
+      complexMarkersRef.current.forEach(m => m.remove());
+      complexMarkersRef.current = [];
+      if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; }
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      initializeMapbox();
+
+      // ── Visual map (created first so we can pass it to geocoder.onAdd) ──
+      if (mapContainerRef.current && !mapInstanceRef.current) {
+        const userLoc = await getUserLocation();
+        const center: [number, number] = userLoc
+          ? [userLoc.longitude, userLoc.latitude]
+          : [-74.0721, 4.711]; // Bogotá fallback
+        const map = createMap(mapContainerRef.current, {
+          style: 'mapbox://styles/mapbox/dark-v11',
+          center,
+          zoom: userLoc ? 13 : 11,
+          pitch: 0,
+        });
+        if (!map) return;
+        mapInstanceRef.current = map;
+
+        // Click on map to place / move marker
+        map.on('click', (ev) => {
+          const { lng, lat } = ev.lngLat;
+          placeMarker(lng, lat);
+          setForm(prev => ({ ...prev, latitude: lat.toFixed(6), longitude: lng.toFixed(6) }));
+          setFormErrors(prev => ({ ...prev, latitude: undefined, longitude: undefined }));
+        });
+
+        // Show existing complexes as markers
+        map.once('load', () => {
+          const validMarkers: ComplexMarker[] = complexesRef.current
+            .filter(c => c.latitude != null && c.longitude != null)
+            .map(c => ({
+              id: c.complex_id,
+              name: c.name,
+              address: c.address ?? '',
+              city: c.city ?? '',
+              latitude: c.latitude as number,
+              longitude: c.longitude as number,
+              minPrice: c.min_price ?? 0,
+              maxPrice: c.max_price ?? 0,
+              fieldsCount: c.fields_count,
+            }));
+          if (validMarkers.length > 0) {
+            complexMarkersRef.current = addComplexMarkers(
+              map,
+              validMarkers,
+              (m) => navigate(`/admin/complexes/${m.id}/fields`),
+            );
+          }
+        });
+      }
+
+      // ── Standalone geocoder input (above the map, no clipping issues) ──
+      if (geocoderContainerRef.current && !geocoderInstanceRef.current && mapInstanceRef.current) {
+        const geocoder = setupGeocoder({ placeholder: 'Buscar dirección del complejo…' });
+        geocoderInstanceRef.current = geocoder;
+        geocoderContainerRef.current.innerHTML = '';
+        // Pass the map to onAdd — satisfies IControl signature; geocoder stays in our custom container
+        geocoderContainerRef.current.appendChild(geocoder.onAdd(mapInstanceRef.current));
+
+        geocoder.on('result', (e: { result: { geometry: { coordinates: [number, number] }; place_name?: string } }) => {
+          const [lng, lat] = e.result.geometry.coordinates;
+          setForm(prev => ({
+            ...prev,
+            latitude: lat.toFixed(6),
+            longitude: lng.toFixed(6),
+            address: prev.address || e.result.place_name || '',
+          }));
+          setFormErrors(prev => ({ ...prev, latitude: undefined, longitude: undefined }));
+          mapInstanceRef.current!.flyTo({ center: [lng, lat], zoom: 15, speed: 1.4, essential: true });
+          placeMarker(lng, lat);
+        });
+
+        geocoder.on('clear', () => {
+          setForm(prev => ({ ...prev, latitude: '', longitude: '' }));
+          if (markerRef.current) { markerRef.current.remove(); markerRef.current = null; }
+        });
+      }
+    }, 80);
+
+    function placeMarker(lng: number, lat: number) {
+      if (!mapInstanceRef.current) return;
+      if (markerRef.current) {
+        markerRef.current.setLngLat([lng, lat]);
+      } else {
+        const m = new mapboxgl.Marker({ color: '#62bf3b', draggable: true })
+          .setLngLat([lng, lat])
+          .addTo(mapInstanceRef.current);
+        m.on('dragend', () => {
+          const pos = m.getLngLat();
+          setForm(prev => ({ ...prev, latitude: pos.lat.toFixed(6), longitude: pos.lng.toFixed(6) }));
+        });
+        markerRef.current = m;
+      }
+    }
+
+    return () => {
+      clearTimeout(timer);
+      if (geocoderInstanceRef.current) {
+        try { geocoderInstanceRef.current.onRemove(); } catch { /* noop */ }
+        geocoderInstanceRef.current = null;
+      }
+      if (markerRef.current) { markerRef.current.remove(); markerRef.current = null; }
+      complexMarkersRef.current.forEach(m => m.remove());
+      complexMarkersRef.current = [];
+      if (mapInstanceRef.current) { mapInstanceRef.current.remove(); mapInstanceRef.current = null; }
+    };
+  }, [showForm]); // eslint-disable-line react-hooks/exhaustive-deps
  
   useEffect(() => {
     if (fetchedRef.current) return;
@@ -234,8 +370,6 @@ const AdminComplexes: React.FC = () => {
     if (!form.name.trim()) errors.name = 'Requerido';
     if (!form.city.trim()) errors.city = 'Requerido';
     if (!form.address.trim()) errors.address = 'Requerido';
-    if (form.latitude && isNaN(parseFloat(form.latitude))) errors.latitude = 'Número inválido';
-    if (form.longitude && isNaN(parseFloat(form.longitude))) errors.longitude = 'Número inválido';
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -319,14 +453,11 @@ const AdminComplexes: React.FC = () => {
               { key: 'city', label: 'Ciudad *', placeholder: 'Ej: Bogotá', type: 'text' },
               { key: 'address', label: 'Dirección *', placeholder: 'Ej: Cra 15 #80-45', type: 'text' },
               { key: 'telephones', label: 'Teléfono(s)', placeholder: 'Ej: +57 300 123 4567', type: 'text', hint: 'Separa múltiples con comas' },
-              { key: 'latitude', label: 'Latitud', placeholder: 'Ej: 4.7110', type: 'number' },
-              { key: 'longitude', label: 'Longitud', placeholder: 'Ej: -74.0721', type: 'number' },
-            ] as { key: keyof CreateComplexForm; label: string; placeholder: string; type: string; hint?: string }[]).map(({ key, label, placeholder, type, hint }) => (
+            ] as { key: keyof CreateComplexForm; label: string; placeholder: string; type: string; hint?: string }[]).map(({ key, label, placeholder, hint }) => (
               <div key={key}>
                 <label className="block text-[11px] font-extrabold text-[var(--color-text-2)] mb-1.5 uppercase tracking-wide">{label}</label>
                 <input
-                  type={type}
-                  step={type === 'number' ? 'any' : undefined}
+                  type="text"
                   value={form[key]}
                   onChange={e => setField(key, e.target.value)}
                   placeholder={placeholder}
@@ -336,6 +467,43 @@ const AdminComplexes: React.FC = () => {
                 {formErrors[key] && <p className="text-xs text-[var(--color-accent)] mt-1 font-bold">{formErrors[key]}</p>}
               </div>
             ))}
+
+            {/* Location picker — full width: geocoder input + visual map */}
+            <div className="sm:col-span-2 space-y-2">
+              <label className="block text-[11px] font-extrabold text-[var(--color-text-2)] mb-1.5 uppercase tracking-wide">
+                Ubicación en el mapa
+              </label>
+              <p className="text-[10px] text-[var(--color-text-3)] -mt-1">
+                Busca la dirección o haz clic directamente en el mapa. Arrastra el marcador verde para ajustar.
+              </p>
+              {/* Standalone geocoder input (outside the map to avoid dropdown clipping) */}
+              <div ref={geocoderContainerRef} className="geocoder-admin" />
+              {/* Visual map */}
+              <div
+                ref={mapContainerRef}
+                className="w-full rounded-[var(--radius-lg)] border border-[var(--color-border)]"
+                style={{ height: '260px' }}
+              />
+              {(form.latitude || form.longitude) && (
+                <div className="flex items-center gap-2 px-3 py-2 rounded-[var(--radius-lg)] bg-[var(--color-primary-tint)] border border-[var(--color-primary)]/30">
+                  <MapPin className="w-3.5 h-3.5 text-[var(--color-primary)] flex-shrink-0" />
+                  <span className="text-xs font-bold text-[var(--color-primary-dark)] flex-1">
+                    {Number(form.latitude).toFixed(5)}, {Number(form.longitude).toFixed(5)}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setForm(p => ({ ...p, latitude: '', longitude: '' }));
+                      geocoderInstanceRef.current?.clear();
+                      if (markerRef.current) { markerRef.current.remove(); markerRef.current = null; }
+                    }}
+                    className="text-[10px] font-extrabold text-[var(--color-accent)] hover:underline"
+                  >
+                    Limpiar
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
           <div className="px-6 pb-5 flex items-center justify-end gap-3">
             <button

@@ -56,6 +56,15 @@ export interface Booking {
   startIso?: string;
 }
 
+export interface ComplexListItem {
+  id: string;
+  name: string;
+  city: string;
+  minPrice: number;
+  maxPrice: number;
+  fieldsCount: number;
+}
+
 export type ComplexFieldType = 'futbol_5' | 'futbol_7' | 'futbol_11' | 'microfutbol' | 'futsal';
 export type ComplexFieldStatus = 'active' | 'maintenance' | 'inactive';
 

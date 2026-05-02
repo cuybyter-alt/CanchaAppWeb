@@ -331,7 +331,7 @@ const Complexes: React.FC = () => {
             animate-slide-in-bottom lg:animate-slide-in-right
             fixed z-[1001]
             bottom-0 left-0 right-0
-            lg:top-16 lg:right-0 lg:bottom-0 lg:left-auto lg:w-[380px]
+            lg:top-0 lg:right-0 lg:bottom-0 lg:left-auto lg:w-[380px]
             bg-[var(--color-surface)]
             rounded-t-[var(--radius-2xl)] lg:rounded-tl-[var(--radius-2xl)] lg:rounded-tr-none lg:rounded-b-none
             overflow-hidden overflow-y-auto

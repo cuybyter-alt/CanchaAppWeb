@@ -85,6 +85,11 @@ export function Topbar({ onSearch, searchValue = '', sidebarOpen: _sidebarOpen, 
             value={searchValue}
             className="flex-1 bg-transparent border-none outline-none text-white text-sm font-bold py-2.5 placeholder:text-white/30 placeholder:font-semibold"
             onChange={(e) => onSearch?.(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && searchValue.trim()) {
+                navigate(`/fields?q=${encodeURIComponent(searchValue.trim())}`);
+              }
+            }}
           />
           {searchValue && (
             <button onClick={() => onSearch?.('')} className="text-white/40 hover:text-white/80 transition-colors">
@@ -230,6 +235,12 @@ export function Topbar({ onSearch, searchValue = '', sidebarOpen: _sidebarOpen, 
               placeholder="Buscar canchas, barrios..."
               className="flex-1 bg-transparent border-none outline-none text-white text-sm font-bold py-2.5 placeholder:text-white/30 placeholder:font-semibold"
               onChange={(e) => onSearch?.(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                  navigate(`/fields?q=${encodeURIComponent(e.currentTarget.value.trim())}`);
+                  setShowMobileSearch(false);
+                }
+              }}
               autoFocus
             />
             <button

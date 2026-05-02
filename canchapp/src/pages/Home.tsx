@@ -511,25 +511,26 @@ const Home: React.FC = () => {
             onClick={() => setBookingPanelOpen(false)}
           />
 
-          {/* Mobile: slide up from bottom */}
-          <div className="animate-slide-in-bottom lg:hidden fixed bottom-0 left-0 right-0 z-[1001] max-h-[88vh] rounded-t-[var(--radius-2xl)] overflow-hidden shadow-[0_-8px_40px_rgba(0,0,0,.35)]">
-            <div className="flex justify-center pt-3 pb-1 sticky top-0 bg-[var(--color-surface)] z-10">
+          {/* Panel container — mobile: bottom sheet, desktop: right drawer */}
+          <div className="
+            animate-slide-in-bottom lg:animate-slide-in-right
+            fixed z-[1001]
+            bottom-0 left-0 right-0
+            lg:top-0 lg:right-0 lg:bottom-0 lg:left-auto lg:w-[380px]
+            bg-[var(--color-surface)]
+            rounded-t-[var(--radius-2xl)] lg:rounded-tl-[var(--radius-2xl)] lg:rounded-tr-none lg:rounded-b-none
+            overflow-hidden
+            max-h-[88vh] lg:max-h-none
+            shadow-[0_-8px_40px_rgba(0,0,0,.35)] lg:shadow-[-8px_0_40px_rgba(0,0,0,.25)]
+            lg:border-l lg:border-[var(--color-border)]
+          ">
+            {/* Mobile drag handle */}
+            <div className="lg:hidden flex justify-center pt-3 pb-1 sticky top-0 bg-[var(--color-surface)] z-10">
               <div className="w-10 h-1 bg-[var(--color-border)] rounded-full" />
             </div>
-            <BookingPanel
-              field={panelOverrideField ?? selectedField}
-              onBookingCreated={handleBookingCreated}
-              onSlotBooked={handleSlotBooked}
-              preselectedSlotId={panelPreselectedSlotId}
-              preselectedDate={panelPreselectedDate}
-              onClose={() => setBookingPanelOpen(false)}
-            />
-          </div>
-
-          {/* Desktop: slide in from right */}
-          <div className="animate-slide-in-right hidden lg:block fixed top-16 right-0 bottom-0 w-[380px] z-[1001] border-l border-[var(--color-border)] shadow-[-8px_0_40px_rgba(0,0,0,.25)] overflow-hidden">
+            {/* Preselected slot flash banner */}
             {bookingPanelFlash && (
-              <div className="mx-4 mt-4 flex items-center gap-2 px-3 py-2 rounded-[var(--radius-lg)]
+              <div className="hidden lg:flex mx-4 mt-4 items-center gap-2 px-3 py-2 rounded-[var(--radius-lg)]
                 bg-[var(--color-primary)]/20 border border-[var(--color-primary)]/40 animate-pulse">
                 <i className="fa-solid fa-wand-magic-sparkles text-[var(--color-primary)] text-xs" />
                 <span className="text-[11px] font-extrabold text-[var(--color-primary-dark)]">

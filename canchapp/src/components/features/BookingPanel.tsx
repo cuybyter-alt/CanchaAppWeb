@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Calendar, Clock, MapPin, Star, Zap } from 'lucide-react';
+import { Calendar, Clock, MapPin, Star, X, Zap } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import type { Booking, Field } from '../../types/field';
 import { MiniFieldSVG } from '../ui/svg-assets';
@@ -18,6 +18,8 @@ interface BookingPanelProps {
   preselectedSlotId?: string;
   /** ISO date string to pre-select (from ComplexFieldsDialog) */
   preselectedDate?: string;
+  /** Called when the user dismisses the panel */
+  onClose?: () => void;
 }
 
 const DAY_NAMES = ['DOM', 'LUN', 'MAR', 'MIE', 'JUE', 'VIE', 'SAB'];
@@ -59,7 +61,7 @@ const sportNames: Record<string, string> = {
   futbol11:   'Fútbol',
 };
 
-export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCreated, onSlotBooked, preselectedSlotId, preselectedDate }) => {
+export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCreated, onSlotBooked, preselectedSlotId, preselectedDate, onClose }) => {
   const navigate = useNavigate();
   const [selectedDate, setSelectedDate] = useState(dates[0].id);
   const [selectedSlot, setSelectedSlot] = useState<string | null>(
@@ -278,7 +280,9 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
   const basePrice = selectedSlotData?.price ?? field.price;
 
   return (
-    <div className="bg-[var(--color-surface)] rounded-[var(--radius-2xl)] border-[1.5px] border-[var(--color-border)] shadow-[var(--shadow-lg)] overflow-hidden flex flex-col">
+    <div className={`bg-[var(--color-surface)] shadow-[var(--shadow-lg)] overflow-hidden flex flex-col h-full ${
+      onClose ? '' : 'rounded-[var(--radius-2xl)] border-[1.5px] border-[var(--color-border)]'
+    }`}>
 
       {/* ── Header dark ── */}
       <div className="bg-[var(--color-text)] p-5 pb-6 relative overflow-hidden">
@@ -290,10 +294,22 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
           }}
         />
         <div className="relative z-10">
-          <p className="font-[var(--font-pixel)] text-[6px] tracking-widest uppercase text-[var(--color-primary)] mb-2">
-            <Calendar className="inline w-3 h-3 mr-1" />
-            PANEL DE RESERVA
-          </p>
+          <div className="flex items-start justify-between">
+            <p className="font-[var(--font-pixel)] text-[6px] tracking-widest uppercase text-[var(--color-primary)] mb-2">
+              <Calendar className="inline w-3 h-3 mr-1" />
+              PANEL DE RESERVA
+            </p>
+            {onClose && (
+              <button
+                onClick={onClose}
+                className="w-7 h-7 flex items-center justify-center rounded-full bg-white/10 text-white/60
+                  hover:bg-white/20 hover:text-white transition-all flex-shrink-0 -mt-1"
+                aria-label="Cerrar panel"
+              >
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
+          </div>
           <p className="font-[var(--font-display)] text-[26px] font-black tracking-tight text-white mb-2">
             {field.name}
           </p>
@@ -318,7 +334,7 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
       </div>
 
       {/* ── Body ── */}
-      <div className="p-5 flex-1 overflow-y-auto">
+      <div className="p-5 flex-1 overflow-y-auto min-h-0">
 
         {/* Seleccionar Fecha */}
         <p className="font-[var(--font-pixel)] text-[6px] tracking-widest uppercase text-[var(--color-text-3)] mb-3">
@@ -426,7 +442,7 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
         </div>
 
         {/* Resumen de precio */}
-        <div className="bg-[var(--color-surf2)] rounded-[var(--radius-xl)] p-4 border-[1.5px] border-[var(--color-border)] mb-4">
+        <div className="bg-[var(--color-surf2)] rounded-[var(--radius-xl)] p-4 border-[1.5px] border-[var(--color-border)] mb-2">
           <div className="flex justify-between items-center py-2 text-[13px] font-bold text-[var(--color-text-2)] border-b border-[var(--color-border)]">
             <span>
               <i className="fa-solid fa-futbol text-[var(--color-primary)] mr-1" />
@@ -441,7 +457,10 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
             </span>
           </div>
         </div>
+      </div>
 
+      {/* ── Sticky CTA footer ── */}
+      <div className="px-5 pb-5 pt-3 border-t border-[var(--color-border)] bg-[var(--color-surface)] flex-shrink-0">
         {/* CTAs */}
         <button
           onClick={handleBookNow}

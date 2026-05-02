@@ -49,10 +49,12 @@ export function MapCard({
   const [error, setError] = useState<string | null>(null);
 
   const navigate = useNavigate();
-  const { complexMarkers: contextComplexMarkers, setComplexMarkers } = useMapContext();
+  const { complexMarkers: contextComplexMarkers, setComplexMarkers, centerOn } = useMapContext();
   // Use a ref so startMap always reads the latest context markers without re-creating
   const contextMarkersRef = useRef<ComplexMarker[]>(contextComplexMarkers);
   useEffect(() => { contextMarkersRef.current = contextComplexMarkers; }, [contextComplexMarkers]);
+  const centerOnRef = useRef(centerOn);
+  useEffect(() => { centerOnRef.current = centerOn; }, [centerOn]);
 
   // ── Initialize map once location is resolved ──────────────────────────
   const startMap = useCallback(async (userLoc: UserLocation | null) => {
@@ -76,7 +78,9 @@ export function MapCard({
       }
     }
 
-    const center: [number, number] = userLoc
+    const center: [number, number] = centerOnRef.current
+      ? [centerOnRef.current.lng, centerOnRef.current.lat]
+      : userLoc
       ? [userLoc.longitude, userLoc.latitude]
       : markersToDisplay.length > 0
       ? [markersToDisplay[0].longitude, markersToDisplay[0].latitude]
@@ -86,7 +90,7 @@ export function MapCard({
       const mapInstance = createMap(mapContainer.current, {
         style,
         center,
-        zoom: userLoc ? 13 : 11,
+        zoom: centerOnRef.current ? (centerOnRef.current.zoom ?? 16) : (userLoc ? 13 : 11),
         pitch: showMiniMap ? 30 : 45,
       });
 
@@ -118,7 +122,14 @@ export function MapCard({
           );
           markersRef.current = markers;
 
-          if (userLoc) {
+          if (centerOnRef.current) {
+            mapInstance.flyTo({
+              center: [centerOnRef.current.lng, centerOnRef.current.lat],
+              zoom: centerOnRef.current.zoom ?? 16,
+              speed: 1.6,
+              essential: true,
+            });
+          } else if (userLoc) {
             mapInstance.flyTo({
               center: [userLoc.longitude, userLoc.latitude],
               zoom: 13,

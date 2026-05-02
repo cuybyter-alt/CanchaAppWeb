@@ -16,10 +16,10 @@ function toNearbyComplex(c: ComplexListItem): NearbyComplex {
   return {
     id: c.id,
     name: c.name,
-    address: c.city,
+    address: c.address ?? c.city,
     city: c.city,
-    latitude: 0,
-    longitude: 0,
+    latitude: c.latitude ?? 0,
+    longitude: c.longitude ?? 0,
     minPrice: c.minPrice,
     maxPrice: c.maxPrice,
     fieldsCount: c.fieldsCount,

@@ -8,12 +8,14 @@ import { MapContext } from '../context/MapContext';
 import { LocationBanner } from '../components/layout/LocationBanner';
 import type { ComplexMarker } from '../types/map';
 import type { Field } from '../types/field';
+import type { MapCenterCoords } from '../context/MapContext';
 
 export default function AppLayout() {
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [complexMarkers, setComplexMarkers] = useState<ComplexMarker[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  const [centerOn, setCenterOn] = useState<MapCenterCoords | undefined>(undefined);
 
   // Global quick-book panel (triggered from sidebar widget)
   const [quickBookField, setQuickBookField] = useState<Field | null>(null);
@@ -33,7 +35,7 @@ export default function AppLayout() {
   };
 
   return (
-    <MapContext.Provider value={{ openMap: () => setIsMapOpen(true), complexMarkers, setComplexMarkers, searchQuery, setSearchQuery }}>
+    <MapContext.Provider value={{ openMap: () => setIsMapOpen(true), openMapAt: (coords) => { setCenterOn(coords); setIsMapOpen(true); }, complexMarkers, setComplexMarkers, searchQuery, setSearchQuery, centerOn, setCenterOn }}>
       <div className="min-h-screen relative z-[1]">
         {/* Topbar - fixed at top */}
         <Topbar
@@ -60,7 +62,7 @@ export default function AppLayout() {
         </div>
 
         {/* Global map dialog */}
-        <MapDialog isOpen={isMapOpen} onClose={() => setIsMapOpen(false)} />
+        <MapDialog isOpen={isMapOpen} onClose={() => { setIsMapOpen(false); setCenterOn(undefined); }} />
 
         {/* Global quick-book panel — mobile: bottom sheet, desktop: right drawer */}
         {quickBookOpen && quickBookField && (

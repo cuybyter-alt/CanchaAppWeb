@@ -2,6 +2,7 @@ import { MapPin, ArrowRight, Heart } from 'lucide-react';
 import type { NearbyComplex } from '../../types/map';
 import { Typography } from '../ui/typography';
 import { formatPrice } from '../../lib/utils';
+import { useMapContext } from '../../context/MapContext';
 
 interface ComplexCardProps {
   complex: NearbyComplex;
@@ -11,6 +12,7 @@ interface ComplexCardProps {
 }
 
 export function ComplexCard({ complex, onSelect, isFavorite, onToggleFavorite }: ComplexCardProps) {
+  const { openMapAt } = useMapContext();
   return (
     <div
       className="group cursor-pointer bg-[var(--color-surface)] rounded-[var(--radius-2xl)] overflow-hidden
@@ -53,12 +55,21 @@ export function ComplexCard({ complex, onSelect, isFavorite, onToggleFavorite }:
               <Heart className={`w-3.5 h-3.5 ${isFavorite ? 'fill-white' : ''}`} />
             </button>
           )}
-          <div className="flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2.5 py-1">
-            <MapPin className="w-2.5 h-2.5 text-[var(--color-primary)]" />
+          {(complex.latitude !== 0 || complex.longitude !== 0) && (
+          <button
+            onClick={(e) => { e.stopPropagation(); openMapAt({ lng: complex.longitude, lat: complex.latitude, zoom: 16 }); }}
+            title="Ver ubicación en mapa"
+            className="group/loc flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2.5 py-1
+              transition-all duration-200
+              hover:scale-110 hover:bg-[var(--color-primary)] hover:shadow-[0_0_10px_var(--color-primary-glow)]
+              active:scale-95"
+          >
+            <MapPin className="w-2.5 h-2.5 text-[var(--color-primary)] group-hover/loc:text-white transition-colors duration-200" />
             <span className="font-[var(--font-pixel)] text-[7px] tracking-widest text-white">
               {complex.distanceLabel}
             </span>
-          </div>
+          </button>
+          )}
         </div>
 
         {/* Fields count — bottom right */}

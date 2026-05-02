@@ -6,9 +6,11 @@ import authService, { tokenStorage } from '../../services/AuthService';
 interface TopbarProps {
   onSearch?: (query: string) => void;
   searchValue?: string;
+  sidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
 }
 
-export function Topbar({ onSearch, searchValue = '' }: TopbarProps) {
+export function Topbar({ onSearch, searchValue = '', sidebarOpen: _sidebarOpen, onToggleSidebar }: TopbarProps) {
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -50,6 +52,19 @@ export function Topbar({ onSearch, searchValue = '' }: TopbarProps) {
           <Menu className="w-5 h-5" />
         </button>
 
+        {/* Desktop Sidebar Toggle */}
+        {onToggleSidebar && (
+          <button
+            onClick={onToggleSidebar}
+            className="hidden lg:flex w-10 h-10 rounded-[var(--radius-md)] border-none cursor-pointer items-center justify-center
+              bg-white/8 text-white/70 transition-all duration-[var(--duration-fast)]
+              hover:bg-white/15 hover:text-white hover:scale-105 active:scale-95"
+            title="Alternar menú lateral"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
+
         {/* Logo */}
         <a href="/" className="flex items-center gap-2 cursor-pointer no-underline flex-shrink-0">
           <div className="w-9 h-9 md:w-10 md:h-10 rounded-[var(--radius-md)] bg-[var(--color-text)] overflow-hidden border-2 border-[var(--color-primary)] shadow-[var(--shadow-primary)] flex-shrink-0">
@@ -70,6 +85,11 @@ export function Topbar({ onSearch, searchValue = '' }: TopbarProps) {
             value={searchValue}
             className="flex-1 bg-transparent border-none outline-none text-white text-sm font-bold py-2.5 placeholder:text-white/30 placeholder:font-semibold"
             onChange={(e) => onSearch?.(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && searchValue.trim()) {
+                navigate(`/fields?q=${encodeURIComponent(searchValue.trim())}`);
+              }
+            }}
           />
           {searchValue && (
             <button onClick={() => onSearch?.('')} className="text-white/40 hover:text-white/80 transition-colors">
@@ -215,6 +235,12 @@ export function Topbar({ onSearch, searchValue = '' }: TopbarProps) {
               placeholder="Buscar canchas, barrios..."
               className="flex-1 bg-transparent border-none outline-none text-white text-sm font-bold py-2.5 placeholder:text-white/30 placeholder:font-semibold"
               onChange={(e) => onSearch?.(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && e.currentTarget.value.trim()) {
+                  navigate(`/fields?q=${encodeURIComponent(e.currentTarget.value.trim())}`);
+                  setShowMobileSearch(false);
+                }
+              }}
               autoFocus
             />
             <button

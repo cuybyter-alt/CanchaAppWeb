@@ -60,6 +60,9 @@ export interface ComplexListItem {
   id: string;
   name: string;
   city: string;
+  address?: string;
+  latitude?: number;
+  longitude?: number;
   minPrice: number;
   maxPrice: number;
   fieldsCount: number;

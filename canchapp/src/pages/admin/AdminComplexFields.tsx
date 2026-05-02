@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
-import { Plus, Target, Building2, ChevronRight, X, Loader2, AlertCircle, Ruler, Users, Wrench, Trash2, Edit3, CheckCircle, MapPin } from 'lucide-react';
+import { Plus, Target, Building2, ChevronRight, X, Loader2, AlertCircle, Ruler, Users, Wrench, Trash2, Edit3, CheckCircle, MapPin, Calendar } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ApiClient from '../../services/ApiClient';
 import { toast } from 'sonner';
@@ -95,7 +95,7 @@ function ConfirmModal({ name, onConfirm, onCancel, deleting }: { name: string; o
  
 // ─── Field Card ───────────────────────────────────────────────────────────────
  
-function FieldCard({ f, onDelete }: { f: FieldItem & { _amenities?: string[]; _capacity?: number; _price?: number }; onDelete: () => void }) {
+function FieldCard({ f, onDelete, onSchedule }: { f: FieldItem & { _amenities?: string[]; _capacity?: number; _price?: number }; onDelete: () => void; onSchedule: () => void }) {
   const cfg = STATUS_CFG[f.status] ?? STATUS_CFG.inactive;
   const amenities = f._amenities ?? [];
   const capacity = f._capacity ?? TYPE_PLAYERS[f.type] ?? 10;
@@ -156,8 +156,8 @@ function FieldCard({ f, onDelete }: { f: FieldItem & { _amenities?: string[]; _c
  
       {/* Action bar */}
       <div className="px-3 py-2.5 flex gap-0.5">
-        <button className="flex-1 py-1.5 rounded-[var(--radius-lg)] text-xs font-extrabold text-[var(--color-primary)] hover:bg-[var(--color-primary-tint)] transition-colors flex items-center justify-center gap-1">
-          <Target className="w-3 h-3" /> Horarios
+        <button onClick={onSchedule} className="flex-1 py-1.5 rounded-[var(--radius-lg)] text-xs font-extrabold text-[var(--color-primary)] hover:bg-[var(--color-primary-tint)] transition-colors flex items-center justify-center gap-1">
+          <Calendar className="w-3 h-3" /> Horarios
         </button>
         <button className="flex-1 py-1.5 rounded-[var(--radius-lg)] text-xs font-extrabold text-[var(--color-text-2)] hover:bg-[var(--color-surf2)] transition-colors flex items-center justify-center gap-1">
           <Edit3 className="w-3 h-3" /> Editar
@@ -523,7 +523,12 @@ const AdminComplexFields: React.FC = () => {
           {fields.length > 0 && (
             <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
               {fields.map(f => (
-                <FieldCard key={f.field_id} f={f} onDelete={() => setDeleteTarget(f)} />
+                <FieldCard
+                  key={f.field_id}
+                  f={f}
+                  onDelete={() => setDeleteTarget(f)}
+                  onSchedule={() => navigate(`/admin/complexes/${complexId}/fields/${f.field_id}/schedule`, { state: { fieldName: f.name, complexName: complex?.name ?? '' } })}
+                />
               ))}
             </div>
           )}

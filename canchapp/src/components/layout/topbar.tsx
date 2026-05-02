@@ -6,9 +6,11 @@ import authService, { tokenStorage } from '../../services/AuthService';
 interface TopbarProps {
   onSearch?: (query: string) => void;
   searchValue?: string;
+  sidebarOpen?: boolean;
+  onToggleSidebar?: () => void;
 }
 
-export function Topbar({ onSearch, searchValue = '' }: TopbarProps) {
+export function Topbar({ onSearch, searchValue = '', sidebarOpen: _sidebarOpen, onToggleSidebar }: TopbarProps) {
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
@@ -49,6 +51,19 @@ export function Topbar({ onSearch, searchValue = '' }: TopbarProps) {
         >
           <Menu className="w-5 h-5" />
         </button>
+
+        {/* Desktop Sidebar Toggle */}
+        {onToggleSidebar && (
+          <button
+            onClick={onToggleSidebar}
+            className="hidden lg:flex w-10 h-10 rounded-[var(--radius-md)] border-none cursor-pointer items-center justify-center
+              bg-white/8 text-white/70 transition-all duration-[var(--duration-fast)]
+              hover:bg-white/15 hover:text-white hover:scale-105 active:scale-95"
+            title="Alternar menú lateral"
+          >
+            <Menu className="w-5 h-5" />
+          </button>
+        )}
 
         {/* Logo */}
         <a href="/" className="flex items-center gap-2 cursor-pointer no-underline flex-shrink-0">

@@ -3,14 +3,15 @@ import { ArrowLeft, Search, X, Map, ChevronDown, ChevronUp } from 'lucide-react'
 import { useNavigate } from 'react-router-dom';
 import { ComplexCard } from '../components/features/ComplexCard';
 import { ComplexFieldsDialog } from '../components/features/ComplexFieldsDialog';
+import { BookingPanel } from '../components/features/BookingPanel';
 import { MapCard } from '../components/sections/MapCard';
 import { Typography } from '../components/ui/typography';
 import type { NearbyComplex, ComplexMarker } from '../types/map';
-import type { Booking, ComplexListItem } from '../types/field';
+import type { Booking, ComplexField, ComplexFieldType, ComplexListItem, Field, TimeSlotData } from '../types/field';
 import complexesService from '../services/ComplexesService';
 import favoritesService from '../services/FavoritesService';
-import { MAPBOX_STYLES } from '../services/mapboxService';
 import notify from '../services/toast';
+import { formatPrice } from '../lib/utils';
 
 function toNearbyComplex(c: ComplexListItem): NearbyComplex {
   return {
@@ -25,6 +26,36 @@ function toNearbyComplex(c: ComplexListItem): NearbyComplex {
     fieldsCount: c.fieldsCount,
     distanceKm: 0,
     distanceLabel: '',
+  };
+}
+
+const COMPLEX_TO_SPORT: Record<ComplexFieldType, Field['sport']> = {
+  futbol_5: 'futbol5', futbol_7: 'futbol7', futbol_11: 'futbol11',
+  microfutbol: 'microfutbol', futsal: 'futbol5',
+};
+const COMPLEX_SPORT_LABEL: Record<ComplexFieldType, string> = {
+  futbol_5: 'Fútbol 5', futbol_7: 'Fútbol 7', futbol_11: 'Fútbol 11',
+  microfutbol: 'Microfútbol', futsal: 'Futsal',
+};
+
+function buildSyntheticField(cf: ComplexField, complex: NearbyComplex, slot: TimeSlotData, allSlots: TimeSlotData[]): Field {
+  return {
+    id: cf.fieldId,
+    name: cf.name,
+    sport: COMPLEX_TO_SPORT[cf.type] ?? 'futbol5',
+    sportLabel: COMPLEX_SPORT_LABEL[cf.type] ?? cf.type,
+    location: `${complex.name} · ${complex.city}`,
+    distance: '',
+    price: slot.price,
+    priceLabel: formatPrice(slot.price),
+    rating: 0,
+    reviewCount: 0,
+    image: '',
+    tags: [],
+    amenities: [],
+    availability: allSlots.length > 0 ? allSlots : [slot],
+    isFavorite: false,
+    capacity: 10,
   };
 }
 
@@ -47,7 +78,23 @@ const Complexes: React.FC = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [, setBookings] = useState<Booking[]>([]);
 
+  // Booking panel (opens after slot selection in dialog)
+  const [panelField, setPanelField] = useState<Field | null>(null);
+  const [panelSlotId, setPanelSlotId] = useState<string | undefined>(undefined);
+  const [panelDate, setPanelDate] = useState<string | undefined>(undefined);
+  const [bookingPanelOpen, setBookingPanelOpen] = useState(false);
+
   const [showMap, setShowMap] = useState(true);
+
+  const handleSlotFromDialog = (complexField: ComplexField, slot: TimeSlotData, date: string, allSlots: TimeSlotData[]) => {
+    if (!selectedComplex) return;
+    const synthField = buildSyntheticField(complexField, selectedComplex, slot, allSlots);
+    setPanelField(synthField);
+    setPanelSlotId(slot.id);
+    setPanelDate(date);
+    setIsDialogOpen(false);
+    setBookingPanelOpen(true);
+  };
 
   const handleMapMarkerClick = (marker: ComplexMarker) => {
     setSelectedComplex({ ...marker, distanceKm: 0, distanceLabel: '' });
@@ -139,6 +186,33 @@ const Complexes: React.FC = () => {
         </Typography>
       </div>
 
+      {/* Embedded map */}
+      <div className="space-y-2">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-[var(--color-text-3)] uppercase tracking-widest">
+            <Map className="w-3 h-3 text-[var(--color-primary)]" />
+            Mapa de complejos
+          </div>
+          <button
+            onClick={() => setShowMap(p => !p)}
+            className="flex items-center gap-1 text-[11px] font-bold text-[var(--color-text-3)] hover:text-[var(--color-primary)] transition-colors"
+          >
+            {showMap
+              ? <><ChevronUp className="w-3.5 h-3.5" /> Ocultar</>
+              : <><ChevronDown className="w-3.5 h-3.5" /> Mostrar</>}
+          </button>
+        </div>
+        {showMap && (
+          <div className="h-[220px] rounded-[var(--radius-2xl)] overflow-hidden">
+            <MapCard
+              showMiniMap={false}
+              fullMapHeight="220px"
+              onMarkerClick={handleMapMarkerClick}
+            />
+          </div>
+        )}
+      </div>
+
       {/* Search bar */}
       <div className="relative">
         <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-3)] pointer-events-none" />
@@ -164,34 +238,6 @@ const Complexes: React.FC = () => {
           >
             <X className="w-3 h-3" />
           </button>
-        )}
-      </div>
-
-      {/* Embedded map */}
-      <div className="space-y-2">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-1.5 text-[11px] font-extrabold text-[var(--color-text-3)] uppercase tracking-widest">
-            <Map className="w-3 h-3 text-[var(--color-primary)]" />
-            Mapa de complejos
-          </div>
-          <button
-            onClick={() => setShowMap(p => !p)}
-            className="flex items-center gap-1 text-[11px] font-bold text-[var(--color-text-3)] hover:text-[var(--color-primary)] transition-colors"
-          >
-            {showMap
-              ? <><ChevronUp className="w-3.5 h-3.5" /> Ocultar</>
-              : <><ChevronDown className="w-3.5 h-3.5" /> Mostrar</>}
-          </button>
-        </div>
-        {showMap && (
-          <div className="h-[360px] rounded-[var(--radius-2xl)] overflow-hidden">
-            <MapCard
-              showMiniMap={false}
-              fullMapHeight="360px"
-              style={MAPBOX_STYLES.streets}
-              onMarkerClick={handleMapMarkerClick}
-            />
-          </div>
         )}
       </div>
 
@@ -268,8 +314,45 @@ const Complexes: React.FC = () => {
         isOpen={isDialogOpen}
         onClose={() => setIsDialogOpen(false)}
         complex={selectedComplex}
+        onSlotSelected={handleSlotFromDialog}
         onBookingCreated={(booking) => setBookings((prev) => [booking, ...prev])}
       />
+
+      {/* Booking panel overlay (slides up on mobile, right drawer on desktop) */}
+      {bookingPanelOpen && panelField && (
+        <>
+          {/* Backdrop with blur (mobile + desktop) */}
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-[1000]"
+            onClick={() => setBookingPanelOpen(false)}
+          />
+          {/* Panel container */}
+          <div className="
+            animate-slide-in-bottom lg:animate-slide-in-right
+            fixed z-[1001]
+            bottom-0 left-0 right-0
+            lg:top-16 lg:right-0 lg:bottom-0 lg:left-auto lg:w-[380px]
+            bg-[var(--color-surface)]
+            rounded-t-[var(--radius-2xl)] lg:rounded-tl-[var(--radius-2xl)] lg:rounded-tr-none lg:rounded-b-none
+            overflow-hidden overflow-y-auto
+            max-h-[88vh] lg:max-h-none
+            shadow-[0_-8px_40px_rgba(0,0,0,.35)] lg:shadow-[-8px_0_40px_rgba(0,0,0,.25)]
+            lg:border-l lg:border-[var(--color-border)]
+          ">
+            {/* Mobile drag handle */}
+            <div className="lg:hidden flex justify-center pt-3 pb-1 sticky top-0 bg-[var(--color-surface)] z-10">
+              <div className="w-10 h-1 bg-[var(--color-border)] rounded-full" />
+            </div>
+            <BookingPanel
+              field={panelField}
+              onBookingCreated={(booking) => setBookings((prev) => [booking, ...prev])}
+              preselectedSlotId={panelSlotId}
+              preselectedDate={panelDate}
+              onClose={() => setBookingPanelOpen(false)}
+            />
+          </div>
+        </>
+      )}
     </div>
   );
 };

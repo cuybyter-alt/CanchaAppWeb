@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { MapPin, ArrowRight } from 'lucide-react';
+import { MapPin, ArrowRight, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Typography } from '../components/ui/typography';
 import { PromoBanner } from '../components/sections/PromoBanner';
@@ -94,6 +94,7 @@ const Home: React.FC = () => {
   const [panelPreselectedSlotId, setPanelPreselectedSlotId] = useState<string | undefined>(undefined);
   const [panelPreselectedDate, setPanelPreselectedDate] = useState<string | undefined>(undefined);
   const [bookingPanelFlash, setBookingPanelFlash] = useState(false);
+  const [bookingPanelOpen, setBookingPanelOpen] = useState(false);
   // Skip first run of filter effect (initial complexes loaded by geo effect)
   const skipFirstFilterEffect = useRef(true);
   const { openMap } = useMapContext();
@@ -303,6 +304,7 @@ const Home: React.FC = () => {
     setPanelPreselectedDate(date);
     setIsComplexDialogOpen(false);
     setBookingPanelFlash(true);
+    setBookingPanelOpen(true);
     setTimeout(() => setBookingPanelFlash(false), 2500);
   };
 
@@ -498,34 +500,54 @@ const Home: React.FC = () => {
 
         </div>
 
-        {/* Columna derecha: panel de reserva sticky (solo desktop) */}
-        <div className="hidden lg:block w-80 sticky top-20 flex-shrink-0">
-          {/* Flash hint when a slot is pre-selected from the complex dialog */}
-          {bookingPanelFlash && (
-            <div className="mb-2 flex items-center gap-2 px-3 py-2 rounded-[var(--radius-lg)]
-              bg-[var(--color-primary)]/20 border border-[var(--color-primary)]/40 animate-pulse">
-              <i className="fa-solid fa-arrow-down text-[var(--color-primary)] animate-bounce text-sm" />
-              <span className="text-[11px] font-extrabold text-[var(--color-primary-dark)]">
-                Horario preseleccionado — confirma aqu\u00ed
-              </span>
+      </div>
+
+      {/* Booking panel overlay — mobile: bottom sheet, desktop: right drawer */}
+      {bookingPanelOpen && (panelOverrideField ?? selectedField) && (
+        <>
+          {/* Backdrop with blur */}
+          <div
+            className="fixed inset-0 bg-black/40 backdrop-blur-[2px] z-[1000]"
+            onClick={() => setBookingPanelOpen(false)}
+          />
+
+          {/* Mobile: slide up from bottom */}
+          <div className="animate-slide-in-bottom lg:hidden fixed bottom-0 left-0 right-0 z-[1001] max-h-[88vh] rounded-t-[var(--radius-2xl)] overflow-hidden shadow-[0_-8px_40px_rgba(0,0,0,.35)]">
+            <div className="flex justify-center pt-3 pb-1 sticky top-0 bg-[var(--color-surface)] z-10">
+              <div className="w-10 h-1 bg-[var(--color-border)] rounded-full" />
             </div>
-          )}
-          <div className={`transition-all duration-300 ${
-            bookingPanelFlash
-              ? 'ring-2 ring-[var(--color-primary)] ring-offset-2 ring-offset-[var(--color-surface)] rounded-[var(--radius-2xl)]'
-              : ''
-          }`}>
             <BookingPanel
               field={panelOverrideField ?? selectedField}
               onBookingCreated={handleBookingCreated}
               onSlotBooked={handleSlotBooked}
               preselectedSlotId={panelPreselectedSlotId}
               preselectedDate={panelPreselectedDate}
+              onClose={() => setBookingPanelOpen(false)}
             />
           </div>
-        </div>
 
-      </div>
+          {/* Desktop: slide in from right */}
+          <div className="animate-slide-in-right hidden lg:block fixed top-16 right-0 bottom-0 w-[380px] z-[1001] border-l border-[var(--color-border)] shadow-[-8px_0_40px_rgba(0,0,0,.25)] overflow-hidden">
+            {bookingPanelFlash && (
+              <div className="mx-4 mt-4 flex items-center gap-2 px-3 py-2 rounded-[var(--radius-lg)]
+                bg-[var(--color-primary)]/20 border border-[var(--color-primary)]/40 animate-pulse">
+                <i className="fa-solid fa-wand-magic-sparkles text-[var(--color-primary)] text-xs" />
+                <span className="text-[11px] font-extrabold text-[var(--color-primary-dark)]">
+                  Horario preseleccionado — confirma aquí
+                </span>
+              </div>
+            )}
+            <BookingPanel
+              field={panelOverrideField ?? selectedField}
+              onBookingCreated={handleBookingCreated}
+              onSlotBooked={handleSlotBooked}
+              preselectedSlotId={panelPreselectedSlotId}
+              preselectedDate={panelPreselectedDate}
+              onClose={() => setBookingPanelOpen(false)}
+            />
+          </div>
+        </>
+      )}
 
       {/* Dialog: canchas de un complejo */}
       <ComplexFieldsDialog

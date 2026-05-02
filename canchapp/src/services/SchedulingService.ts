@@ -148,6 +148,105 @@ const schedulingService = {
     const slotsRaw = extractArray(res.data) as TimeSlotOutput[];
     return slotsRaw.map((item, idx) => toTimeSlotData(item, idx));
   },
+
+  getComplexSchedules: async (complexId: string): Promise<FieldSchedule[]> => {
+    const res = await ApiClient.get<ApiResponse<FieldSchedule[]>>(`/scheduling/complexes/${complexId}/schedules/`);
+    return Array.isArray(res.data) ? res.data : [];
+  },
+
+  createSchedule: async (complexId: string, payload: CreateSchedulePayload): Promise<FieldSchedule> => {
+    const res = await ApiClient.post<ApiResponse<FieldSchedule>>(
+      `/scheduling/complexes/${complexId}/schedules/`,
+      payload,
+      { withAuth: true },
+    );
+    return res.data as FieldSchedule;
+  },
+
+  createSchedulePricing: async (scheduleId: string, payload: CreateSchedulePricingPayload): Promise<SchedulePricing> => {
+    const res = await ApiClient.post<ApiResponse<SchedulePricing>>(
+      `/scheduling/schedules/${scheduleId}/pricings/`,
+      payload,
+      { withAuth: true },
+    );
+    return res.data as SchedulePricing;
+  },
+
+  listSchedulePricings: async (scheduleId: string): Promise<SchedulePricing[]> => {
+    const res = await ApiClient.get<ApiResponse<SchedulePricing[]>>(`/scheduling/schedules/${scheduleId}/pricings/`);
+    return Array.isArray(res.data) ? res.data : [];
+  },
+
+  updateSchedule: async (scheduleId: string, payload: UpdateSchedulePayload): Promise<FieldSchedule> => {
+    const res = await ApiClient.put<ApiResponse<FieldSchedule>>(
+      `/scheduling/schedules/${scheduleId}/`,
+      payload,
+      { withAuth: true },
+    );
+    return res.data as FieldSchedule;
+  },
+
+  deleteSchedule: async (scheduleId: string): Promise<void> => {
+    await ApiClient.delete(`/scheduling/schedules/${scheduleId}/`, { withAuth: true });
+  },
+
+  updateSchedulePricing: async (pricingId: string, payload: CreateSchedulePricingPayload): Promise<SchedulePricing> => {
+    const res = await ApiClient.put<ApiResponse<SchedulePricing>>(
+      `/scheduling/pricings/${pricingId}/`,
+      payload,
+      { withAuth: true },
+    );
+    return res.data as SchedulePricing;
+  },
+
+  deleteSchedulePricing: async (pricingId: string): Promise<void> => {
+    await ApiClient.delete(`/scheduling/pricings/${pricingId}/`, { withAuth: true });
+  },
 };
 
 export default schedulingService;
+
+// ─── Admin schedule types (exported for pages) ────────────────────────────────
+
+export interface SchedulePricing {
+  pricing_id: string;
+  schedule_id: string;
+  start_time: string;
+  end_time: string;
+  price: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface FieldSchedule {
+  schedule_id: string;
+  complex_id: string;
+  field_id: string | null;
+  day_of_week: number;
+  opening_time: string;
+  closing_time: string;
+  slot_duration_minutes: number;
+  created_at: string;
+  updated_at: string;
+  pricings: SchedulePricing[];
+}
+
+export interface CreateSchedulePayload {
+  field_id?: string;
+  day_of_week: number;
+  opening_time: string;
+  closing_time: string;
+  slot_duration_minutes: number;
+}
+
+export interface UpdateSchedulePayload {
+  opening_time: string;
+  closing_time: string;
+  slot_duration_minutes: number;
+}
+
+export interface CreateSchedulePricingPayload {
+  start_time: string;  // "HH:mm"
+  end_time: string;    // "HH:mm"
+  price: string;       // decimal string, e.g. "70000.00"
+}

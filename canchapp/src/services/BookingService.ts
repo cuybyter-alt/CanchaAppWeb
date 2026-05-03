@@ -18,6 +18,24 @@ export interface BookingOutput {
   total_price?: number;
 }
 
+export interface AdminBookingRow {
+  id: string;
+  customerName: string;
+  approval: 'approved' | 'pending';
+  fieldName: string;
+  fieldId: string;
+  complexName: string;
+  timeSlotId: string;
+  timeRange: string;
+  phone: string;
+  totalLabel: string;
+  totalPrice: number;
+  status: 'active' | 'canceled';
+  isManual?: boolean;
+  createdByAdmin?: boolean;
+  startIso?: string;
+}
+
 type RawRecord = Record<string, unknown>;
 
 function toRecords(arr: unknown[]): RawRecord[] {
@@ -103,6 +121,44 @@ function mapBackendBooking(raw: RawRecord): Booking {
   };
 }
 
+function mapToAdminBookingRow(raw: RawRecord): AdminBookingRow {
+  const slot = raw.time_slot as RawRecord | undefined;
+  const slotField = slot ? (slot.field as RawRecord | undefined) : undefined;
+  const startDt = (raw.start_datetime ?? slot?.start_datetime) as string | undefined;
+  const endDt = (raw.end_datetime ?? slot?.end_datetime) as string | undefined;
+  const fieldName = (raw.field_name ?? slotField?.name ?? '—') as string;
+  const price = (raw.total_price ?? slot?.price ?? 0) as number;
+  const status = (raw.status ?? 'active') as string;
+  const isApproved = status === 'accepted' || status === 'confirmed' || (raw.is_approved as boolean);
+
+  let timeRange = '—';
+  if (startDt && endDt) {
+    const start = new Date(startDt);
+    const end = new Date(endDt);
+    const startStr = start.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
+    const endStr = end.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
+    timeRange = `${startStr} - ${endStr}`;
+  }
+
+  return {
+    id: (raw.booking_id ?? raw.id ?? '') as string,
+    customerName: (raw.client_name ?? raw.customer_name ?? '—') as string,
+    approval: isApproved ? 'approved' : 'pending',
+    fieldName,
+    fieldId: (raw.field_id ?? slotField?.field_id ?? '') as string,
+    complexName: (raw.complex_name ?? '—') as string,
+    timeSlotId: (raw.time_slot_id ?? '') as string,
+    timeRange,
+    phone: (raw.phone ?? '+57 300 000 0000') as string,
+    totalLabel: `$${price.toLocaleString('es-CO')}`,
+    totalPrice: price,
+    status: status === 'rejected' || status === 'cancelled' || status === 'canceled' ? 'canceled' : 'active',
+    isManual: (raw.created_by_admin ?? false) as boolean,
+    createdByAdmin: (raw.created_by_admin ?? false) as boolean,
+    startIso: startDt,
+  };
+}
+
 const bookingService = {
   createBooking: async (timeSlotId: string): Promise<BookingOutput> => {
     try {
@@ -182,6 +238,85 @@ const bookingService = {
     const fetchOnce = async () => {
       const res = await ApiClient.get<unknown>(path, { withAuth: true });
       return extractItems(res).map(mapBackendBooking);
+    };
+
+    try {
+      return await fetchOnce();
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 401) {
+        await authService.refreshToken();
+        return await fetchOnce();
+      }
+      throw error;
+    }
+  },
+
+  // Admin endpoints
+  getComplexBookings: async (complexId: string, params?: {
+    page?: number;
+    page_size?: number;
+    status?: 'active' | 'canceled' | 'inactive';
+    is_approved?: boolean;
+  }): Promise<AdminBookingRow[]> => {
+    const query = new URLSearchParams();
+    if (params?.page !== undefined) query.set('page', String(params.page));
+    if (params?.page_size !== undefined) query.set('page_size', String(params.page_size));
+    if (params?.status !== undefined) query.set('status', params.status);
+    if (params?.is_approved !== undefined) query.set('is_approved', String(params.is_approved));
+    const qs = query.toString();
+    const path = `/bookings/complex/${complexId}/${qs ? `?${qs}` : ''}`;
+
+    const fetchOnce = async () => {
+      const res = await ApiClient.get<unknown>(path, { withAuth: true });
+      return extractItems(res).map(mapToAdminBookingRow);
+    };
+
+    try {
+      return await fetchOnce();
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 401) {
+        await authService.refreshToken();
+        return await fetchOnce();
+      }
+      throw error;
+    }
+  },
+
+  updateBookingStatus: async (bookingId: string, newStatus: 'accepted' | 'rejected'): Promise<void> => {
+    const fetchOnce = async () => {
+      await ApiClient.patch<ApiResponse<unknown>>(
+        `/bookings/${bookingId}/status/${newStatus}/`,
+        {},
+        { withAuth: true },
+      );
+    };
+
+    try {
+      await fetchOnce();
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 401) {
+        await authService.refreshToken();
+        await fetchOnce();
+        return;
+      }
+      throw error;
+    }
+  },
+
+  createAdminBooking: async (timeSlotId: string, clientName: string, clientPhone?: string): Promise<BookingOutput> => {
+    const fetchOnce = async () => {
+      const res = await ApiClient.post<ApiResponse<BookingOutput>>('/bookings/', {
+        time_slot_id: timeSlotId,
+        client_name: clientName,
+        phone: clientPhone || '',
+        created_by_admin: true,
+      }, {
+        withAuth: true,
+      });
+      return res.data;
     };
 
     try {

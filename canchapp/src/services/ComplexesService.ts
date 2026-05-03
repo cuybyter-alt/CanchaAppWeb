@@ -226,11 +226,14 @@ const haversineKm = (lat1: number, lng1: number, lat2: number, lng2: number): nu
 };
 
 const complexesService = {
-  async getComplexes(params: { search?: string; pageSize?: number } = {}): Promise<ComplexListItem[]> {
+  async getComplexes(params: { search?: string; pageSize?: number; ownerId?: string } = {}): Promise<ComplexListItem[]> {
     const query = new URLSearchParams();
     query.set('page_size', String(params.pageSize ?? 100));
     if (params.search && params.search.trim().length > 0) {
       query.set('search', params.search.trim());
+    }
+    if (params.ownerId && params.ownerId.trim().length > 0) {
+      query.set('owner_id', params.ownerId.trim());
     }
 
     const res = await ApiClient.get<ApiResponse<unknown>>(`/complexes/?${query.toString()}`);

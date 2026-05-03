@@ -1,114 +1,44 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import {
+  AlertCircle,
   Building2,
   CalendarCheck,
   Check,
   CircleDot,
   Clock3,
   Hand,
+  Loader,
   Phone,
   QrCode,
   Smartphone,
   X,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
+import { tokenStorage } from '../../services/AuthService';
+import bookingService, { type AdminBookingRow } from '../../services/BookingService';
+import ComplexesService from '../../services/ComplexesService';
+import schedulingService from '../../services/SchedulingService';
 import { notify } from '../../services/toast';
+import type { TimeSlotData } from '../../types/field';
 
 type BookingFilter = 'all' | 'active' | 'pending' | 'canceled';
-type BookingApproval = 'approved' | 'pending';
 
-interface AdminBookingRow {
-  id: string;
-  customerName: string;
-  approval: BookingApproval;
-  fieldName: string;
-  fieldId: string;
-  complexName: string;
-  timeSlotId: string;
-  timeRange: string;
-  phone: string;
-  totalLabel: string;
-  totalPrice: number;
-  status: 'active' | 'canceled';
-  isManual?: boolean;
-}
-
-interface ManualField {
+interface OwnedComplex {
   id: string;
   name: string;
+}
+
+interface AdminFieldOption {
+  id: string;
+  name: string;
+  complexId: string;
   complexName: string;
 }
 
-interface ManualTimeSlot {
-  id: string;
-  fieldId: string;
-  timeRange: string;
-  price: number;
+interface BookingBadge {
+  label: string;
+  className: string;
 }
-
-const seedBookings: AdminBookingRow[] = [
-  {
-    id: 'booking-demo-1',
-    customerName: 'Juan Pérez',
-    approval: 'approved',
-    fieldName: 'Cancha Principal',
-    fieldId: 'field-main',
-    complexName: 'Complejo Deportivo El Estadio',
-    timeSlotId: 'slot-14',
-    timeRange: '14:00 - 15:00',
-    phone: '+57 300 111 2222',
-    totalLabel: '$80.000',
-    totalPrice: 80000,
-    status: 'active',
-  },
-  {
-    id: 'booking-demo-2',
-    customerName: 'María González',
-    approval: 'approved',
-    fieldName: 'Cancha Principal',
-    fieldId: 'field-main',
-    complexName: 'Complejo Deportivo El Estadio',
-    timeSlotId: 'slot-18',
-    timeRange: '18:00 - 19:00',
-    phone: '+57 300 333 4444',
-    totalLabel: '$100.000',
-    totalPrice: 100000,
-    status: 'active',
-  },
-  {
-    id: 'booking-demo-3',
-    customerName: 'Carlos López',
-    approval: 'pending',
-    fieldName: 'Cancha Secundaria',
-    fieldId: 'field-secondary',
-    complexName: 'Complejo Deportivo El Estadio',
-    timeSlotId: 'slot-16',
-    timeRange: '16:00 - 17:00',
-    phone: '+57 300 555 6666',
-    totalLabel: '$60.000',
-    totalPrice: 60000,
-    status: 'active',
-  },
-];
-
-const manualFields: ManualField[] = [
-  {
-    id: 'field-main',
-    name: 'Cancha Principal',
-    complexName: 'Complejo Deportivo El Estadio',
-  },
-  {
-    id: 'field-secondary',
-    name: 'Cancha Secundaria',
-    complexName: 'Complejo Deportivo El Estadio',
-  },
-];
-
-const manualSlots: ManualTimeSlot[] = [
-  { id: 'slot-20', fieldId: 'field-main', timeRange: '20:00 - 21:00', price: 90000 },
-  { id: 'slot-21', fieldId: 'field-main', timeRange: '21:00 - 22:00', price: 90000 },
-  { id: 'slot-19', fieldId: 'field-secondary', timeRange: '19:00 - 20:00', price: 70000 },
-];
 
 const filters: { key: BookingFilter; label: string }[] = [
   { key: 'all', label: 'Todas' },
@@ -118,22 +48,189 @@ const filters: { key: BookingFilter; label: string }[] = [
 ];
 
 const AdminBookings: React.FC = () => {
+  const userId = tokenStorage.getUser()?.user_id ?? null;
+
   const [filter, setFilter] = useState<BookingFilter>('all');
-  const [bookings, setBookings] = useState<AdminBookingRow[]>(seedBookings);
+  const [bookings, setBookings] = useState<AdminBookingRow[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [selectedBooking, setSelectedBooking] = useState<AdminBookingRow | null>(null);
-  const [showManualForm, setShowManualForm] = useState(false);
   const [confirmationCode, setConfirmationCode] = useState('');
+  const [showManualForm, setShowManualForm] = useState(false);
+
+  const [complexes, setComplexes] = useState<OwnedComplex[]>([]);
+  const [fields, setFields] = useState<AdminFieldOption[]>([]);
+  const [timeSlots, setTimeSlots] = useState<TimeSlotData[]>([]);
 
   const [manualFieldId, setManualFieldId] = useState('');
   const [manualSlotId, setManualSlotId] = useState('');
   const [manualClientName, setManualClientName] = useState('');
   const [manualClientPhone, setManualClientPhone] = useState('');
+  const [submittingManual, setSubmittingManual] = useState(false);
+
+  const formatPrice = (value: number) => `$${value.toLocaleString('es-CO')}`;
+
+  const generateConfirmationCode = () => {
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+    let code = '';
+    for (let i = 0; i < 8; i += 1) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return code;
+  };
+
+  const formatSlotLabel = (slot: TimeSlotData) => {
+    const time = `${slot.time} ${slot.period}`;
+    return `${time} - ${formatPrice(slot.price)}${slot.status !== 'available' ? ' (ocupado)' : ''}`;
+  };
+
+  const getBookingBadge = (booking: AdminBookingRow): BookingBadge => {
+    if (booking.status === 'canceled') {
+      return {
+        label: 'Cancelada',
+        className: 'bg-red-200 text-red-900',
+      };
+    }
+
+    if (booking.approval === 'approved') {
+      return {
+        label: 'Aprobada',
+        className: 'bg-[var(--color-primary)] text-white',
+      };
+    }
+
+    return {
+      label: 'Pendiente',
+      className: 'bg-[var(--color-accent)] text-white',
+    };
+  };
+
+  const reloadBookingsForComplexes = async (complexList: OwnedComplex[]) => {
+    if (complexList.length === 0) {
+      setBookings([]);
+      return;
+    }
+
+    const settled = await Promise.allSettled(
+      complexList.map((complex) => bookingService.getComplexBookings(complex.id)),
+    );
+
+    const merged = settled.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
+    const unique = Array.from(new Map(merged.map((booking) => [booking.id, booking])).values());
+
+    unique.sort((left, right) => {
+      const leftTime = left.startIso ? new Date(left.startIso).getTime() : 0;
+      const rightTime = right.startIso ? new Date(right.startIso).getTime() : 0;
+      return rightTime - leftTime;
+    });
+
+    setBookings(unique);
+
+    if (settled.some((result) => result.status === 'rejected')) {
+      notify.warning('Algunas reservas no pudieron cargarse.');
+    }
+  };
+
+  const reloadFieldsForComplexes = async (complexList: OwnedComplex[]) => {
+    if (complexList.length === 0) {
+      setFields([]);
+      return;
+    }
+
+    const settled = await Promise.allSettled(
+      complexList.map(async (complex) => {
+        const complexFields = await ComplexesService.getComplexFields(complex.id);
+        return complexFields.map((field) => ({
+          id: field.fieldId,
+          name: field.name,
+          complexId: complex.id,
+          complexName: complex.name,
+        }));
+      }),
+    );
+
+    const merged = settled.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
+    const unique = Array.from(new Map(merged.map((field) => [field.id, field])).values());
+    setFields(unique);
+
+    if (settled.some((result) => result.status === 'rejected')) {
+      notify.warning('Algunas canchas no pudieron cargarse.');
+    }
+  };
+
+  const loadInitialData = async () => {
+    if (!userId) {
+      setLoading(false);
+      setError('Debes iniciar sesión para ver tus complejos.');
+      return;
+    }
+
+    setLoading(true);
+    setError(null);
+
+    try {
+      const complexItems = await ComplexesService.getComplexes({ ownerId: userId, pageSize: 50 });
+      const owned = complexItems.map((complex) => ({ id: complex.id, name: complex.name }));
+      setComplexes(owned);
+
+      if (owned.length === 0) {
+        setBookings([]);
+        setFields([]);
+        notify.warning('No tienes complejos asociados.');
+        return;
+      }
+
+      await Promise.all([reloadBookingsForComplexes(owned), reloadFieldsForComplexes(owned)]);
+    } catch (err) {
+      const msg = (err as any)?.message || 'Error cargando reservas';
+      setError(msg);
+      notify.error(msg);
+      console.error('Error loading admin bookings:', err);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    void loadInitialData();
+  }, [userId]);
+
+  useEffect(() => {
+    if (!manualFieldId) {
+      setTimeSlots([]);
+      setManualSlotId('');
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadTimeSlots = async () => {
+      try {
+        const dateISO = new Date().toISOString().slice(0, 10);
+        const slots = await schedulingService.getFieldTimeSlots(manualFieldId, dateISO);
+        if (cancelled) return;
+        const available = slots.filter((slot) => slot.status === 'available');
+        setTimeSlots(available);
+        setManualSlotId((current) => (available.some((slot) => slot.id === current) ? current : ''));
+      } catch (err) {
+        if (cancelled) return;
+        setTimeSlots([]);
+        setManualSlotId('');
+        const msg = (err as any)?.message || 'No se pudieron cargar los horarios disponibles.';
+        notify.error(msg);
+      }
+    };
+
+    void loadTimeSlots();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [manualFieldId]);
 
   const counts = useMemo(() => {
     const active = bookings.filter((booking) => booking.status === 'active').length;
-    const pending = bookings.filter(
-      (booking) => booking.status === 'active' && booking.approval === 'pending',
-    ).length;
+    const pending = bookings.filter((booking) => booking.status === 'active' && booking.approval === 'pending').length;
     const canceled = bookings.filter((booking) => booking.status === 'canceled').length;
     return {
       all: bookings.length,
@@ -152,81 +249,63 @@ const AdminBookings: React.FC = () => {
     });
   }, [bookings, filter]);
 
-  const availableSlots = useMemo(
-    () => manualSlots.filter((slot) => slot.fieldId === manualFieldId),
-    [manualFieldId],
-  );
+  const availableSlots = useMemo(() => timeSlots, [timeSlots]);
 
-  const formatPrice = (value: number) => `$${value.toLocaleString('es-CO')}`;
-
-  const generateConfirmationCode = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = '';
-    for (let i = 0; i < 8; i += 1) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-  };
-
-  const handleManualBooking = (event: React.FormEvent) => {
+  const handleManualBooking = async (event: React.FormEvent) => {
     event.preventDefault();
+
     if (!manualFieldId || !manualSlotId || !manualClientName.trim()) {
       notify.error('Completa los campos obligatorios.');
       return;
     }
 
-    const field = manualFields.find((item) => item.id === manualFieldId);
-    const slot = manualSlots.find((item) => item.id === manualSlotId);
-    if (!field || !slot) {
-      notify.error('Cancha u horario no disponible.');
-      return;
+    setSubmittingManual(true);
+    try {
+      await bookingService.createAdminBooking(
+        manualSlotId,
+        manualClientName.trim(),
+        manualClientPhone.trim() || undefined,
+      );
+
+      await reloadBookingsForComplexes(complexes);
+
+      setManualFieldId('');
+      setManualSlotId('');
+      setManualClientName('');
+      setManualClientPhone('');
+      setShowManualForm(false);
+      notify.success('Reserva manual creada exitosamente.');
+    } catch (err) {
+      const msg = (err as any)?.message || 'Error creando reserva manual';
+      notify.error(msg);
+      console.error('Error creating manual booking:', err);
+    } finally {
+      setSubmittingManual(false);
     }
-
-    const next: AdminBookingRow = {
-      id: `manual-${Date.now()}`,
-      customerName: manualClientName.trim(),
-      approval: 'approved',
-      fieldName: field.name,
-      fieldId: field.id,
-      complexName: field.complexName,
-      timeSlotId: slot.id,
-      timeRange: slot.timeRange,
-      phone: manualClientPhone.trim() || '+57 300 000 0000',
-      totalLabel: formatPrice(slot.price),
-      totalPrice: slot.price,
-      status: 'active',
-      isManual: true,
-    };
-
-    setBookings((prev) => [next, ...prev]);
-    setManualFieldId('');
-    setManualSlotId('');
-    setManualClientName('');
-    setManualClientPhone('');
-    setShowManualForm(false);
-    notify.success('Reserva manual creada.');
   };
 
-  const approveBooking = (id: string) => {
-    setBookings((prev) =>
-      prev.map((booking) =>
-        booking.id === id && booking.status === 'active' && booking.approval === 'pending'
-          ? { ...booking, approval: 'approved' }
-          : booking,
-      ),
-    );
-    notify.success('Reserva aprobada.');
+  const approveBooking = async (id: string) => {
+    try {
+      await bookingService.updateBookingStatus(id, 'accepted');
+      await reloadBookingsForComplexes(complexes);
+      notify.success('Reserva aprobada.');
+    } catch (err) {
+      const msg = (err as any)?.message || 'Error aprobando reserva';
+      notify.error(msg);
+      console.error('Error approving booking:', err);
+    }
   };
 
-  const cancelBooking = (id: string) => {
-    setBookings((prev) =>
-      prev.map((booking) =>
-        booking.id === id && booking.status === 'active'
-          ? { ...booking, status: 'canceled' }
-          : booking,
-      ),
-    );
-    notify.warning('Reserva cancelada.');
+  const cancelBooking = async (id: string) => {
+    try {
+      await bookingService.updateBookingStatus(id, 'rejected');
+      await reloadBookingsForComplexes(complexes);
+      notify.warning('Reserva cancelada.');
+    } catch (err) {
+      const msg = (err as any)?.message || 'Error cancelando reserva';
+      notify.error(msg);
+      console.error('Error canceling booking:', err);
+    }
   };
 
   const openQr = (booking: AdminBookingRow) => {
@@ -245,6 +324,9 @@ const AdminBookings: React.FC = () => {
           <h1 className="text-4xl font-extrabold text-[var(--color-text)] leading-tight">
             Gestión de <span className="text-[var(--color-primary)]">Reservas</span>
           </h1>
+          <p className="mt-2 text-sm font-semibold text-[var(--color-text-3)]">
+            Mostrando reservas de tus complejos: {complexes.length}
+          </p>
         </div>
 
         <button
@@ -258,34 +340,32 @@ const AdminBookings: React.FC = () => {
 
       {showManualForm && (
         <div className="bg-[var(--color-surface)] rounded-[var(--radius-2xl)] border-[1.5px] border-[var(--color-primary)] shadow-[var(--shadow-primary)] p-5 animate-fade-in">
-          <p className="font-extrabold text-[var(--color-text)] text-lg mb-1">
-            Registrar Reserva Presencial
-          </p>
+          <p className="font-extrabold text-[var(--color-text)] text-lg mb-1">Registrar Reserva Presencial</p>
           <p className="text-sm text-[var(--color-text-3)] mb-4">
-            Crea una reserva manual para clientes que llegan directo al complejo.
+            Crea una reserva manual para una cancha que pertenezca a uno de tus complejos.
           </p>
 
-          <form
-            onSubmit={handleManualBooking}
-            className="grid grid-cols-1 md:grid-cols-2 gap-3"
-          >
+          <form onSubmit={handleManualBooking} className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="block mb-1.5 font-extrabold text-sm text-[var(--color-text-2)]">
                 Cancha *
               </label>
               <select
                 value={manualFieldId}
-                onChange={(event) => {
-                  setManualFieldId(event.target.value);
+                onChange={(e) => {
+                  setManualFieldId(e.target.value);
                   setManualSlotId('');
                 }}
                 className="w-full h-10 px-3 rounded-[var(--radius-md)] border-[1.5px] border-[var(--color-border)] bg-white font-semibold text-sm"
                 required
+                disabled={fields.length === 0}
               >
-                <option value="">Seleccionar cancha</option>
-                {manualFields.map((field) => (
+                <option value="">
+                  {fields.length === 0 ? 'Sin canchas disponibles' : 'Seleccionar cancha'}
+                </option>
+                {fields.map((field) => (
                   <option key={field.id} value={field.id}>
-                    {field.name} ({field.complexName})
+                    {field.complexName} · {field.name}
                   </option>
                 ))}
               </select>
@@ -297,21 +377,21 @@ const AdminBookings: React.FC = () => {
               </label>
               <select
                 value={manualSlotId}
-                onChange={(event) => setManualSlotId(event.target.value)}
+                onChange={(e) => setManualSlotId(e.target.value)}
                 className="w-full h-10 px-3 rounded-[var(--radius-md)] border-[1.5px] border-[var(--color-border)] bg-white font-semibold text-sm disabled:opacity-60"
-                disabled={!manualFieldId}
+                disabled={!manualFieldId || availableSlots.length === 0}
                 required
               >
                 <option value="">
-                  {manualFieldId
-                    ? availableSlots.length > 0
+                  {!manualFieldId
+                    ? 'Selecciona cancha primero'
+                    : availableSlots.length > 0
                       ? 'Seleccionar horario'
-                      : 'Sin horarios disponibles'
-                    : 'Selecciona cancha primero'}
+                      : 'Sin horarios disponibles'}
                 </option>
                 {availableSlots.map((slot) => (
                   <option key={slot.id} value={slot.id}>
-                    {slot.timeRange} - {formatPrice(slot.price)}
+                    {formatSlotLabel(slot)}
                   </option>
                 ))}
               </select>
@@ -323,10 +403,11 @@ const AdminBookings: React.FC = () => {
               </label>
               <input
                 value={manualClientName}
-                onChange={(event) => setManualClientName(event.target.value)}
+                onChange={(e) => setManualClientName(e.target.value)}
                 placeholder="Ej: Juan Pérez"
                 className="w-full h-10 px-3 rounded-[var(--radius-md)] border-[1.5px] border-[var(--color-border)] bg-white font-semibold text-sm"
                 required
+                disabled={submittingManual}
               />
             </div>
 
@@ -336,9 +417,10 @@ const AdminBookings: React.FC = () => {
               </label>
               <input
                 value={manualClientPhone}
-                onChange={(event) => setManualClientPhone(event.target.value)}
+                onChange={(e) => setManualClientPhone(e.target.value)}
                 placeholder="Ej: +57 300 123 4567"
                 className="w-full h-10 px-3 rounded-[var(--radius-md)] border-[1.5px] border-[var(--color-border)] bg-white font-semibold text-sm"
+                disabled={submittingManual}
               />
             </div>
 
@@ -347,14 +429,23 @@ const AdminBookings: React.FC = () => {
                 type="button"
                 onClick={() => setShowManualForm(false)}
                 className="px-4 py-2 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-white text-[var(--color-text-2)] font-extrabold text-sm hover:border-[var(--color-primary)]"
+                disabled={submittingManual}
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="px-4 py-2 rounded-[var(--radius-md)] bg-[var(--color-primary)] text-white font-extrabold text-sm shadow-[var(--shadow-primary)] hover:-translate-y-0.5 transition-all"
+                className="px-4 py-2 rounded-[var(--radius-md)] bg-[var(--color-primary)] text-white font-extrabold text-sm shadow-[var(--shadow-primary)] hover:-translate-y-0.5 transition-all disabled:opacity-60"
+                disabled={submittingManual}
               >
-                Confirmar Reserva
+                {submittingManual ? (
+                  <>
+                    <Loader className="w-3.5 h-3.5 animate-spin inline-block mr-1" />
+                    Creando...
+                  </>
+                ) : (
+                  'Confirmar Reserva'
+                )}
               </button>
             </div>
           </form>
@@ -378,111 +469,116 @@ const AdminBookings: React.FC = () => {
         ))}
       </div>
 
-      <div className="space-y-4">
-        {filteredBookings.map((booking) => (
-          <article
-            key={booking.id}
-            className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-3.5 md:p-4 shadow-[var(--shadow-md)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--color-primary)] hover:shadow-[var(--shadow-primary)]"
-          >
-            <div className="flex flex-col xl:flex-row xl:items-center gap-3">
-              <div className="w-10 h-10 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center flex-shrink-0 shadow-[var(--shadow-primary)]">
-                <Smartphone className="w-4 h-4" />
-              </div>
+      {loading && (
+        <div className="flex flex-col items-center justify-center py-12">
+          <Loader className="w-8 h-8 text-[var(--color-primary)] animate-spin mb-3" />
+          <p className="text-[var(--color-text-2)] font-semibold">Cargando reservas...</p>
+        </div>
+      )}
 
-              <div className="flex-1 min-w-0">
-                <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <h2 className="text-lg md:text-xl font-extrabold text-[var(--color-text)] leading-none">
-                    {booking.customerName}
-                  </h2>
-                  {booking.approval === 'approved' ? (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[var(--color-primary)] text-white uppercase">
-                      Aprobada
-                    </span>
-                  ) : (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[var(--color-accent)] text-white uppercase">
-                      Pendiente
-                    </span>
-                  )}
-                  {booking.isManual && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[var(--color-score)] text-[var(--color-text)] uppercase">
-                      Presencial
-                    </span>
-                  )}
-                  {booking.status === 'canceled' && (
-                    <span className="px-2 py-0.5 rounded-full text-[10px] font-extrabold bg-[var(--color-accent)] text-white uppercase">
-                      Cancelada
-                    </span>
-                  )}
-                </div>
-
-                <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm md:text-base text-[var(--color-text-2)] font-bold">
-                  <span className="inline-flex items-center gap-1.5">
-                    <CircleDot className="w-4 h-4 text-[var(--color-primary)]" />
-                    {booking.fieldName}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 text-[var(--color-text-3)]">
-                    <Building2 className="w-4 h-4" />
-                    {booking.complexName}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5">
-                    <Clock3 className="w-4 h-4 text-[var(--color-primary)]" />
-                    {booking.timeRange}
-                  </span>
-                  <span className="inline-flex items-center gap-1.5 text-[var(--color-text-3)]">
-                    <Phone className="w-4 h-4" />
-                    {booking.phone}
-                  </span>
-                </div>
-              </div>
-
-              <div className="flex items-center gap-2 xl:gap-2.5 flex-wrap xl:flex-nowrap">
-                <p className="text-2xl md:text-3xl leading-none font-extrabold text-[var(--color-primary)] mr-1">
-                  {booking.totalLabel}
-                </p>
-
-                <button
-                  onClick={() => approveBooking(booking.id)}
-                  disabled={booking.status === 'canceled' || booking.approval === 'approved'}
-                  className="px-3 py-1.5 rounded-full bg-[var(--color-primary)] text-white text-sm font-extrabold inline-flex items-center gap-1.5 shadow-[var(--shadow-primary)] transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-55 disabled:cursor-not-allowed"
-                >
-                  <Check className="w-3.5 h-3.5" />
-                  Aprobar
-                </button>
-
-                <button
-                  onClick={() => openQr(booking)}
-                  disabled={booking.status === 'canceled'}
-                  className="px-3 py-1.5 rounded-full border border-[var(--color-border)] text-[var(--color-text-2)] bg-white text-sm font-extrabold inline-flex items-center gap-1.5 hover:border-[var(--color-primary)] hover:-translate-y-0.5 transition-all active:scale-95"
-                >
-                  <QrCode className="w-3.5 h-3.5" />
-                  Ver QR
-                </button>
-
-                <button
-                  onClick={() => cancelBooking(booking.id)}
-                  disabled={booking.status === 'canceled'}
-                  className="px-3 py-1.5 rounded-full bg-[var(--color-accent)] text-white text-sm font-extrabold inline-flex items-center gap-1.5 shadow-[var(--shadow-md)] hover:-translate-y-0.5 transition-all active:scale-95 disabled:opacity-55 disabled:cursor-not-allowed"
-                >
-                  <X className="w-3.5 h-3.5" />
-                  Cancelar
-                </button>
-              </div>
-            </div>
-          </article>
-        ))}
-
-        {filteredBookings.length === 0 && (
-          <div className="bg-[var(--color-surface)] border-[1.5px] border-dashed border-[var(--color-border)] rounded-[var(--radius-2xl)] p-10 text-center">
-            <div className="w-14 h-14 rounded-full bg-[var(--color-primary-tint)] flex items-center justify-center mx-auto mb-3">
-              <CalendarCheck className="w-7 h-7 text-[var(--color-primary)]" />
-            </div>
-            <p className="font-extrabold text-[var(--color-text)] text-lg">Sin reservas</p>
-            <p className="text-sm text-[var(--color-text-3)] mt-1">
-              No hay reservas para el filtro seleccionado.
-            </p>
+      {error && !loading && (
+        <div className="bg-red-50 border border-red-200 rounded-[var(--radius-2xl)] p-4 flex items-start gap-3">
+          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="font-extrabold text-red-900">Error</p>
+            <p className="text-sm text-red-800 mt-1">{error}</p>
           </div>
-        )}
-      </div>
+        </div>
+      )}
+
+      {!loading && !error && (
+        <div className="space-y-4">
+          {filteredBookings.map((booking) => (
+            <article
+              key={booking.id}
+              className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-3.5 md:p-4 shadow-[var(--shadow-md)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--color-primary)] hover:shadow-[var(--shadow-primary)]"
+            >
+              <div className="flex flex-col xl:flex-row xl:items-center gap-3">
+                <div className="w-10 h-10 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center flex-shrink-0 shadow-[var(--shadow-primary)]">
+                  <Smartphone className="w-4 h-4" />
+                </div>
+
+                <div className="flex-1 min-w-0">
+                  <div className="flex flex-wrap items-center gap-2 mb-1">
+                    <h2 className="text-lg md:text-xl font-extrabold text-[var(--color-text)] leading-none">
+                      {booking.customerName}
+                    </h2>
+                    <span
+                      className={`px-2 py-0.5 rounded-full text-[10px] font-extrabold uppercase ${getBookingBadge(booking).className}`}
+                    >
+                      {getBookingBadge(booking).label}
+                    </span>
+                  </div>
+
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm md:text-base text-[var(--color-text-2)] font-bold">
+                    <span className="inline-flex items-center gap-1.5">
+                      <CircleDot className="w-4 h-4 text-[var(--color-primary)]" />
+                      {booking.fieldName}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 text-[var(--color-text-3)]">
+                      <Building2 className="w-4 h-4" />
+                      {booking.complexName}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5">
+                      <Clock3 className="w-4 h-4 text-[var(--color-primary)]" />
+                      {booking.timeRange}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 text-[var(--color-text-3)]">
+                      <Phone className="w-4 h-4" />
+                      {booking.phone}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-2 xl:gap-2.5 flex-wrap xl:flex-nowrap">
+                  <p className="text-2xl md:text-3xl leading-none font-extrabold text-[var(--color-primary)] mr-1">
+                    {booking.totalLabel}
+                  </p>
+
+                  <button
+                    onClick={() => approveBooking(booking.id)}
+                    disabled={booking.status === 'canceled' || booking.approval === 'approved'}
+                    className="px-3 py-1.5 rounded-full bg-[var(--color-primary)] text-white text-sm font-extrabold inline-flex items-center gap-1.5 shadow-[var(--shadow-primary)] transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-55 disabled:cursor-not-allowed"
+                  >
+                    <Check className="w-3.5 h-3.5" />
+                    Aprobar
+                  </button>
+
+                  <button
+                    onClick={() => openQr(booking)}
+                    disabled={booking.status === 'canceled'}
+                    className="px-3 py-1.5 rounded-full border border-[var(--color-border)] text-[var(--color-text-2)] bg-white text-sm font-extrabold inline-flex items-center gap-1.5 hover:border-[var(--color-primary)] hover:-translate-y-0.5 transition-all active:scale-95 disabled:opacity-55 disabled:cursor-not-allowed"
+                  >
+                    <QrCode className="w-3.5 h-3.5" />
+                    Ver QR
+                  </button>
+
+                  <button
+                    onClick={() => cancelBooking(booking.id)}
+                    disabled={booking.status === 'canceled'}
+                    className="px-3 py-1.5 rounded-full bg-red-600 text-white text-sm font-extrabold inline-flex items-center gap-1.5 shadow-[var(--shadow-md)] hover:-translate-y-0.5 transition-all active:scale-95 disabled:opacity-55 disabled:cursor-not-allowed"
+                  >
+                    <X className="w-3.5 h-3.5" />
+                    Cancelar
+                  </button>
+                </div>
+              </div>
+            </article>
+          ))}
+
+          {filteredBookings.length === 0 && (
+            <div className="bg-[var(--color-surface)] border-[1.5px] border-dashed border-[var(--color-border)] rounded-[var(--radius-2xl)] p-10 text-center">
+              <div className="w-14 h-14 rounded-full bg-[var(--color-primary-tint)] flex items-center justify-center mx-auto mb-3">
+                <CalendarCheck className="w-7 h-7 text-[var(--color-primary)]" />
+              </div>
+              <p className="font-extrabold text-[var(--color-text)] text-lg">Sin reservas</p>
+              <p className="text-sm text-[var(--color-text-3)] mt-1">
+                No hay reservas para los complejos de tu cuenta.
+              </p>
+            </div>
+          )}
+        </div>
+      )}
 
       {selectedBooking && (
         <div
@@ -491,13 +587,13 @@ const AdminBookings: React.FC = () => {
         >
           <div
             className="w-full max-w-sm bg-[var(--color-surface)] rounded-[var(--radius-2xl)] p-5 border border-[var(--color-border)] shadow-[var(--shadow-primary)]"
-            onClick={(event) => event.stopPropagation()}
+            onClick={(e) => e.stopPropagation()}
           >
             <div className="flex items-center justify-between mb-3">
               <p className="font-extrabold text-[var(--color-text)]">Verificar Reserva</p>
               <button
                 onClick={() => setSelectedBooking(null)}
-                className="w-8 h-8 rounded-full bg-[var(--color-surf2)] inline-flex items-center justify-center"
+                className="w-8 h-8 rounded-full bg-[var(--color-surf2)] inline-flex items-center justify-center hover:bg-[var(--color-border)]"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -509,7 +605,7 @@ const AdminBookings: React.FC = () => {
 
             <div className="rounded-[var(--radius-xl)] border border-[var(--color-border)] p-5 text-center mb-3 bg-white">
               <QRCodeSVG
-                value={`CANCHAPP:${selectedBooking.id}`}
+                value={`CANCHAPP:${selectedBooking.id}:${selectedBooking.timeSlotId}`}
                 size={180}
                 level="H"
                 includeMargin={false}
@@ -530,7 +626,7 @@ const AdminBookings: React.FC = () => {
 
             <button
               onClick={() => setSelectedBooking(null)}
-              className="mt-4 w-full px-4 py-2.5 rounded-[var(--radius-md)] bg-[var(--color-primary)] text-white font-extrabold text-sm shadow-[var(--shadow-primary)]"
+              className="mt-4 w-full px-4 py-2.5 rounded-[var(--radius-md)] bg-[var(--color-primary)] text-white font-extrabold text-sm shadow-[var(--shadow-primary)] hover:-translate-y-0.5 transition-all"
             >
               Cerrar
             </button>

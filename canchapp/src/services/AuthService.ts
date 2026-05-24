@@ -99,9 +99,10 @@ const authService = {
    * Registro con email, nombre, contraseña y rol
    */
   register: async (payload: RegisterPayload): Promise<UserOutput> => {
+    const { role_name, ...rest } = payload;
     const res = await ApiClient.post<ApiResponse<UserOutput>>(
       "/identity/register/",
-      payload
+      { ...rest, role_names: [role_name] }
     );
     return res.data;
   },
@@ -225,7 +226,7 @@ const authService = {
   ): Promise<TokenPairOutput> => {
     const res = await ApiClient.post<ApiResponse<TokenPairOutput>>(
       "/identity/auth/firebase/",
-      { firebase_id_token: firebaseIdToken, role_name: roleName }
+      { firebase_id_token: firebaseIdToken, role_names: [roleName] }
     );
     tokenStorage.save(res.data);
     tokenStorage.saveUser(res.data.user);

@@ -47,6 +47,55 @@ const filters: { key: BookingFilter; label: string }[] = [
   { key: 'canceled', label: 'Canceladas' },
 ];
 
+/** Código estable por reserva (mismo ID → mismo código al reabrir el QR). */
+function confirmationCodeFromBookingId(bookingId: string): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for (let i = 0; i < 8; i += 1) {
+    const idx =
+      (bookingId.charCodeAt(i % bookingId.length) +
+        bookingId.charCodeAt((i * 3) % bookingId.length)) %
+      chars.length;
+    code += chars.charAt(idx);
+  }
+  return code;
+}
+
+function bookingStatusLabel(booking: AdminBookingRow): string {
+  if (booking.status === 'canceled') return 'Cancelada';
+  if (booking.approval === 'approved') return 'Aprobada';
+  return 'Pendiente';
+}
+
+/** Texto legible embebido en el QR (sin depender del backend). */
+function buildBookingQrText(booking: AdminBookingRow, code: string): string {
+  const dateLine = booking.startIso
+    ? new Date(booking.startIso).toLocaleDateString('es-CO', {
+        weekday: 'long',
+        year: 'numeric',
+        month: 'long',
+        day: 'numeric',
+      })
+    : null;
+
+  return [
+    'CANCHAPP - Reserva',
+    '------------------------',
+    `Codigo: ${code}`,
+    `Cliente: ${booking.customerName}`,
+    `Complejo: ${booking.complexName}`,
+    `Cancha: ${booking.fieldName}`,
+    dateLine ? `Fecha: ${dateLine}` : null,
+    `Horario: ${booking.timeRange}`,
+    `Telefono: ${booking.phone}`,
+    `Total: ${booking.totalLabel}`,
+    `Estado: ${bookingStatusLabel(booking)}`,
+    `ID: ${booking.id}`,
+  ]
+    .filter((line): line is string => Boolean(line))
+    .join('\n');
+}
+
 const AdminBookings: React.FC = () => {
   const userId = tokenStorage.getUser()?.user_id ?? null;
 
@@ -69,15 +118,6 @@ const AdminBookings: React.FC = () => {
   const [submittingManual, setSubmittingManual] = useState(false);
 
   const formatPrice = (value: number) => `$${value.toLocaleString('es-CO')}`;
-
-  const generateConfirmationCode = () => {
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-    let code = '';
-    for (let i = 0; i < 8; i += 1) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return code;
-  };
 
   const formatSlotLabel = (slot: TimeSlotData) => {
     const time = `${slot.time} ${slot.period}`;
@@ -310,8 +350,13 @@ const AdminBookings: React.FC = () => {
 
   const openQr = (booking: AdminBookingRow) => {
     setSelectedBooking(booking);
-    setConfirmationCode(generateConfirmationCode());
+    setConfirmationCode(confirmationCodeFromBookingId(booking.id));
   };
+
+  const qrPayload = useMemo(() => {
+    if (!selectedBooking || !confirmationCode) return '';
+    return buildBookingQrText(selectedBooking, confirmationCode);
+  }, [selectedBooking, confirmationCode]);
 
   return (
     <div className="p-5 sm:p-8 space-y-6">
@@ -603,12 +648,16 @@ const AdminBookings: React.FC = () => {
               {selectedBooking.customerName}
             </p>
 
+            <p className="text-[11px] text-[var(--color-text-3)] text-center mb-2 font-semibold">
+              Escanea para ver los datos de la reserva
+            </p>
+
             <div className="rounded-[var(--radius-xl)] border border-[var(--color-border)] p-5 text-center mb-3 bg-white">
               <QRCodeSVG
-                value={`CANCHAPP:${selectedBooking.id}:${selectedBooking.timeSlotId}`}
+                value={qrPayload}
                 size={180}
-                level="H"
-                includeMargin={false}
+                level="M"
+                includeMargin
                 className="mx-auto"
               />
             </div>
@@ -620,9 +669,11 @@ const AdminBookings: React.FC = () => {
               </p>
             </div>
 
-            <p className="text-sm text-[var(--color-text-2)] font-semibold text-center">
-              {selectedBooking.fieldName} • {selectedBooking.timeRange}
-            </p>
+            <div className="text-sm text-[var(--color-text-2)] font-semibold text-center space-y-1">
+              <p>{selectedBooking.complexName}</p>
+              <p>{selectedBooking.fieldName} • {selectedBooking.timeRange}</p>
+              <p className="text-[var(--color-primary-dark)]">{selectedBooking.totalLabel}</p>
+            </div>
 
             <button
               onClick={() => setSelectedBooking(null)}

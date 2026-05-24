@@ -26,9 +26,31 @@ const OwnerIcon = () => (
 );
  
 // ─── Types ────────────────────────────────────────────────────────────────────
- 
+
 type RegisterView = "social" | "form";
 type Role = "Player" | "Owner";
+
+const FIELD_LABELS: Record<string, string> = {
+  email: "Correo electrónico",
+  username: "Nombre de usuario",
+  password: "Contraseña",
+  f_name: "Nombre",
+  l_name: "Apellido",
+  role_names: "Rol",
+};
+
+function formatRegisterError(err: ApiError): string {
+  const details = err.details;
+  if (details && Object.keys(details).length > 0) {
+    const lines = Object.entries(details).flatMap(([field, value]) => {
+      const label = FIELD_LABELS[field] ?? field;
+      const messages = Array.isArray(value) ? value : [String(value)];
+      return messages.map((m) => `${label}: ${m}`);
+    });
+    if (lines.length > 0) return lines.join(" ");
+  }
+  return err.message ?? "Error al crear la cuenta.";
+}
  
 // ─── Role Selector ────────────────────────────────────────────────────────────
  
@@ -119,7 +141,7 @@ const Register: React.FC = () => {
       navigate("/login", { state: { registered: true } });
     } catch (e) {
       const err = e as ApiError;
-      const msg = err.message ?? "Error al crear la cuenta.";
+      const msg = formatRegisterError(err);
       setError(msg);
       notify.error("Error en el registro", msg);
     } finally {

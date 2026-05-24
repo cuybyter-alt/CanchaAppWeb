@@ -4,6 +4,8 @@ import { Typography } from '../ui/typography';
 import { Badge } from '../ui/badge';
 import { useEffect, useState } from 'react';
 import { useMapContext } from '../../context/MapContext';
+import authService from '../../services/AuthService';
+import bookingService from '../../services/BookingService';
 import complexesService from '../../services/ComplexesService';
 import schedulingService from '../../services/SchedulingService';
 import { formatPrice } from '../../lib/utils';
@@ -82,6 +84,37 @@ export function Sidebar({ onQuickBook }: SidebarProps = {}) {
   const [quickSlot, setQuickSlot] = useState<QuickSlot | null>(null);
   const [loadingQuick, setLoadingQuick] = useState(true);
   const [countdown, setCountdown] = useState('');
+  const [myBookingsCount, setMyBookingsCount] = useState(0);
+  const [loadingBookingsCount, setLoadingBookingsCount] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBookingsCount = async () => {
+      if (!authService.isAuthenticated()) {
+        if (!cancelled) {
+          setMyBookingsCount(0);
+          setLoadingBookingsCount(false);
+        }
+        return;
+      }
+
+      try {
+        const total = await bookingService.getMyBookingsCount();
+        if (!cancelled) setMyBookingsCount(total);
+      } catch {
+        if (!cancelled) setMyBookingsCount(0);
+      } finally {
+        if (!cancelled) setLoadingBookingsCount(false);
+      }
+    };
+
+    void loadBookingsCount();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Load nearest complex + first available slot
   useEffect(() => {
@@ -237,9 +270,11 @@ export function Sidebar({ onQuickBook }: SidebarProps = {}) {
       >
         <Calendar className="w-[18px] h-[18px] flex-shrink-0" />
         Mis Reservas
-        <Badge variant="primary" className="ml-auto">
-          3
-        </Badge>
+        {!loadingBookingsCount && myBookingsCount > 0 && (
+          <Badge variant="primary" className="ml-auto">
+            {myBookingsCount}
+          </Badge>
+        )}
       </NavLink>
 
       <NavLink

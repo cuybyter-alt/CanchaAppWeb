@@ -14,6 +14,7 @@ import { tokenStorage } from '../services/AuthService';
 import authService from '../services/AuthService';
 import { Topbar } from '../components/layout/topbar';
 import { useAuth } from '../context/AuthContext';
+import { useAdminTodayStats } from '../hooks/useAdminTodayStats';
 
 const ROLE_LABEL: Record<string, string> = {
   Owner: 'Dueño',
@@ -23,6 +24,7 @@ const ROLE_LABEL: Record<string, string> = {
 function AdminSidebar({ onClose }: { onClose?: () => void }) {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const todayStats = useAdminTodayStats();
   const roleLabel = ROLE_LABEL[user?.role_name ?? ''] ?? user?.role_name ?? 'Admin';
 
   const handleLogout = async () => {
@@ -96,7 +98,7 @@ function AdminSidebar({ onClose }: { onClose?: () => void }) {
       >
         <CalendarCheck className="w-[18px] h-[18px] flex-shrink-0" />
         Reservas
-        <AdminBookingsBadge />
+        <AdminBookingsBadge pending={todayStats.pendingBookings} loading={todayStats.loading} />
       </NavLink>
 
       <NavLink
@@ -127,7 +129,11 @@ function AdminSidebar({ onClose }: { onClose?: () => void }) {
       <div className="h-[1.5px] bg-[var(--color-border)] rounded-sm my-3" />
 
       {/* Today's stats widget */}
-      <TodayWidget />
+      <TodayWidget
+        todayBookings={todayStats.todayBookings}
+        pendingBookings={todayStats.pendingBookings}
+        loading={todayStats.loading}
+      />
 
       {/* Logout */}
       <button
@@ -141,16 +147,31 @@ function AdminSidebar({ onClose }: { onClose?: () => void }) {
   );
 }
 
-function AdminBookingsBadge() {
-  // Static badge for now — wire up to real count later
+function AdminBookingsBadge({
+  pending,
+  loading,
+}: {
+  pending: number;
+  loading: boolean;
+}) {
+  if (loading || pending <= 0) return null;
+
   return (
     <span className="ml-auto px-1.5 py-0.5 min-w-[20px] text-center rounded-full bg-[var(--color-accent)] text-white text-[10px] font-extrabold">
-      1
+      {pending}
     </span>
   );
 }
 
-function TodayWidget() {
+function TodayWidget({
+  todayBookings,
+  pendingBookings,
+  loading,
+}: {
+  todayBookings: number;
+  pendingBookings: number;
+  loading: boolean;
+}) {
   return (
     <div className="bg-[var(--color-text)] rounded-[var(--radius-xl)] p-4 mt-2 relative overflow-hidden">
       <div
@@ -166,11 +187,15 @@ function TodayWidget() {
         </p>
         <div className="flex gap-6">
           <div>
-            <p className="text-white font-extrabold text-xl leading-none">3</p>
+            <p className="text-white font-extrabold text-xl leading-none">
+              {loading ? '—' : todayBookings}
+            </p>
             <p className="text-white/50 text-[10px] font-bold uppercase tracking-wide mt-0.5">Reservas</p>
           </div>
           <div>
-            <p className="text-[var(--color-primary)] font-extrabold text-xl leading-none">1</p>
+            <p className="text-[var(--color-primary)] font-extrabold text-xl leading-none">
+              {loading ? '—' : pendingBookings}
+            </p>
             <p className="text-white/50 text-[10px] font-bold uppercase tracking-wide mt-0.5">Pendientes</p>
           </div>
         </div>

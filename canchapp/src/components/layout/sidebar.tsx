@@ -41,6 +41,9 @@ const COMPLEX_SPORT_LABEL: Record<ComplexFieldType, string> = {
   futsal: 'Futsal',
 };
 
+const QUICK_SLOT_CACHE_TTL = 5 * 60 * 1000;
+let quickSlotCache: { ts: number; slot: QuickSlot | null } | null = null;
+
 function buildSyntheticField(cf: ComplexField, complex: NearbyComplex, slot: TimeSlotData, allSlots: TimeSlotData[]): Field {
   return {
     id: cf.fieldId,
@@ -84,11 +87,20 @@ export function Sidebar({ onQuickBook }: SidebarProps = {}) {
   useEffect(() => {
     let cancelled = false;
 
+    if (quickSlotCache && Date.now() - quickSlotCache.ts < QUICK_SLOT_CACHE_TTL) {
+      setQuickSlot(quickSlotCache.slot);
+      setLoadingQuick(false);
+      return () => {
+        cancelled = true;
+      };
+    }
+
     const load = async () => {
       setLoadingQuick(true);
       try {
         const coords = getCachedCoords();
         let complexes: NearbyComplex[] = [];
+        let resolvedSlot: QuickSlot | null = null;
 
         if (coords) {
           complexes = await complexesService.getNearbyComplexes(coords.lat, coords.lng, 1);
@@ -122,7 +134,7 @@ export function Sidebar({ onQuickBook }: SidebarProps = {}) {
               (!s.startIso || new Date(s.startIso) > now)
             );
             if (available) {
-              setQuickSlot({
+              resolvedSlot = {
                 complexId: complex.id,
                 complexName: complex.name,
                 fieldId: cf.fieldId,
@@ -131,10 +143,15 @@ export function Sidebar({ onQuickBook }: SidebarProps = {}) {
                 slot: available,
                 allSlots: slots,
                 field: buildSyntheticField(cf, complex, available, slots),
-              });
+              };
               break;
             }
           } catch { /* skip this field */ }
+        }
+
+        if (!cancelled) {
+          quickSlotCache = { ts: Date.now(), slot: resolvedSlot };
+          setQuickSlot(resolvedSlot);
         }
       } catch { /* silent */ } finally {
         if (!cancelled) setLoadingQuick(false);

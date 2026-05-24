@@ -13,6 +13,7 @@ import {
 import { tokenStorage } from '../services/AuthService';
 import authService from '../services/AuthService';
 import { Topbar } from '../components/layout/topbar';
+import { useAuth } from '../context/AuthContext';
 
 const ROLE_LABEL: Record<string, string> = {
   Owner: 'Dueño',
@@ -21,7 +22,7 @@ const ROLE_LABEL: Record<string, string> = {
 
 function AdminSidebar({ onClose }: { onClose?: () => void }) {
   const navigate = useNavigate();
-  const user = tokenStorage.getUser();
+  const { user } = useAuth();
   const roleLabel = ROLE_LABEL[user?.role_name ?? ''] ?? user?.role_name ?? 'Admin';
 
   const handleLogout = async () => {

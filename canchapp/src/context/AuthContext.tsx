@@ -11,6 +11,7 @@
 import {
     createContext,
     useContext,
+  useCallback,
     useEffect,
     useState,
     type ReactNode,
@@ -38,6 +39,8 @@ interface AuthContextValue {
     loading: boolean;
   /** Abre el popup de Google y sincroniza con el backend */
     loginWithGoogle: () => Promise<void>;
+  /** Recarga el usuario almacenado desde localStorage */
+    refreshUser: () => void;
   /** Cierra sesión en Firebase y limpia los tokens locales */
     logout: () => Promise<void>;
 }
@@ -108,6 +111,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     await signInWithPopup(auth, googleProvider);
   };
 
+  const refreshUser = useCallback(() => {
+    setUser(tokenStorage.getUser());
+  }, []);
+
   const logout = async () => {
     try {
       await authService.logout();
@@ -119,7 +126,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   return (
     <AuthContext.Provider
-      value={{ user, firebaseUser, loading, loginWithGoogle, logout }}
+      value={{ user, firebaseUser, loading, loginWithGoogle, refreshUser, logout }}
     >
       {children}
     </AuthContext.Provider>

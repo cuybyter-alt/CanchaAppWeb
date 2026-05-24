@@ -1,4 +1,4 @@
-import ApiClient from "./ApiClient";
+import ApiClient, { type ApiError } from "./ApiClient";
 
 // ─── Types (mirror del backend DTOs) ─────────────────────────────────────────
 
@@ -34,6 +34,13 @@ export interface RegisterPayload {
   username: string;
 }
 
+export interface UpdateProfilePayload {
+  username?: string | null;
+  f_name?: string | null;
+  l_name?: string | null;
+  avatar_url?: string | null;
+}
+
 // Wrapper que usa el backend: { data, success, message, meta }
 interface ApiResponse<T> {
   data: T;
@@ -60,7 +67,13 @@ export const tokenStorage = {
     localStorage.setItem("user", JSON.stringify(user)),
   getUser: (): UserOutput | null => {
     const raw = localStorage.getItem("user");
-    return raw ? (JSON.parse(raw) as UserOutput) : null;
+    if (!raw) return null;
+    try {
+      return JSON.parse(raw) as UserOutput;
+    } catch {
+      localStorage.removeItem("user");
+      return null;
+    }
   },
 };
 
@@ -91,6 +104,115 @@ const authService = {
       payload
     );
     return res.data;
+  },
+
+  /**
+   * GET /api/identity/users/me/
+   * Obtiene el perfil del usuario autenticado.
+   */
+  getCurrentUserProfile: async (): Promise<UserOutput> => {
+    try {
+      const res = await ApiClient.get<ApiResponse<UserOutput>>(
+        "/identity/users/me/",
+        { withAuth: true }
+      );
+      return res.data;
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 401) {
+        await authService.refreshToken();
+        const retry = await ApiClient.get<ApiResponse<UserOutput>>(
+          "/identity/users/me/",
+          { withAuth: true }
+        );
+        return retry.data;
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * GET /api/identity/users/<user_id>/
+   * Obtiene un perfil por id. Útil para pantallas administrativas.
+   */
+  getUserProfile: async (userId: string): Promise<UserOutput> => {
+    try {
+      const res = await ApiClient.get<ApiResponse<UserOutput>>(
+        `/identity/users/${userId}/`,
+        { withAuth: true }
+      );
+      return res.data;
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 401) {
+        await authService.refreshToken();
+        const retry = await ApiClient.get<ApiResponse<UserOutput>>(
+          `/identity/users/${userId}/`,
+          { withAuth: true }
+        );
+        return retry.data;
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * PUT /api/identity/users/me/
+   * Actualiza el perfil del usuario autenticado.
+   */
+  updateCurrentUserProfile: async (
+    payload: UpdateProfilePayload
+  ): Promise<UserOutput> => {
+    try {
+      const res = await ApiClient.put<ApiResponse<UserOutput>>(
+        "/identity/users/me/",
+        payload,
+        { withAuth: true }
+      );
+      return res.data;
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 401) {
+        await authService.refreshToken();
+        const retry = await ApiClient.put<ApiResponse<UserOutput>>(
+          "/identity/users/me/",
+          payload,
+          { withAuth: true }
+        );
+        return retry.data;
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * PUT /api/identity/users/<user_id>/
+   * Actualiza el perfil de un usuario concreto.
+   */
+  updateUserProfile: async (
+    userId: string,
+    payload: UpdateProfilePayload
+  ): Promise<UserOutput> => {
+    try {
+      const res = await ApiClient.put<ApiResponse<UserOutput>>(
+        `/identity/users/${userId}/`,
+        payload,
+        { withAuth: true }
+      );
+      return res.data;
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 401) {
+        await authService.refreshToken();
+        const retry = await ApiClient.put<ApiResponse<UserOutput>>(
+          `/identity/users/${userId}/`,
+          payload,
+          { withAuth: true }
+        );
+        return retry.data;
+      }
+      throw error;
+    }
   },
 
   /**

@@ -264,6 +264,19 @@ const authService = {
     tokenStorage.clear();
   },
 
+  /**
+   * POST /api/identity/auth/password-reset/request/
+   * Envía un código OTP al correo para restablecer la contraseña.
+   * Siempre devuelve el mismo mensaje (anti-enumeración).
+   */
+  requestPasswordReset: async (email: string): Promise<string> => {
+    const res = await ApiClient.post<ApiResponse<{ email: string }>>(
+      "/identity/auth/password-reset/request/",
+      { email }
+    );
+    return res.message;
+  },
+
   isAuthenticated: (): boolean => !!tokenStorage.getAccess(),
 };
 

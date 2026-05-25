@@ -99,8 +99,8 @@ function formatTime(isoString?: string): string {
 }
 
 function mapStatus(raw?: string, isApproved?: boolean): Booking['status'] {
-  if (raw === 'cancelled' || raw === 'canceled') return 'cancelled';
-  if (isApproved || raw === 'confirmed' || raw === 'active') return 'confirmed';
+  if (raw === 'cancelled' || raw === 'canceled' || raw === 'rejected') return 'cancelled';
+  if (isApproved || raw === 'confirmed' || raw === 'active' || raw === 'accepted') return 'confirmed';
   return 'pending';
 }
 
@@ -268,12 +268,14 @@ const bookingService = {
     page_size?: number;
     status?: 'active' | 'canceled' | 'inactive';
     is_approved?: boolean;
+    is_past?: boolean;
   }): Promise<Booking[]> => {
     const query = new URLSearchParams();
     if (params?.page !== undefined) query.set('page', String(params.page));
     if (params?.page_size !== undefined) query.set('page_size', String(params.page_size));
     if (params?.status !== undefined) query.set('status', params.status);
     if (params?.is_approved !== undefined) query.set('is_approved', String(params.is_approved));
+    if (params?.is_past !== undefined) query.set('is_past', String(params.is_past));
     const qs = query.toString();
     const path = `/bookings/my/${qs ? `?${qs}` : ''}`;
 

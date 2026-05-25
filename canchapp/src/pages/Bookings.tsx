@@ -8,51 +8,65 @@ import bookingService from '../services/BookingService';
 
 type Tab = 'upcoming' | 'past';
 
-const isUpcoming = (b: Booking): boolean =>
-  !b.startIso || new Date(b.startIso) >= new Date();
-
-const isPast = (b: Booking): boolean =>
-  !!b.startIso && new Date(b.startIso) < new Date();
-
 const Bookings: React.FC = () => {
   const navigate = useNavigate();
-  const [bookings, setBookings] = useState<Booking[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
 
   const [tab, setTab] = useState<Tab>('upcoming');
+
+  // Upcoming
+  const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
+  const [upcomingLoading, setUpcomingLoading] = useState(true);
+  const [upcomingError, setUpcomingError] = useState<string | null>(null);
+
+  // Past — lazy loaded on first tab switch
+  const [pastBookings, setPastBookings] = useState<Booking[]>([]);
+  const [pastLoading, setPastLoading] = useState(false);
+  const [pastError, setPastError] = useState<string | null>(null);
+  const [pastLoaded, setPastLoaded] = useState(false);
+
   const [complexQuery, setComplexQuery] = useState('');
   const [dateFrom, setDateFrom] = useState('');
   const [dateTo, setDateTo] = useState('');
 
+  // Load upcoming on mount
   useEffect(() => {
     let cancelled = false;
-    setLoading(true);
-    setError(null);
+    setUpcomingLoading(true);
+    setUpcomingError(null);
     bookingService
-      .getMyBookings()
-      .then((data) => {
-        if (!cancelled) setBookings(data);
-      })
-      .catch((err) => {
-        if (!cancelled) setError((err as { message?: string })?.message ?? 'Error al cargar reservas.');
-      })
-      .finally(() => {
-        if (!cancelled) setLoading(false);
-      });
+      .getMyBookings({ is_past: false, page_size: 100 })
+      .then((data) => { if (!cancelled) setUpcomingBookings(data); })
+      .catch((err) => { if (!cancelled) setUpcomingError((err as { message?: string })?.message ?? 'Error al cargar reservas.'); })
+      .finally(() => { if (!cancelled) setUpcomingLoading(false); });
     return () => { cancelled = true; };
   }, []);
 
-  const upcomingBookings = useMemo(
-    () => bookings.filter(isUpcoming).sort((a, b) => {
+  // Load past on first tab switch to 'past'
+  useEffect(() => {
+    if (tab !== 'past' || pastLoaded) return;
+    let cancelled = false;
+    setPastLoading(true);
+    setPastError(null);
+    bookingService
+      .getMyBookings({ is_past: true, page_size: 100 })
+      .then((data) => { if (!cancelled) { setPastBookings(data); setPastLoaded(true); } })
+      .catch((err) => { if (!cancelled) setPastError((err as { message?: string })?.message ?? 'Error al cargar reservas.'); })
+      .finally(() => { if (!cancelled) setPastLoading(false); });
+    return () => { cancelled = true; };
+  }, [tab, pastLoaded]);
+
+  // Sort upcoming ascending (soonest first)
+  const sortedUpcoming = useMemo(
+    () => [...upcomingBookings].sort((a, b) => {
       if (!a.startIso || !b.startIso) return 0;
       return new Date(a.startIso).getTime() - new Date(b.startIso).getTime();
     }),
-    [bookings],
+    [upcomingBookings],
   );
 
-  const pastBookings = useMemo(() => {
-    let filtered = bookings.filter(isPast);
+  // Filter + sort past descending (most recent first)
+  const filteredPast = useMemo(() => {
+    let filtered = [...pastBookings];
 
     if (complexQuery.trim()) {
       const q = complexQuery.trim().toLowerCase();
@@ -79,9 +93,11 @@ const Bookings: React.FC = () => {
       if (!a.startIso || !b.startIso) return 0;
       return new Date(b.startIso).getTime() - new Date(a.startIso).getTime();
     });
-  }, [bookings, complexQuery, dateFrom, dateTo]);
+  }, [pastBookings, complexQuery, dateFrom, dateTo]);
 
-  const visibleBookings = tab === 'upcoming' ? upcomingBookings : pastBookings;
+  const loading = tab === 'upcoming' ? upcomingLoading : pastLoading;
+  const error = tab === 'upcoming' ? upcomingError : pastError;
+  const visibleBookings = tab === 'upcoming' ? sortedUpcoming : filteredPast;
 
   const clearPastFilters = () => {
     setComplexQuery('');
@@ -119,9 +135,9 @@ const Bookings: React.FC = () => {
           }`}
         >
           Próximas
-          {!loading && upcomingBookings.length > 0 && (
+          {!upcomingLoading && sortedUpcoming.length > 0 && (
             <span className="ml-2 px-1.5 py-0.5 rounded-full bg-[var(--color-primary)] text-white text-[10px] font-black">
-              {upcomingBookings.length}
+              {sortedUpcoming.length}
             </span>
           )}
         </button>
@@ -223,11 +239,10 @@ const Bookings: React.FC = () => {
             <BookingCard
               key={booking.id}
               booking={booking}
-              onCancelled={(id) =>
-                setBookings((prev) =>
-                  prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' as const } : b)),
-                )
-              }
+              onCancelled={(id) => {
+                setUpcomingBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' as const } : b)));
+                setPastBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' as const } : b)));
+              }}
             />
           ))}
         </div>

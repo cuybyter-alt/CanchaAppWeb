@@ -23,6 +23,7 @@ import AdminFields from './pages/admin/AdminFields'
 import AdminBookings from './pages/admin/AdminBookings'
 import AdminReports from './pages/admin/AdminReports'
 import Notifications from './pages/Notifications'
+import ForgotPassword from './pages/ForgotPassword'
 
 function App() {
   return (
@@ -42,6 +43,7 @@ function App() {
         {/* Public routes */}
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
+        <Route path="/forgot-password" element={<ForgotPassword />} />
 
         {/* Admin routes — Owner & Manager only */}
         <Route element={<RequireAdmin />}>

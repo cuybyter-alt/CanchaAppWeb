@@ -2,6 +2,7 @@ import ApiClient from './ApiClient';
 import authService from './AuthService';
 import type { ApiError } from './ApiClient';
 import type { Booking, Sport } from '../types/field';
+import type { BookingConfirmation, BookingConfirmationResponse } from '../types/notification';
 
 interface ApiResponse<T> {
   data: T;
@@ -40,6 +41,22 @@ type RawRecord = Record<string, unknown>;
 
 function toRecords(arr: unknown[]): RawRecord[] {
   return arr.filter((i): i is RawRecord => !!i && typeof i === 'object');
+}
+
+function parseBookingsTotal(res: unknown): number {
+  if (res && typeof res === 'object') {
+    const r = res as RawRecord;
+    const data = r.data;
+    if (data && typeof data === 'object' && typeof (data as RawRecord).total === 'number') {
+      return (data as RawRecord).total as number;
+    }
+    if (typeof r.total === 'number') return r.total;
+    const meta = r.meta;
+    if (meta && typeof meta === 'object' && typeof (meta as RawRecord).total === 'number') {
+      return (meta as RawRecord).total as number;
+    }
+  }
+  return extractItems(res).length;
 }
 
 function extractItems(data: unknown): RawRecord[] {
@@ -106,7 +123,8 @@ function mapBackendBooking(raw: RawRecord): Booking {
   return {
     id: (raw.booking_id ?? raw.id ?? '') as string,
     fieldId: (raw.field_id ?? slotField?.field_id ?? '') as string,
-    complexName: (raw.complex_name ?? '—') as string,
+    complexId: (raw.complex_id ?? slotField?.complex_id ?? '') as string,
+    complexName: (raw.complex_name ?? slotField?.complex_name ?? '—') as string,
     fieldName,
     sport,
     sportLabel,
@@ -221,6 +239,30 @@ const bookingService = {
     }
   },
 
+  /**
+   * GET /api/bookings/my/?page=1&page_size=1
+   * Devuelve el total de reservas del usuario (sin cargar todas las páginas).
+   */
+  getMyBookingsCount: async (): Promise<number> => {
+    const path = '/bookings/my/?page=1&page_size=1';
+
+    const fetchOnce = async () => {
+      const res = await ApiClient.get<unknown>(path, { withAuth: true });
+      return parseBookingsTotal(res);
+    };
+
+    try {
+      return await fetchOnce();
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 401) {
+        await authService.refreshToken();
+        return await fetchOnce();
+      }
+      throw error;
+    }
+  },
+
   getMyBookings: async (params?: {
     page?: number;
     page_size?: number;
@@ -306,8 +348,7 @@ const bookingService = {
     }
   },
 
-  createAdminBooking: async (timeSlotId: string, clientName: string, clientPhone?: string): Promise<BookingOutput> => {
-    const fetchOnce = async () => {
+  createAdminBooking: async (timeSlotId: string, clientName: string, clientPhone?: string): Promise<BookingOutput> => {    const fetchOnce = async () => {
       const res = await ApiClient.post<ApiResponse<BookingOutput>>('/bookings/', {
         time_slot_id: timeSlotId,
         client_name: clientName,
@@ -316,6 +357,30 @@ const bookingService = {
       }, {
         withAuth: true,
       });
+      return res.data;
+    };
+
+    try {
+      return await fetchOnce();
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 401) {
+        await authService.refreshToken();
+        return await fetchOnce();
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * GET /api/bookings/<id>/confirmation/
+   * Returns the QR token and short_code for a confirmed booking.
+   */
+  getBookingConfirmation: async (bookingId: string): Promise<BookingConfirmation> => {
+    const path = `/bookings/${bookingId}/confirmation/`;
+
+    const fetchOnce = async () => {
+      const res = await ApiClient.get<BookingConfirmationResponse>(path, { withAuth: true });
       return res.data;
     };
 

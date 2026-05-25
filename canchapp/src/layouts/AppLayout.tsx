@@ -6,11 +6,15 @@ import { MapDialog } from '../components/sections/MapDialog';
 import { BookingPanel } from '../components/features/BookingPanel';
 import { MapContext } from '../context/MapContext';
 import { LocationBanner } from '../components/layout/LocationBanner';
+import { NotificationsProvider } from '../context/NotificationsContext';
+import { usePushNotifications } from '../hooks/usePushNotifications';
 import type { ComplexMarker } from '../types/map';
 import type { Field } from '../types/field';
 import type { MapCenterCoords } from '../context/MapContext';
 
-export default function AppLayout() {
+function AppLayoutInner() {
+  usePushNotifications();
+
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [complexMarkers, setComplexMarkers] = useState<ComplexMarker[]>([]);
   const [searchQuery, setSearchQuery] = useState('');
@@ -101,5 +105,13 @@ export default function AppLayout() {
         )}
       </div>
     </MapContext.Provider>
+  );
+}
+
+export default function AppLayout() {
+  return (
+    <NotificationsProvider>
+      <AppLayoutInner />
+    </NotificationsProvider>
   );
 }

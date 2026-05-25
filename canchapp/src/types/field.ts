@@ -29,6 +29,8 @@ export interface Field {
   priceLabel: string;
   rating: number;
   reviewCount: number;
+  complexId?: string;
+  complexName?: string;
   image: string;
   tags: FieldType[];
   amenities: Amenity[];
@@ -41,6 +43,7 @@ export interface Field {
 export interface Booking {
   id: string;
   fieldId: string;
+  complexId?: string;
   complexName: string;
   fieldName: string;
   sport: Sport;
@@ -66,6 +69,8 @@ export interface ComplexListItem {
   minPrice: number;
   maxPrice: number;
   fieldsCount: number;
+  averageRating?: number;
+  reviewCount?: number;
 }
 
 export type ComplexFieldType = 'futbol_5' | 'futbol_7' | 'futbol_11' | 'microfutbol' | 'futsal';

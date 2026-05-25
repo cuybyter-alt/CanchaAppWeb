@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BarChart3,
@@ -6,76 +6,189 @@ import {
   LogOut,
   Lock,
   Mail,
-  MapPin,
-  Phone,
   Save,
   Shield,
   Sparkles,
   User,
 } from 'lucide-react';
-import { tokenStorage } from '../services/AuthService';
-import demoFavoritesService from '../services/DemoFavoritesService';
-import demoReservationService from '../services/DemoReservationService';
+import { tokenStorage, type UpdateProfilePayload, type UserOutput } from '../services/AuthService';
+import bookingService from '../services/BookingService';
+import favoritesService from '../services/FavoritesService';
 import notify from '../services/toast';
 import authService from '../services/AuthService';
+import { useAuth } from '../context/AuthContext';
 
 interface ProfileData {
-  fullName: string;
+  username: string;
+  firstName: string;
+  lastName: string;
   email: string;
-  phone: string;
-  location: string;
+  avatarUrl: string;
 }
 
-const PROFILE_KEY = 'canchapp-user-profile';
+const buildProfile = (user = tokenStorage.getUser()): ProfileData => ({
+  username: user?.username ?? '',
+  firstName: user?.f_name ?? '',
+  lastName: user?.l_name ?? '',
+  email: user?.email ?? '',
+  avatarUrl: user?.avatar_url ?? '',
+});
 
-const defaultProfile = (): ProfileData => {
-  const currentUser = tokenStorage.getUser();
-  return {
-    fullName: currentUser ? `${currentUser.f_name} ${currentUser.l_name}`.trim() : '',
-    email: currentUser?.email ?? '',
-    phone: '',
-    location: '',
-  };
-};
-
-const readProfile = (): ProfileData => {
-  if (typeof window === 'undefined') return defaultProfile();
-  const raw = localStorage.getItem(PROFILE_KEY);
-  if (!raw) return defaultProfile();
-  try {
-    const parsed = JSON.parse(raw) as Partial<ProfileData>;
-    return {
-      ...defaultProfile(),
-      ...parsed,
-    };
-  } catch {
-    return defaultProfile();
-  }
+const normalizeValue = (value: string): string | null => {
+  const trimmed = value.trim();
+  return trimmed.length > 0 ? trimmed : null;
 };
 
 const Profile: React.FC = () => {
   const navigate = useNavigate();
+  const { user: currentUser, loading: authLoading, refreshUser } = useAuth();
   const [isEditing, setIsEditing] = useState(false);
-  const [profile, setProfile] = useState<ProfileData>(readProfile);
+  const [isLoadingProfile, setIsLoadingProfile] = useState(true);
+  const [isSaving, setIsSaving] = useState(false);
+  const [profile, setProfile] = useState<ProfileData>(() => buildProfile());
+  const [profileError, setProfileError] = useState<string | null>(null);
+  const [profileUser, setProfileUser] = useState<UserOutput | null>(null);
+  const accessToken = tokenStorage.getAccess();
+  const visibleUser = currentUser ?? tokenStorage.getUser();
+  const resolvedUser = profileUser ?? visibleUser;
+  const activeLoadKey = visibleUser?.user_id ?? (accessToken ? 'token' : null);
+  const [stats, setStats] = useState({ reservations: 0, favorites: 0 });
+  const [statsLoading, setStatsLoading] = useState(true);
 
-  const [currentPassword, setCurrentPassword] = useState('');
-  const [newPassword, setNewPassword] = useState('');
-  const [confirmPassword, setConfirmPassword] = useState('');
+  useEffect(() => {
+    if (authLoading) {
+      return;
+    }
 
-  const stats = useMemo(() => ({
-    reservations: demoReservationService.getBookings().length,
-    favorites: demoFavoritesService.getFavoriteIds().length,
-  }), []);
+    if (!activeLoadKey) {
+      setStats({ reservations: 0, favorites: 0 });
+      setStatsLoading(false);
+      return;
+    }
 
-  const currentUser = tokenStorage.getUser();
+    let cancelled = false;
+    setStatsLoading(true);
 
-  if (!currentUser) {
-    navigate('/login');
-    return null;
+    const loadStats = async () => {
+      try {
+        const [reservations, favoriteIds] = await Promise.all([
+          bookingService.getMyBookingsCount(),
+          favoritesService.getFavoriteIds(),
+        ]);
+        if (cancelled) return;
+        setStats({
+          reservations,
+          favorites: favoriteIds.size,
+        });
+      } catch (error) {
+        console.error('Profile stats error:', error);
+        if (!cancelled) {
+          setStats({ reservations: 0, favorites: 0 });
+        }
+      } finally {
+        if (!cancelled) {
+          setStatsLoading(false);
+        }
+      }
+    };
+
+    void loadStats();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeLoadKey, authLoading]);
+
+  useEffect(() => {
+    if (!authLoading && !resolvedUser && !accessToken) {
+      navigate('/login');
+    }
+  }, [authLoading, resolvedUser, accessToken, navigate]);
+
+  useEffect(() => {
+    if (authLoading) {
+      return;
+    }
+
+    if (!activeLoadKey) {
+      setIsLoadingProfile(false);
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadProfile = async () => {
+      setIsLoadingProfile(true);
+      setProfileError(null);
+
+      try {
+        const backendProfile = await authService.getCurrentUserProfile();
+        if (cancelled) return;
+
+        tokenStorage.saveUser(backendProfile);
+        refreshUser();
+        setProfileUser(backendProfile);
+        setProfile(buildProfile(backendProfile));
+      } catch (error) {
+        console.error('Profile load error:', error);
+        if (cancelled) return;
+
+        const cachedUser = tokenStorage.getUser();
+        setProfile(buildProfile(cachedUser ?? undefined));
+        setProfileUser(cachedUser);
+        setProfileError('No se pudo sincronizar el perfil con el backend.');
+      } finally {
+        if (!cancelled) {
+          setIsLoadingProfile(false);
+        }
+      }
+    };
+
+    void loadProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [activeLoadKey, authLoading, refreshUser]);
+
+  if (authLoading || isLoadingProfile) {
+    return (
+      <main className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
+        <section className="rounded-[var(--radius-2xl)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)] p-8 animate-pulse">
+          <p className="text-sm font-semibold text-[var(--color-text-3)] mb-4">
+            Cargando perfil...
+          </p>
+          <div className="h-6 w-40 rounded-full bg-[var(--color-surf2)] mb-4" />
+          <div className="h-12 w-72 rounded-[var(--radius-xl)] bg-[var(--color-surf2)] mb-6" />
+          <div className="h-64 rounded-[var(--radius-2xl)] bg-[var(--color-surf2)]" />
+        </section>
+      </main>
+    );
+  }
+
+  if (!resolvedUser) {
+    return (
+      <main className="p-4 sm:p-6 lg:p-8 max-w-6xl mx-auto">
+        <section className="rounded-[var(--radius-2xl)] border border-[var(--color-border)] bg-[var(--color-surface)] shadow-[var(--shadow-lg)] p-8">
+          <h2 className="text-2xl font-black text-[var(--color-text)] mb-2">
+            No se pudo cargar el perfil
+          </h2>
+          <p className="text-sm font-semibold text-[var(--color-text-3)] mb-6">
+            Inicia sesion de nuevo para recuperar tu informacion.
+          </p>
+          <button
+            onClick={() => navigate('/login')}
+            className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-[var(--color-primary)] text-white font-extrabold shadow-[var(--shadow-primary)] hover:-translate-y-0.5 transition-all"
+          >
+            Ir a login
+          </button>
+        </section>
+      </main>
+    );
   }
 
   const roleLabel = (() => {
-    switch (currentUser.role_name) {
+    switch (resolvedUser.role_name) {
       case 'Owner':
         return 'Dueño';
       case 'Manager':
@@ -83,7 +196,7 @@ const Profile: React.FC = () => {
       case 'Player':
         return 'Jugador';
       default:
-        return currentUser.role_name;
+        return resolvedUser.role_name;
     }
   })();
 
@@ -92,7 +205,7 @@ const Profile: React.FC = () => {
   };
 
   const handleCancelEdit = () => {
-    setProfile(readProfile());
+    setProfile(buildProfile(resolvedUser));
     setIsEditing(false);
   };
 
@@ -107,32 +220,34 @@ const Profile: React.FC = () => {
     }
   };
 
-  const saveProfile = () => {
-    if (typeof window !== 'undefined') {
-      localStorage.setItem(PROFILE_KEY, JSON.stringify(profile));
-    }
-    setIsEditing(false);
-    notify.success('Perfil actualizado', 'Tu información fue guardada correctamente.');
-  };
-
-  const handlePasswordChange = () => {
-    if (!currentPassword || !newPassword || !confirmPassword) {
-      notify.error('Campos incompletos', 'Debes completar todos los campos de contraseña.');
-      return;
-    }
-    if (newPassword.length < 8) {
-      notify.error('Contraseña inválida', 'La nueva contraseña debe tener al menos 8 caracteres.');
-      return;
-    }
-    if (newPassword !== confirmPassword) {
-      notify.error('No coinciden', 'La confirmación de contraseña no coincide.');
+  const saveProfile = async () => {
+    if (isSaving) {
       return;
     }
 
-    setCurrentPassword('');
-    setNewPassword('');
-    setConfirmPassword('');
-    notify.success('Contraseña actualizada', 'Tu contraseña fue cambiada exitosamente.');
+    setIsSaving(true);
+
+    try {
+      const payload: UpdateProfilePayload = {
+        username: normalizeValue(profile.username) ?? resolvedUser.username ?? null,
+        f_name: normalizeValue(profile.firstName),
+        l_name: normalizeValue(profile.lastName),
+        avatar_url: normalizeValue(profile.avatarUrl),
+      };
+
+      const updatedUser = await authService.updateCurrentUserProfile(payload);
+      tokenStorage.saveUser(updatedUser);
+      refreshUser();
+      setProfileUser(updatedUser);
+      setProfile(buildProfile(updatedUser));
+      setIsEditing(false);
+      notify.success('Perfil actualizado', 'Los cambios se guardaron en el backend.');
+    } catch (error) {
+      console.error('Profile save error:', error);
+      notify.error('No se pudo guardar el perfil', 'Verifica los datos e intenta de nuevo.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -147,7 +262,7 @@ const Profile: React.FC = () => {
             Configuración de <span className="text-[var(--color-primary)]">Perfil</span>
           </h1>
           <p className="mt-3 text-sm sm:text-base text-[var(--color-text-3)] font-semibold max-w-2xl">
-            Administra tu cuenta, actualiza tus datos y revisa tu actividad desde una interfaz más visual y ordenada.
+            Administra tu cuenta desde una interfaz más visual y ordenada. Esta pantalla ya usa los endpoints reales del backend.
           </p>
         </div>
 
@@ -177,10 +292,11 @@ const Profile: React.FC = () => {
               </button>
               <button
                 onClick={saveProfile}
+                disabled={isSaving}
                 className="inline-flex items-center gap-2 px-4 py-2.5 rounded-full bg-[var(--color-primary)] text-white font-extrabold shadow-[var(--shadow-primary)] hover:-translate-y-0.5 transition-all"
               >
                 <Save className="w-4 h-4" />
-                Guardar cambios
+                {isSaving ? 'Guardando...' : 'Guardar cambios'}
               </button>
             </div>
           )}
@@ -203,8 +319,8 @@ const Profile: React.FC = () => {
             <div className="relative shrink-0 animate-float">
               <div className="w-28 h-28 sm:w-32 sm:h-32 rounded-[28px] bg-[var(--color-primary)] p-1 shadow-[var(--shadow-primary)]">
                 <div className="w-full h-full rounded-[24px] overflow-hidden border-[3px] border-[var(--color-primary-light)] bg-white">
-                  {currentUser.avatar_url ? (
-                    <img src={currentUser.avatar_url} alt={profile.fullName || 'Perfil'} className="w-full h-full object-cover" />
+                  {profile.avatarUrl ? (
+                    <img src={profile.avatarUrl} alt={profile.firstName || 'Perfil'} className="w-full h-full object-cover" />
                   ) : (
                     <img src="/cuypequeniologo.png" alt="Canchapp" className="w-full h-full object-cover" />
                   )}
@@ -223,31 +339,37 @@ const Profile: React.FC = () => {
                 </span>
                 <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-[var(--color-score)] text-[var(--color-text)] text-xs font-extrabold tracking-wide uppercase">
                   <Mail className="w-3.5 h-3.5" />
-                  {currentUser.email}
+                  {resolvedUser.email}
                 </span>
               </div>
 
               <h2 className="text-3xl sm:text-4xl font-black text-white leading-tight mb-2">
-                {profile.fullName || 'Usuario'}
+                {`${profile.firstName} ${profile.lastName}`.trim() || profile.username || 'Usuario'}
               </h2>
 
               <p className="text-white/70 font-semibold max-w-2xl">
-                Mantén actualizada tu información personal y seguridad. Esta vista sigue la misma línea visual del panel principal: bloques claros, contraste fuerte y jerarquía marcada.
+                Mantén actualizados los datos que realmente acepta la API de identidad: usuario, nombres y avatar.
               </p>
 
               <div className="mt-5 flex flex-wrap justify-center lg:justify-start gap-2">
                 <span className="px-3 py-1.5 rounded-full bg-white/10 text-white text-sm font-extrabold inline-flex items-center gap-2">
-                  <Phone className="w-4 h-4" />
-                  {profile.phone || 'Sin teléfono'}
+                  <User className="w-4 h-4" />
+                  {profile.username || 'Sin usuario'}
                 </span>
                 <span className="px-3 py-1.5 rounded-full bg-white/10 text-white text-sm font-extrabold inline-flex items-center gap-2">
-                  <MapPin className="w-4 h-4" />
-                  {profile.location || 'Sin ubicación'}
+                  <Mail className="w-4 h-4" />
+                  {resolvedUser.email}
                 </span>
               </div>
             </div>
           </div>
         </div>
+
+        {profileError && (
+          <div className="mx-6 mt-6 rounded-[var(--radius-xl)] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+            {profileError}
+          </div>
+        )}
 
         <div className="p-6 sm:p-8">
           <div className="grid grid-cols-1 xl:grid-cols-[1.35fr_0.85fr] gap-6">
@@ -269,12 +391,13 @@ const Profile: React.FC = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="animate-fade-in">
                   <label className="block text-xs font-extrabold text-[var(--color-text-3)] uppercase tracking-[0.2em] mb-2">
-                    Nombre completo
+                    Nombre de usuario
                   </label>
                   <input
-                    value={profile.fullName}
-                    onChange={(e) => setProfile((p) => ({ ...p, fullName: e.target.value }))}
+                    value={profile.username}
+                    onChange={(e) => setProfile((p) => ({ ...p, username: e.target.value }))}
                     disabled={!isEditing}
+                    placeholder="usuario.canchapp"
                     className="w-full h-12 px-4 rounded-[var(--radius-lg)] border-[1.5px] border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] font-semibold outline-none transition-all disabled:opacity-70 disabled:cursor-not-allowed focus:border-[var(--color-primary)] focus:shadow-[var(--shadow-primary)]"
                   />
                 </div>
@@ -285,35 +408,48 @@ const Profile: React.FC = () => {
                   </label>
                   <input
                     type="email"
-                    value={profile.email}
-                    onChange={(e) => setProfile((p) => ({ ...p, email: e.target.value }))}
-                    disabled={!isEditing}
+                    value={resolvedUser.email}
+                    readOnly
+                    disabled
                     className="w-full h-12 px-4 rounded-[var(--radius-lg)] border-[1.5px] border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] font-semibold outline-none transition-all disabled:opacity-70 disabled:cursor-not-allowed focus:border-[var(--color-primary)] focus:shadow-[var(--shadow-primary)]"
                   />
                 </div>
 
                 <div className="animate-fade-in">
                   <label className="block text-xs font-extrabold text-[var(--color-text-3)] uppercase tracking-[0.2em] mb-2">
-                    Teléfono
+                    Nombres
                   </label>
                   <input
-                    value={profile.phone}
-                    onChange={(e) => setProfile((p) => ({ ...p, phone: e.target.value }))}
+                    value={profile.firstName}
+                    onChange={(e) => setProfile((p) => ({ ...p, firstName: e.target.value }))}
                     disabled={!isEditing}
-                    placeholder="+57 300 123 4567"
+                    placeholder="Juan"
                     className="w-full h-12 px-4 rounded-[var(--radius-lg)] border-[1.5px] border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] font-semibold outline-none transition-all disabled:opacity-70 disabled:cursor-not-allowed focus:border-[var(--color-primary)] focus:shadow-[var(--shadow-primary)]"
                   />
                 </div>
 
                 <div className="animate-fade-in">
                   <label className="block text-xs font-extrabold text-[var(--color-text-3)] uppercase tracking-[0.2em] mb-2">
-                    Ubicación
+                    Apellidos
                   </label>
                   <input
-                    value={profile.location}
-                    onChange={(e) => setProfile((p) => ({ ...p, location: e.target.value }))}
+                    value={profile.lastName}
+                    onChange={(e) => setProfile((p) => ({ ...p, lastName: e.target.value }))}
                     disabled={!isEditing}
-                    placeholder="Bogotá, Colombia"
+                    placeholder="Pérez"
+                    className="w-full h-12 px-4 rounded-[var(--radius-lg)] border-[1.5px] border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] font-semibold outline-none transition-all disabled:opacity-70 disabled:cursor-not-allowed focus:border-[var(--color-primary)] focus:shadow-[var(--shadow-primary)]"
+                  />
+                </div>
+
+                <div className="md:col-span-2 animate-fade-in">
+                  <label className="block text-xs font-extrabold text-[var(--color-text-3)] uppercase tracking-[0.2em] mb-2">
+                    Avatar URL
+                  </label>
+                  <input
+                    value={profile.avatarUrl}
+                    onChange={(e) => setProfile((p) => ({ ...p, avatarUrl: e.target.value }))}
+                    disabled={!isEditing}
+                    placeholder="https://..."
                     className="w-full h-12 px-4 rounded-[var(--radius-lg)] border-[1.5px] border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] font-semibold outline-none transition-all disabled:opacity-70 disabled:cursor-not-allowed focus:border-[var(--color-primary)] focus:shadow-[var(--shadow-primary)]"
                   />
                 </div>
@@ -330,10 +466,11 @@ const Profile: React.FC = () => {
                     </button>
                     <button
                       onClick={saveProfile}
+                      disabled={isSaving}
                       className="px-4 py-2.5 rounded-full bg-[var(--color-primary)] text-white font-extrabold shadow-[var(--shadow-primary)] hover:-translate-y-0.5 transition-all inline-flex items-center gap-2"
                     >
                       <Save className="w-4 h-4" />
-                      Guardar cambios
+                      {isSaving ? 'Guardando...' : 'Guardar cambios'}
                     </button>
                   </>
                 ) : (
@@ -356,41 +493,13 @@ const Profile: React.FC = () => {
                     <p className="text-[10px] font-extrabold tracking-[0.24em] text-[var(--color-primary)] uppercase mb-1">
                       Seguridad
                     </p>
-                    <h3 className="text-xl font-black text-[var(--color-text)]">Cambiar contraseña</h3>
+                    <h3 className="text-xl font-black text-[var(--color-text)]">Contraseña</h3>
                   </div>
                 </div>
 
-                <div className="space-y-3">
-                  <input
-                    type="password"
-                    placeholder="Contraseña actual"
-                    value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
-                    className="w-full h-11 px-4 rounded-[var(--radius-lg)] border-[1.5px] border-[var(--color-border)] bg-[var(--color-surf2)] font-semibold outline-none transition-all focus:border-[var(--color-primary)] focus:shadow-[var(--shadow-primary)]"
-                  />
-                  <input
-                    type="password"
-                    placeholder="Nueva contraseña"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="w-full h-11 px-4 rounded-[var(--radius-lg)] border-[1.5px] border-[var(--color-border)] bg-[var(--color-surf2)] font-semibold outline-none transition-all focus:border-[var(--color-primary)] focus:shadow-[var(--shadow-primary)]"
-                  />
-                  <input
-                    type="password"
-                    placeholder="Confirmar nueva contraseña"
-                    value={confirmPassword}
-                    onChange={(e) => setConfirmPassword(e.target.value)}
-                    className="w-full h-11 px-4 rounded-[var(--radius-lg)] border-[1.5px] border-[var(--color-border)] bg-[var(--color-surf2)] font-semibold outline-none transition-all focus:border-[var(--color-primary)] focus:shadow-[var(--shadow-primary)]"
-                  />
-                </div>
-
-                <button
-                  onClick={handlePasswordChange}
-                  className="mt-4 w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-full bg-[var(--color-text)] text-white font-extrabold shadow-[var(--shadow-lg)] hover:-translate-y-0.5 transition-all"
-                >
-                  <Lock className="w-4 h-4" />
-                  Actualizar contraseña
-                </button>
+                <p className="text-sm font-semibold text-[var(--color-text-3)] leading-6">
+                  Por implementar ....
+                </p>
               </section>
 
               <section className="bg-[var(--color-surface)] rounded-[var(--radius-2xl)] border-[1.5px] border-[var(--color-border)] shadow-[var(--shadow-md)] p-5 sm:p-6 animate-fade-in">
@@ -409,13 +518,17 @@ const Profile: React.FC = () => {
                     <p className="text-[10px] font-extrabold uppercase tracking-[0.24em] text-[var(--color-text-3)] mb-1">
                       Reservas
                     </p>
-                    <p className="text-3xl font-black text-[var(--color-primary-dark)] leading-none">{stats.reservations}</p>
+                    <p className="text-3xl font-black text-[var(--color-primary-dark)] leading-none">
+                      {statsLoading ? '—' : stats.reservations}
+                    </p>
                   </div>
                   <div className="rounded-[var(--radius-xl)] border border-[var(--color-border)] p-4 bg-[var(--color-surf2)]">
                     <p className="text-[10px] font-extrabold uppercase tracking-[0.24em] text-[var(--color-text-3)] mb-1">
                       Favoritas
                     </p>
-                    <p className="text-3xl font-black text-[var(--color-primary-dark)] leading-none">{stats.favorites}</p>
+                    <p className="text-3xl font-black text-[var(--color-primary-dark)] leading-none">
+                      {statsLoading ? '—' : stats.favorites}
+                    </p>
                   </div>
                 </div>
               </section>

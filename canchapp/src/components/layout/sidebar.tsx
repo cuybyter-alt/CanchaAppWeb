@@ -1,9 +1,12 @@
-import { Calendar, Heart, Home, MapPin, Search, Settings, Wallet, User } from 'lucide-react';
+import { Bell, Calendar, Heart, Home, MapPin, Search, Settings, Wallet, User } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Typography } from '../ui/typography';
 import { Badge } from '../ui/badge';
 import { useEffect, useState } from 'react';
 import { useMapContext } from '../../context/MapContext';
+import authService from '../../services/AuthService';
+import bookingService from '../../services/BookingService';
+import { useNotifications } from '../../context/NotificationsContext';
 import complexesService from '../../services/ComplexesService';
 import schedulingService from '../../services/SchedulingService';
 import { formatPrice } from '../../lib/utils';
@@ -41,6 +44,9 @@ const COMPLEX_SPORT_LABEL: Record<ComplexFieldType, string> = {
   futsal: 'Futsal',
 };
 
+const QUICK_SLOT_CACHE_TTL = 5 * 60 * 1000;
+let quickSlotCache: { ts: number; slot: QuickSlot | null } | null = null;
+
 function buildSyntheticField(cf: ComplexField, complex: NearbyComplex, slot: TimeSlotData, allSlots: TimeSlotData[]): Field {
   return {
     id: cf.fieldId,
@@ -75,20 +81,61 @@ function getCachedCoords(): { lat: number; lng: number } | null {
 export function Sidebar({ onQuickBook }: SidebarProps = {}) {
   const { openMap } = useMapContext();
   const navigate = useNavigate();
+  const { unreadCount: notifUnreadCount } = useNotifications();
 
   const [quickSlot, setQuickSlot] = useState<QuickSlot | null>(null);
   const [loadingQuick, setLoadingQuick] = useState(true);
   const [countdown, setCountdown] = useState('');
+  const [myBookingsCount, setMyBookingsCount] = useState(0);
+  const [loadingBookingsCount, setLoadingBookingsCount] = useState(true);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadBookingsCount = async () => {
+      if (!authService.isAuthenticated()) {
+        if (!cancelled) {
+          setMyBookingsCount(0);
+          setLoadingBookingsCount(false);
+        }
+        return;
+      }
+
+      try {
+        const total = await bookingService.getMyBookingsCount();
+        if (!cancelled) setMyBookingsCount(total);
+      } catch {
+        if (!cancelled) setMyBookingsCount(0);
+      } finally {
+        if (!cancelled) setLoadingBookingsCount(false);
+      }
+    };
+
+    void loadBookingsCount();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   // Load nearest complex + first available slot
   useEffect(() => {
     let cancelled = false;
+
+    if (quickSlotCache && Date.now() - quickSlotCache.ts < QUICK_SLOT_CACHE_TTL) {
+      setQuickSlot(quickSlotCache.slot);
+      setLoadingQuick(false);
+      return () => {
+        cancelled = true;
+      };
+    }
 
     const load = async () => {
       setLoadingQuick(true);
       try {
         const coords = getCachedCoords();
         let complexes: NearbyComplex[] = [];
+        let resolvedSlot: QuickSlot | null = null;
 
         if (coords) {
           complexes = await complexesService.getNearbyComplexes(coords.lat, coords.lng, 1);
@@ -122,7 +169,7 @@ export function Sidebar({ onQuickBook }: SidebarProps = {}) {
               (!s.startIso || new Date(s.startIso) > now)
             );
             if (available) {
-              setQuickSlot({
+              resolvedSlot = {
                 complexId: complex.id,
                 complexName: complex.name,
                 fieldId: cf.fieldId,
@@ -131,10 +178,15 @@ export function Sidebar({ onQuickBook }: SidebarProps = {}) {
                 slot: available,
                 allSlots: slots,
                 field: buildSyntheticField(cf, complex, available, slots),
-              });
+              };
               break;
             }
           } catch { /* skip this field */ }
+        }
+
+        if (!cancelled) {
+          quickSlotCache = { ts: Date.now(), slot: resolvedSlot };
+          setQuickSlot(resolvedSlot);
         }
       } catch { /* silent */ } finally {
         if (!cancelled) setLoadingQuick(false);
@@ -220,9 +272,32 @@ export function Sidebar({ onQuickBook }: SidebarProps = {}) {
       >
         <Calendar className="w-[18px] h-[18px] flex-shrink-0" />
         Mis Reservas
-        <Badge variant="primary" className="ml-auto">
-          3
-        </Badge>
+        {!loadingBookingsCount && myBookingsCount > 0 && (
+          <Badge variant="primary" className="ml-auto">
+            {myBookingsCount}
+          </Badge>
+        )}
+      </NavLink>
+
+      <NavLink
+        to="/notifications"
+        className={({ isActive }) =>
+          `flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold
+          transition-all duration-[var(--duration-fast)] relative no-underline
+          ${
+            isActive
+              ? 'bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)] before:absolute before:left-0 before:top-[20%] before:bottom-[20%] before:w-[3px] before:rounded-r-[var(--radius-xs)] before:bg-[var(--color-primary)]'
+              : 'text-[var(--color-text-2)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]'
+          }`
+        }
+      >
+        <Bell className="w-[18px] h-[18px] flex-shrink-0" />
+        Notificaciones
+        {notifUnreadCount > 0 && (
+          <Badge variant="primary" className="ml-auto">
+            {notifUnreadCount}
+          </Badge>
+        )}
       </NavLink>
 
       <NavLink

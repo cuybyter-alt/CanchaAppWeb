@@ -22,6 +22,7 @@ import AdminFieldSchedule from './pages/admin/AdminFieldSchedule'
 import AdminFields from './pages/admin/AdminFields'
 import AdminBookings from './pages/admin/AdminBookings'
 import AdminReports from './pages/admin/AdminReports'
+import Notifications from './pages/Notifications'
 
 function App() {
   return (
@@ -62,6 +63,7 @@ function App() {
           <Route path="/complexes" element={<Complexes />} />
           <Route path="/complexes/:id" element={<ComplexDetail />} />
           <Route path="/bookings" element={<Bookings />} />
+          <Route path="/notifications" element={<Notifications />} />
           <Route path="/favorites" element={<Favorites />} />
           <Route path="/profile" element={<Profile />} />
           <Route path="/payments" element={<Payments />} />

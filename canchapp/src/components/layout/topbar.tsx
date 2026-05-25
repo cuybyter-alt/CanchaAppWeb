@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Bell, MapPin, Search, LogOut, User, Shield, Menu, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import authService, { tokenStorage } from '../../services/AuthService';
+import { useAuth } from '../../context/AuthContext';
 
 interface TopbarProps {
   onSearch?: (query: string) => void;
@@ -15,10 +16,10 @@ export function Topbar({ onSearch, searchValue = '', sidebarOpen: _sidebarOpen, 
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const { user } = useAuth();
   
   // Use authService to check authentication
   const isAuthenticated = authService.isAuthenticated();
-  const user = tokenStorage.getUser();
   const isAdmin = user?.role_name === 'Owner' || user?.role_name === 'Manager';
 
   const handleLogout = () => {

@@ -606,11 +606,12 @@ function EditFieldForm({
 // ─── Field Card ───────────────────────────────────────────────────────────────
 
 function FieldCard({
-  f, onDeactivate, onEdit,
+  f, onDeactivate, onEdit, onSchedules,
 }: {
   f: FieldItem;
   onDeactivate: () => void;
   onEdit: () => void;
+  onSchedules: () => void;
 }) {
   const cfg   = STATUS_CFG[f.status] ?? STATUS_CFG.inactive;
   const ui    = getFieldUI(f.field_id);
@@ -679,7 +680,7 @@ function FieldCard({
       {/* Actions */}
       <div className="px-3 py-2.5 flex gap-0.5">
         <button
-          onClick={() => toast.info('Gestión de horarios próximamente')}
+          onClick={onSchedules}
           className="flex-1 py-1.5 rounded-[var(--radius-lg)] text-xs font-extrabold text-[var(--color-primary)] hover:bg-[var(--color-primary-tint)] transition-colors flex items-center justify-center gap-1"
         >
           <Target className="w-3 h-3" /> Horarios
@@ -1139,6 +1140,10 @@ const AdminComplexFields: React.FC = () => {
                   f={f}
                   onDeactivate={() => setDTgt(f)}
                   onEdit={() => { setShowCreate(false); setEditing(f); }}
+                  onSchedules={() => navigate(
+                    `/admin/complexes/${complexId}/fields/${f.field_id}/schedule`,
+                    { state: { fieldName: f.name, complexName: complex?.name ?? '' } },
+                  )}
                 />
               ))}
             </div>

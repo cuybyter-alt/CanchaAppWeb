@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   Building2,
@@ -9,6 +9,12 @@ import {
   ArrowRight,
 } from 'lucide-react';
 import { tokenStorage } from '../../services/AuthService';
+import statisticsService, {
+  countAdminTodayBookings,
+  formatCOP,
+  getCurrentMonthRange,
+  type AdminStats,
+} from '../../services/StatisticsService';
 
 interface StatCardProps {
   icon: React.ReactNode;
@@ -16,10 +22,11 @@ interface StatCardProps {
   label: string;
   value: string | number;
   sub: string;
+  loading?: boolean;
   onClick?: () => void;
 }
 
-function StatCard({ icon, iconBg, label, value, sub, onClick }: StatCardProps) {
+function StatCard({ icon, iconBg, label, value, sub, loading, onClick }: StatCardProps) {
   return (
     <div
       className={`bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-5 flex flex-col gap-3 ${onClick ? 'cursor-pointer hover:shadow-md transition-shadow' : ''}`}
@@ -32,8 +39,10 @@ function StatCard({ icon, iconBg, label, value, sub, onClick }: StatCardProps) {
         <p className="text-[10px] font-extrabold tracking-widest text-[var(--color-text-3)] uppercase mb-1">
           {label}
         </p>
-        <p className="text-3xl font-extrabold text-[var(--color-text)] leading-none">{value}</p>
-        <p className="text-xs text-[var(--color-text-3)] mt-1">{sub}</p>
+        <p className="text-3xl font-extrabold text-[var(--color-text)] leading-none">
+          {loading ? '—' : value}
+        </p>
+        <p className="text-xs text-[var(--color-text-3)] mt-1">{loading ? 'Cargando...' : sub}</p>
       </div>
     </div>
   );
@@ -44,10 +53,11 @@ interface QuickActionProps {
   iconBg: string;
   title: string;
   sub: string;
+  loading?: boolean;
   onClick?: () => void;
 }
 
-function QuickAction({ icon, iconBg, title, sub, onClick }: QuickActionProps) {
+function QuickAction({ icon, iconBg, title, sub, loading, onClick }: QuickActionProps) {
   return (
     <button
       onClick={onClick}
@@ -58,7 +68,9 @@ function QuickAction({ icon, iconBg, title, sub, onClick }: QuickActionProps) {
       </div>
       <div className="min-w-0">
         <p className="font-extrabold text-[var(--color-text)] text-sm truncate">{title}</p>
-        <p className="text-xs text-[var(--color-text-3)] truncate">{sub}</p>
+        <p className="text-xs text-[var(--color-text-3)] truncate">
+          {loading ? 'Cargando...' : sub}
+        </p>
       </div>
     </button>
   );
@@ -68,6 +80,99 @@ const AdminDashboard: React.FC = () => {
   const navigate = useNavigate();
   const user = tokenStorage.getUser();
   const firstName = user?.f_name ?? user?.username ?? 'Admin';
+
+  const [stats, setStats] = useState<AdminStats | null>(null);
+  const [todayBookings, setTodayBookings] = useState(0);
+  const [monthlyIncome, setMonthlyIncome] = useState<number | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+
+    const loadDashboard = async () => {
+      setLoading(true);
+      setError(null);
+
+      try {
+        const adminStats = await statisticsService.getAdminStats();
+        if (cancelled) return;
+
+        const complexIds = adminStats.complexes.map((c) => c.complex_id);
+        const [bookingsToday, incomeSeries] = await Promise.all([
+          countAdminTodayBookings(complexIds),
+          (async () => {
+            const { start, end } = getCurrentMonthRange();
+            const income = await statisticsService.getAdminIncome({
+              start_date: start,
+              end_date: end,
+              interval: 'day',
+            });
+            return statisticsService.sumIncome(income.total_series);
+          })(),
+        ]);
+
+        if (cancelled) return;
+
+        setStats(adminStats);
+        setTodayBookings(bookingsToday);
+        setMonthlyIncome(incomeSeries);
+      } catch (err) {
+        console.error('Admin dashboard stats error:', err);
+        if (!cancelled) {
+          setError('No se pudieron cargar las estadísticas.');
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
+      }
+    };
+
+    void loadDashboard();
+
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const complexesCount = stats?.total_complexes ?? 0;
+  const activeFields = stats?.total_active_fields ?? 0;
+  const totalFields = stats?.total_fields ?? 0;
+  const maintenanceFields = stats?.total_maintenance_fields ?? 0;
+  const pendingBookings = stats?.total_pending_bookings ?? 0;
+  const todayIncome = stats?.total_today_income ?? 0;
+
+  const complexesSub =
+    complexesCount === 1
+      ? '1 registrado'
+      : `${complexesCount} registrados`;
+
+  const fieldsSub =
+    totalFields === 1
+      ? '1 activa'
+      : `${activeFields} activas`;
+
+  const fieldsDetailSub =
+    `${totalFields} total (${maintenanceFields} en mantenimiento)`;
+
+  const pendingSub =
+    pendingBookings === 1
+      ? '1 pendiente'
+      : `${pendingBookings} pendientes`;
+
+  const todayBookingsSub =
+    pendingBookings === 1
+      ? '1 pendiente de aprobación'
+      : `${pendingBookings} pendientes de aprobación`;
+
+  const incomeValue =
+    monthlyIncome === null ? '—' : formatCOP(monthlyIncome);
+
+  const incomeSub =
+    todayIncome > 0
+      ? `Hoy: ${formatCOP(todayIncome)} · Ver reporte completo`
+      : 'Ver reporte completo';
 
   return (
     <div className="p-5 sm:p-8 space-y-8">
@@ -85,6 +190,12 @@ const AdminDashboard: React.FC = () => {
         </p>
       </div>
 
+      {error && (
+        <div className="rounded-[var(--radius-xl)] border border-amber-200 bg-amber-50 px-4 py-3 text-sm font-semibold text-amber-900">
+          {error}
+        </div>
+      )}
+
       {/* Panel de Control */}
       <div className="bg-[var(--color-primary)] rounded-[var(--radius-2xl)] p-6">
         <div className="flex items-center gap-2 mb-1">
@@ -98,21 +209,24 @@ const AdminDashboard: React.FC = () => {
             icon={<Building2 className="w-6 h-6" />}
             iconBg="bg-[var(--color-primary-dark)]"
             title="Mis Complejos"
-            sub="1 registrados"
+            sub={complexesSub}
+            loading={loading}
             onClick={() => navigate('/admin/complexes')}
           />
           <QuickAction
             icon={<CircleDot className="w-6 h-6" />}
             iconBg="bg-rose-500"
             title="Canchas"
-            sub="2 activas"
+            sub={fieldsSub}
+            loading={loading}
             onClick={() => navigate('/admin/fields')}
           />
           <QuickAction
             icon={<CalendarCheck className="w-6 h-6" />}
             iconBg="bg-amber-500"
             title="Reservas"
-            sub="1 pendientes"
+            sub={pendingSub}
+            loading={loading}
             onClick={() => navigate('/admin/bookings')}
           />
           <QuickAction
@@ -131,32 +245,36 @@ const AdminDashboard: React.FC = () => {
           icon={<Building2 className="w-5 h-5" />}
           iconBg="bg-[var(--color-primary)]"
           label="Complejos"
-          value={1}
-          sub="1 total registrados"
+          value={complexesCount}
+          sub={`${complexesCount} total registrados`}
+          loading={loading}
           onClick={() => navigate('/admin/complexes')}
         />
         <StatCard
           icon={<CircleDot className="w-5 h-5" />}
           iconBg="bg-[var(--color-primary)]"
           label="Canchas activas"
-          value={2}
-          sub="2 total (0 en mantenimiento)"
+          value={activeFields}
+          sub={fieldsDetailSub}
+          loading={loading}
           onClick={() => navigate('/admin/fields')}
         />
         <StatCard
           icon={<CalendarCheck className="w-5 h-5" />}
           iconBg="bg-amber-500"
           label="Reservas hoy"
-          value={3}
-          sub="1 pendiente de aprobación"
+          value={todayBookings}
+          sub={todayBookingsSub}
+          loading={loading}
           onClick={() => navigate('/admin/bookings')}
         />
         <StatCard
           icon={<BarChart2 className="w-5 h-5" />}
           iconBg="bg-[var(--color-text)]"
           label="Ingresos del mes"
-          value="—"
-          sub="Ver reporte completo"
+          value={incomeValue}
+          sub={incomeSub}
+          loading={loading}
           onClick={() => navigate('/admin/reports')}
         />
       </div>
@@ -174,7 +292,9 @@ const AdminDashboard: React.FC = () => {
             </button>
           </div>
           <p className="text-sm text-[var(--color-text-3)]">
-            Gestiona y aprueba las reservas de tus canchas.
+            {loading
+              ? 'Cargando resumen...'
+              : `${todayBookings} reserva(s) hoy · ${pendingBookings} pendiente(s) de aprobación.`}
           </p>
           <button
             onClick={() => navigate('/admin/bookings')}
@@ -198,7 +318,9 @@ const AdminDashboard: React.FC = () => {
             </button>
           </div>
           <p className="text-sm text-[var(--color-text-3)]">
-            Administra tus complejos deportivos registrados.
+            {loading
+              ? 'Cargando resumen...'
+              : `${complexesCount} complejo(s) · ${activeFields} cancha(s) activa(s).`}
           </p>
           <button
             onClick={() => navigate('/admin/complexes')}

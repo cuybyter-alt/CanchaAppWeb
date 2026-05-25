@@ -9,9 +9,10 @@ interface ComplexCardProps {
   onSelect: () => void;
   isFavorite?: boolean;
   onToggleFavorite?: (complexId: string) => void;
+  onReviewOpen?: (complexId: string, complexName: string) => void;
 }
 
-export function ComplexCard({ complex, onSelect, isFavorite, onToggleFavorite }: ComplexCardProps) {
+export function ComplexCard({ complex, onSelect, isFavorite, onToggleFavorite, onReviewOpen }: ComplexCardProps) {
   const { openMapAt } = useMapContext();
   return (
     <div
@@ -81,11 +82,19 @@ export function ComplexCard({ complex, onSelect, isFavorite, onToggleFavorite }:
         </div>
 
         {/* City pill — bottom left */}
-        <div className="absolute bottom-3 left-3">
+        <div className="absolute bottom-3 left-3 flex items-center gap-1.5">
           <span className="inline-flex items-center gap-1 font-[var(--font-pixel)] text-[6px] tracking-wider px-2 py-1 rounded-full bg-white/15 text-white border border-white/25">
             <i className="fa-solid fa-location-dot text-[7px]" />
             {complex.city}
           </span>
+          <button
+              onClick={(e) => { e.stopPropagation(); onReviewOpen?.(complex.id, complex.name); }}
+              title="Ver reseñas"
+              className="inline-flex items-center gap-1 font-[var(--font-pixel)] text-[6px] tracking-wider px-2 py-1 rounded-full bg-black/40 backdrop-blur text-[var(--color-score)] border border-white/10 hover:bg-[var(--color-score)]/20 hover:scale-105 active:scale-95 transition-all cursor-pointer"
+            >
+              <i className="fa-solid fa-star text-[7px]" />
+              {(complex.averageRating ?? 0) > 0 ? `${complex.averageRating!.toFixed(1)} · ${complex.reviewCount}` : '—'}
+            </button>
         </div>
       </div>
 

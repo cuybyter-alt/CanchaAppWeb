@@ -58,6 +58,8 @@ export interface ComplexMarker {
   latitude: number;
   longitude: number;
   minPrice: number;
+  averageRating?: number;
+  reviewCount?: number;
   maxPrice: number;
   fieldsCount: number;
 }
@@ -77,4 +79,6 @@ export interface NearbyComplex {
   fieldsCount: number;
   distanceKm: number;
   distanceLabel: string;
+  averageRating?: number;
+  reviewCount?: number;
 }

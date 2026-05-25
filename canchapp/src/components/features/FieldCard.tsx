@@ -10,6 +10,7 @@ interface FieldCardProps {
   isSelected?: boolean;
   onSelect?: (field: Field) => void;
   onToggleFavorite?: (fieldId: string) => void;
+  onReviewOpen?: (field: Field) => void;
 }
 
 const getSportGradient = (sport: string) => {
@@ -52,7 +53,7 @@ const getTagBadge = (tag: string) => {
   }
 };
 
-export function FieldCard({ field, isSelected, onSelect, onToggleFavorite }: FieldCardProps) {
+export function FieldCard({ field, isSelected, onSelect, onToggleFavorite, onReviewOpen }: FieldCardProps) {
   const isFavorite = field.isFavorite;
 
   const handleFavoriteClick = (e: React.MouseEvent) => {
@@ -107,13 +108,18 @@ export function FieldCard({ field, isSelected, onSelect, onToggleFavorite }: Fie
           <Heart className={`w-3.5 h-3.5 ${isFavorite ? 'fill-current' : ''}`} />
         </button>
 
-        {/* Rating */}
-        <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-black/40 backdrop-blur rounded-full px-2 py-1">
+        {/* Rating — clickable to open reviews dialog */}
+        <button
+          className="absolute bottom-3 right-3 flex items-center gap-1 bg-black/40 backdrop-blur rounded-full px-2 py-1
+            hover:bg-[var(--color-primary)] hover:scale-105 active:scale-95 transition-all cursor-pointer z-10"
+          onClick={(e) => { e.stopPropagation(); onReviewOpen?.(field); }}
+          title="Ver reseñas"
+        >
           <Star className="w-2.5 h-2.5 fill-[var(--color-score)] text-[var(--color-score)]" />
           <span className="font-[var(--font-pixel)] text-[6px] tracking-widest uppercase text-[var(--color-score)]">
-            {field.rating} · {field.reviewCount}
+            {field.rating > 0 ? field.rating.toFixed(1) : '—'} · {field.reviewCount}
           </span>
-        </div>
+        </button>
       </div>
 
       {/* Cuerpo de la tarjeta */}

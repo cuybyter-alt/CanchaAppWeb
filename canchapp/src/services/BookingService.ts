@@ -2,6 +2,7 @@ import ApiClient from './ApiClient';
 import authService from './AuthService';
 import type { ApiError } from './ApiClient';
 import type { Booking, Sport } from '../types/field';
+import type { BookingConfirmation, BookingConfirmationResponse } from '../types/notification';
 
 interface ApiResponse<T> {
   data: T;
@@ -122,7 +123,8 @@ function mapBackendBooking(raw: RawRecord): Booking {
   return {
     id: (raw.booking_id ?? raw.id ?? '') as string,
     fieldId: (raw.field_id ?? slotField?.field_id ?? '') as string,
-    complexName: (raw.complex_name ?? '—') as string,
+    complexId: (raw.complex_id ?? slotField?.complex_id ?? '') as string,
+    complexName: (raw.complex_name ?? slotField?.complex_name ?? '—') as string,
     fieldName,
     sport,
     sportLabel,
@@ -346,8 +348,7 @@ const bookingService = {
     }
   },
 
-  createAdminBooking: async (timeSlotId: string, clientName: string, clientPhone?: string): Promise<BookingOutput> => {
-    const fetchOnce = async () => {
+  createAdminBooking: async (timeSlotId: string, clientName: string, clientPhone?: string): Promise<BookingOutput> => {    const fetchOnce = async () => {
       const res = await ApiClient.post<ApiResponse<BookingOutput>>('/bookings/', {
         time_slot_id: timeSlotId,
         client_name: clientName,
@@ -356,6 +357,30 @@ const bookingService = {
       }, {
         withAuth: true,
       });
+      return res.data;
+    };
+
+    try {
+      return await fetchOnce();
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 401) {
+        await authService.refreshToken();
+        return await fetchOnce();
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * GET /api/bookings/<id>/confirmation/
+   * Returns the QR token and short_code for a confirmed booking.
+   */
+  getBookingConfirmation: async (bookingId: string): Promise<BookingConfirmation> => {
+    const path = `/bookings/${bookingId}/confirmation/`;
+
+    const fetchOnce = async () => {
+      const res = await ApiClient.get<BookingConfirmationResponse>(path, { withAuth: true });
       return res.data;
     };
 

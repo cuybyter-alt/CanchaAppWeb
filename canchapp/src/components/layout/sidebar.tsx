@@ -1,4 +1,4 @@
-import { Calendar, Heart, Home, MapPin, Search, Settings, Wallet, User } from 'lucide-react';
+import { Bell, Calendar, Heart, Home, MapPin, Search, Settings, Wallet, User } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Typography } from '../ui/typography';
 import { Badge } from '../ui/badge';
@@ -6,6 +6,7 @@ import { useEffect, useState } from 'react';
 import { useMapContext } from '../../context/MapContext';
 import authService from '../../services/AuthService';
 import bookingService from '../../services/BookingService';
+import { useNotifications } from '../../context/NotificationsContext';
 import complexesService from '../../services/ComplexesService';
 import schedulingService from '../../services/SchedulingService';
 import { formatPrice } from '../../lib/utils';
@@ -80,6 +81,7 @@ function getCachedCoords(): { lat: number; lng: number } | null {
 export function Sidebar({ onQuickBook }: SidebarProps = {}) {
   const { openMap } = useMapContext();
   const navigate = useNavigate();
+  const { unreadCount: notifUnreadCount } = useNotifications();
 
   const [quickSlot, setQuickSlot] = useState<QuickSlot | null>(null);
   const [loadingQuick, setLoadingQuick] = useState(true);
@@ -273,6 +275,27 @@ export function Sidebar({ onQuickBook }: SidebarProps = {}) {
         {!loadingBookingsCount && myBookingsCount > 0 && (
           <Badge variant="primary" className="ml-auto">
             {myBookingsCount}
+          </Badge>
+        )}
+      </NavLink>
+
+      <NavLink
+        to="/notifications"
+        className={({ isActive }) =>
+          `flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold
+          transition-all duration-[var(--duration-fast)] relative no-underline
+          ${
+            isActive
+              ? 'bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)] before:absolute before:left-0 before:top-[20%] before:bottom-[20%] before:w-[3px] before:rounded-r-[var(--radius-xs)] before:bg-[var(--color-primary)]'
+              : 'text-[var(--color-text-2)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]'
+          }`
+        }
+      >
+        <Bell className="w-[18px] h-[18px] flex-shrink-0" />
+        Notificaciones
+        {notifUnreadCount > 0 && (
+          <Badge variant="primary" className="ml-auto">
+            {notifUnreadCount}
           </Badge>
         )}
       </NavLink>

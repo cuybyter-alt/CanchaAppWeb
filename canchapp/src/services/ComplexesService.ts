@@ -254,6 +254,8 @@ const complexesService = {
           minPrice: asNumber(item.min_price) ?? 0,
           maxPrice: asNumber(item.max_price) ?? 0,
           fieldsCount: asNumber(item.fields_count) ?? 0,
+          averageRating: asNumber(item.average_rating) ?? 0,
+          reviewCount: asNumber(item.review_count) ?? 0,
         };
       })
       .filter((item): item is ComplexListItem => item !== null);
@@ -483,6 +485,8 @@ const complexesService = {
           fieldsCount: asNumber(item.fields_count) ?? 0,
           distanceKm: distKm,
           distanceLabel: `${distKm.toFixed(1)} km`,
+          averageRating: asNumber(item.average_rating) ?? 0,
+          reviewCount: asNumber(item.review_count) ?? 0,
         };
       })
       .filter((m): m is NearbyComplex => m !== null)

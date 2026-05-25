@@ -317,6 +317,7 @@ export function ReviewsDialog({
   const confirmedBooking = userBookings.find(
     (b) =>
       b.status === 'confirmed' &&
+      !!b.startIso && new Date(b.startIso) < new Date() &&
       (b.complexId
         ? b.complexId === complexId
         : b.complexName.trim().toLowerCase() === complexName.trim().toLowerCase()),

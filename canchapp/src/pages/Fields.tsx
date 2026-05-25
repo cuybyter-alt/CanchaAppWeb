@@ -3,6 +3,7 @@ import { ArrowLeft, Search, X } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ComplexCard } from '../components/features/ComplexCard';
 import { ComplexFieldsDialog } from '../components/features/ComplexFieldsDialog';
+import { ReviewsDialog } from '../components/features/ReviewsDialog';
 import { BookingPanel } from '../components/features/BookingPanel';
 import { Typography } from '../components/ui/typography';
 import type { NearbyComplex } from '../types/map';
@@ -25,6 +26,8 @@ function toNearbyComplex(c: ComplexListItem): NearbyComplex {
     fieldsCount: c.fieldsCount,
     distanceKm: 0,
     distanceLabel: '',
+    averageRating: c.averageRating ?? 0,
+    reviewCount: c.reviewCount ?? 0,
   };
 }
 
@@ -90,7 +93,8 @@ const Fields: React.FC = () => {
   const [panelSlotId, setPanelSlotId] = useState<string | undefined>(undefined);
   const [panelDate, setPanelDate] = useState<string | undefined>(undefined);
   const [bookingPanelOpen, setBookingPanelOpen] = useState(false);
-  const [, setBookings] = useState<Booking[]>([]);
+  const [bookings, setBookings] = useState<Booking[]>([]);
+  const [reviewTarget, setReviewTarget] = useState<{ complexId: string; complexName: string } | null>(null);
 
   // Debounce
   useEffect(() => {
@@ -299,6 +303,7 @@ const Fields: React.FC = () => {
               complex={complex}
               isFavorite={favoriteIds.has(complex.id)}
               onToggleFavorite={handleToggleFavorite}
+              onReviewOpen={(cId, cName) => setReviewTarget({ complexId: cId, complexName: cName })}
               onSelect={() => {
                 setSelectedComplex(complex);
                 setIsDialogOpen(true);
@@ -306,6 +311,17 @@ const Fields: React.FC = () => {
             />
           ))}
         </div>
+      )}
+
+      {/* Reviews dialog */}
+      {reviewTarget && (
+        <ReviewsDialog
+          isOpen={!!reviewTarget}
+          onClose={() => setReviewTarget(null)}
+          complexId={reviewTarget.complexId}
+          complexName={reviewTarget.complexName}
+          userBookings={bookings}
+        />
       )}
 
       {/* Complex fields dialog */}

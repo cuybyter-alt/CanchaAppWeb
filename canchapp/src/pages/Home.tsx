@@ -9,6 +9,7 @@ import { BookingPanel } from '../components/features/BookingPanel';
 import { BookingCard } from '../components/features/BookingCard';
 import { ComplexCard } from '../components/features/ComplexCard';
 import { ComplexFieldsDialog } from '../components/features/ComplexFieldsDialog';
+import { ReviewsDialog } from '../components/features/ReviewsDialog';
 import type { Booking, ComplexField, ComplexFieldType, Field, TimeSlotData } from '../types/field';
 import type { NearbyComplex } from '../types/map';
 import { useMapContext } from '../context/MapContext';
@@ -95,6 +96,7 @@ const Home: React.FC = () => {
   const [panelPreselectedDate, setPanelPreselectedDate] = useState<string | undefined>(undefined);
   const [bookingPanelFlash, setBookingPanelFlash] = useState(false);
   const [bookingPanelOpen, setBookingPanelOpen] = useState(false);
+  const [reviewTarget, setReviewTarget] = useState<{ complexId: string; complexName: string } | null>(null);
   // Skip first run of filter effect (initial complexes loaded by geo effect)
   const skipFirstFilterEffect = useRef(true);
   const { openMap } = useMapContext();
@@ -405,6 +407,7 @@ const Home: React.FC = () => {
                     complex={complex}
                     isFavorite={favoriteComplexIds.has(complex.id)}
                     onToggleFavorite={handleToggleComplexFavorite}
+                    onReviewOpen={(cId, cName) => setReviewTarget({ complexId: cId, complexName: cName })}
                     onSelect={() => {
                       setSelectedComplex(complex);
                       setIsComplexDialogOpen(true);
@@ -548,6 +551,17 @@ const Home: React.FC = () => {
             />
           </div>
         </>
+      )}
+
+      {/* Dialog: reseñas de un complejo */}
+      {reviewTarget && (
+        <ReviewsDialog
+          isOpen={!!reviewTarget}
+          onClose={() => setReviewTarget(null)}
+          complexId={reviewTarget.complexId}
+          complexName={reviewTarget.complexName}
+          userBookings={bookings}
+        />
       )}
 
       {/* Dialog: canchas de un complejo */}

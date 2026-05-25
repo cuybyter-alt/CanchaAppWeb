@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { Bell, MapPin, Search, LogOut, User, Shield, Menu, X } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, Link } from 'react-router-dom';
 import authService, { tokenStorage } from '../../services/AuthService';
 import { useAuth } from '../../context/AuthContext';
+import { useNotifications } from '../../context/NotificationsContext';
 
 interface TopbarProps {
   onSearch?: (query: string) => void;
@@ -17,6 +18,7 @@ export function Topbar({ onSearch, searchValue = '', sidebarOpen: _sidebarOpen, 
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
   const { user } = useAuth();
+  const { unreadCount } = useNotifications();
   
   // Use authService to check authentication
   const isAuthenticated = authService.isAuthenticated();
@@ -121,16 +123,24 @@ export function Topbar({ onSearch, searchValue = '', sidebarOpen: _sidebarOpen, 
           </button>
 
           {/* Notifications */}
-          <button
+          <Link
+            to="/notifications"
             className="relative w-9 h-9 md:w-10 md:h-10 rounded-[var(--radius-md)] border-none cursor-pointer flex items-center justify-center
               bg-white/8 text-white/70 transition-all duration-[var(--duration-fast)]
-              hover:bg-white/15 hover:text-white hover:scale-105 active:scale-95"
+              hover:bg-white/15 hover:text-white hover:scale-105 active:scale-95 no-underline"
           >
             <Bell className="w-4 h-4" />
-            {isAuthenticated && (
-              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 md:w-2.5 md:h-2.5 bg-[var(--color-accent)] rounded-full border-2 border-[var(--color-text)] animate-ping" />
+            {isAuthenticated && unreadCount > 0 && (
+              <span className="absolute -top-0.5 -right-0.5 min-w-[18px] h-[18px] flex items-center justify-center
+                bg-[var(--color-accent)] rounded-full border-2 border-[var(--color-text)]
+                text-[10px] font-black text-white px-1 leading-none">
+                {unreadCount > 99 ? '99+' : unreadCount}
+              </span>
             )}
-          </button>
+            {isAuthenticated && unreadCount === 0 && (
+              <span className="absolute -top-0.5 -right-0.5 w-2 h-2 md:w-2.5 md:h-2.5 bg-[var(--color-primary)] rounded-full border-2 border-[var(--color-text)]" />
+            )}
+          </Link>
           
           {/* User Menu - Desktop */}
           {isAuthenticated ? (

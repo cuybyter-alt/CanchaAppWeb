@@ -616,7 +616,6 @@ export function ReviewsDialog({
                 {otherReviews.map((r) => (
                   <ReviewItem key={r.id} review={r} isOwn={false} isLoggedIn={currentUserId !== null} />
                 ))}
-                ))}
 
                 {/* Load more */}
                 {hasMore && (

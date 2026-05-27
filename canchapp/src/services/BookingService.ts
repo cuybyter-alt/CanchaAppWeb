@@ -266,7 +266,9 @@ const bookingService = {
   getMyBookings: async (params?: {
     page?: number;
     page_size?: number;
-    status?: 'active' | 'canceled' | 'inactive';
+    /** Valor que se envía tal cual al backend como ?status=. Los estados reales del backend son:
+     *  pending | accepted | rejected | confirmed | canceled */
+    status?: 'pending' | 'accepted' | 'rejected' | 'confirmed' | 'canceled';
     is_approved?: boolean;
     is_past?: boolean;
   }): Promise<Booking[]> => {

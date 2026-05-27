@@ -90,10 +90,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             setUser(tokenStorage.getUser());
         }
         } else {
-        // Firebase cerró sesión → limpiamos todo
+        // Firebase no tiene sesión activa.
+        // Solo limpiar si tampoco hay tokens del backend (login por email/contraseña).
+        // Si hay tokens de backend, el usuario inició sesión sin Google → preservar estado.
         setFirebaseUser(null);
-        setUser(null);
-        tokenStorage.clear();
+        if (!authService.isAuthenticated()) {
+          setUser(null);
+          tokenStorage.clear();
+        } else {
+          setUser(tokenStorage.getUser());
+        }
         }
 
         setLoading(false);

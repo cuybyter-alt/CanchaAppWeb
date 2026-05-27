@@ -318,7 +318,7 @@ export function ReviewsDialog({
     (b) =>
       b.status === 'confirmed' &&
       !!b.startIso && new Date(b.startIso) < new Date() &&
-      (b.complexId
+      (b.complexId && b.complexId !== ''
         ? b.complexId === complexId
         : b.complexName.trim().toLowerCase() === complexName.trim().toLowerCase()),
   ) ?? null;

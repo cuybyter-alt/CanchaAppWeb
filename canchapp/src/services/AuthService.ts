@@ -9,6 +9,7 @@ export interface UserOutput {
   f_name: string;
   l_name: string;
   role_name: string;
+  role_names?: string[];
   status: string;
   avatar_url: string | null;
   is_guest: boolean;
@@ -63,8 +64,14 @@ export const tokenStorage = {
   },
   getAccess: () => localStorage.getItem("access_token"),
   getRefresh: () => localStorage.getItem("refresh_token"),
-  saveUser: (user: UserOutput) =>
-    localStorage.setItem("user", JSON.stringify(user)),
+  saveUser: (user: UserOutput) => {
+    // Normalize: derive role_name from role_names if missing
+    const normalized: UserOutput = {
+      ...user,
+      role_name: user.role_name || user.role_names?.[0] || '',
+    };
+    localStorage.setItem("user", JSON.stringify(normalized));
+  },
   getUser: (): UserOutput | null => {
     const raw = localStorage.getItem("user");
     if (!raw) return null;
@@ -275,6 +282,33 @@ const authService = {
       { email }
     );
     return res.message;
+  },
+
+  /**
+   * POST /api/identity/auth/password-reset/verify-otp/
+   * Valida el OTP de 6 dígitos. Si es correcto, el backend confirma y
+   * permite avanzar al paso de nueva contraseña.
+   */
+  verifyOtp: async (email: string, otp_code: string): Promise<void> => {
+    await ApiClient.post<ApiResponse<{ email: string; otp_code: string }>>(
+      "/identity/auth/password-reset/verify-otp/",
+      { email, otp_code }
+    );
+  },
+
+  /**
+   * POST /api/identity/auth/password-reset/confirm/
+   * Establece la nueva contraseña usando el email + OTP ya verificado.
+   */
+  confirmPasswordReset: async (
+    email: string,
+    otp_code: string,
+    new_password: string
+  ): Promise<void> => {
+    await ApiClient.post<ApiResponse<unknown>>(
+      "/identity/auth/password-reset/confirm/",
+      { email, otp_code, new_password }
+    );
   },
 
   isAuthenticated: (): boolean => !!tokenStorage.getAccess(),

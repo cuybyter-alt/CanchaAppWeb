@@ -10,6 +10,8 @@ import type { NearbyComplex } from '../types/map';
 import type { Booking, ComplexField, ComplexFieldType, ComplexListItem, Field, TimeSlotData } from '../types/field';
 import complexesService from '../services/ComplexesService';
 import favoritesService from '../services/FavoritesService';
+import bookingService from '../services/BookingService';
+import authService from '../services/AuthService';
 import notify from '../services/toast';
 import { formatPrice } from '../lib/utils';
 
@@ -138,6 +140,17 @@ const Fields: React.FC = () => {
 
     return () => { cancelled = true; };
   }, [debouncedQuery]);
+
+  // Load past bookings so ReviewsDialog can verify review eligibility
+  useEffect(() => {
+    if (!authService.isAuthenticated()) return;
+    let cancelled = false;
+    bookingService
+      .getMyBookings({ is_past: true })
+      .then((data) => { if (!cancelled) setBookings(data); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
 
   // Load favorite IDs
   useEffect(() => {

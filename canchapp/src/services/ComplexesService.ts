@@ -226,6 +226,52 @@ const haversineKm = (lat1: number, lng1: number, lat2: number, lng2: number): nu
 };
 
 const complexesService = {
+  /**
+   * GET /api/complexes/manager/list/
+   * Returns all complexes where the authenticated user is owner OR active manager.
+   * Uses JWT — no owner_id param needed.
+   */
+  async getManagerComplexes(params: {
+    search?: string;
+    city?: string;
+    status?: 'active' | 'inactive';
+    pageSize?: number;
+    page?: number;
+  } = {}): Promise<ComplexListItem[]> {
+    const query = new URLSearchParams();
+    query.set('page_size', String(params.pageSize ?? 100));
+    if (params.page !== undefined) query.set('page', String(params.page));
+    if (params.search?.trim()) query.set('search', params.search.trim());
+    if (params.city?.trim()) query.set('city', params.city.trim());
+    if (params.status) query.set('status', params.status);
+
+    const res = await ApiClient.get<ApiResponse<unknown>>(
+      `/complexes/manager/list/?${query.toString()}`,
+      { withAuth: true },
+    );
+    const items = extractArray(res.data);
+
+    return items
+      .map((item): ComplexListItem | null => {
+        const id = asString(item.complex_id) ?? asString(item.id) ?? asString(item.uuid);
+        if (!id) return null;
+        return {
+          id,
+          name: asString(item.name) ?? 'Complejo deportivo',
+          city: asString(item.city) ?? '',
+          address: asString(item.address),
+          latitude: asNumber(item.latitude),
+          longitude: asNumber(item.longitude),
+          minPrice: asNumber(item.min_price) ?? 0,
+          maxPrice: asNumber(item.max_price) ?? 0,
+          fieldsCount: asNumber(item.fields_count) ?? 0,
+          averageRating: asNumber(item.average_rating) ?? 0,
+          reviewCount: asNumber(item.total_reviews) ?? asNumber(item.review_count) ?? 0,
+        };
+      })
+      .filter((item): item is ComplexListItem => item !== null);
+  },
+
   async getComplexes(params: { search?: string; pageSize?: number; ownerId?: string } = {}): Promise<ComplexListItem[]> {
     const query = new URLSearchParams();
     query.set('page_size', String(params.pageSize ?? 100));

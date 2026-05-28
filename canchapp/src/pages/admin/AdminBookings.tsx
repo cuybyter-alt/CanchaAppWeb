@@ -4,6 +4,7 @@ import {
   Building2,
   CalendarCheck,
   Check,
+  CheckCircle2,
   CircleDot,
   Clock3,
   Hand,
@@ -13,7 +14,6 @@ import {
   Smartphone,
   X,
 } from 'lucide-react';
-import { QRCodeSVG } from 'qrcode.react';
 import { tokenStorage } from '../../services/AuthService';
 import bookingService, { type AdminBookingRow } from '../../services/BookingService';
 import ComplexesService from '../../services/ComplexesService';
@@ -21,7 +21,7 @@ import schedulingService from '../../services/SchedulingService';
 import { notify } from '../../services/toast';
 import type { TimeSlotData } from '../../types/field';
 
-type BookingFilter = 'all' | 'active' | 'pending' | 'canceled';
+type BookingFilter = 'all' | 'active' | 'pending' | 'canceled' | 'confirmed';
 
 interface OwnedComplex {
   id: string;
@@ -45,56 +45,8 @@ const filters: { key: BookingFilter; label: string }[] = [
   { key: 'active', label: 'Activas' },
   { key: 'pending', label: 'Pendientes' },
   { key: 'canceled', label: 'Canceladas' },
+  { key: 'confirmed', label: 'Confirmadas' },
 ];
-
-/** Código estable por reserva (mismo ID → mismo código al reabrir el QR). */
-function confirmationCodeFromBookingId(bookingId: string): string {
-  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
-  let code = '';
-  for (let i = 0; i < 8; i += 1) {
-    const idx =
-      (bookingId.charCodeAt(i % bookingId.length) +
-        bookingId.charCodeAt((i * 3) % bookingId.length)) %
-      chars.length;
-    code += chars.charAt(idx);
-  }
-  return code;
-}
-
-function bookingStatusLabel(booking: AdminBookingRow): string {
-  if (booking.status === 'canceled') return 'Cancelada';
-  if (booking.approval === 'approved') return 'Aprobada';
-  return 'Pendiente';
-}
-
-/** Texto legible embebido en el QR (sin depender del backend). */
-function buildBookingQrText(booking: AdminBookingRow, code: string): string {
-  const dateLine = booking.startIso
-    ? new Date(booking.startIso).toLocaleDateString('es-CO', {
-        weekday: 'long',
-        year: 'numeric',
-        month: 'long',
-        day: 'numeric',
-      })
-    : null;
-
-  return [
-    'CANCHAPP - Reserva',
-    '------------------------',
-    `Codigo: ${code}`,
-    `Cliente: ${booking.customerName}`,
-    `Complejo: ${booking.complexName}`,
-    `Cancha: ${booking.fieldName}`,
-    dateLine ? `Fecha: ${dateLine}` : null,
-    `Horario: ${booking.timeRange}`,
-    `Telefono: ${booking.phone}`,
-    `Total: ${booking.totalLabel}`,
-    `Estado: ${bookingStatusLabel(booking)}`,
-    `ID: ${booking.id}`,
-  ]
-    .filter((line): line is string => Boolean(line))
-    .join('\n');
-}
 
 const AdminBookings: React.FC = () => {
   const userId = tokenStorage.getUser()?.user_id ?? null;
@@ -103,8 +55,9 @@ const AdminBookings: React.FC = () => {
   const [bookings, setBookings] = useState<AdminBookingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [selectedBooking, setSelectedBooking] = useState<AdminBookingRow | null>(null);
-  const [confirmationCode, setConfirmationCode] = useState('');
+  const [confirmingBooking, setConfirmingBooking] = useState<AdminBookingRow | null>(null);
+  const [confirmInput, setConfirmInput] = useState('');
+  const [confirming, setConfirming] = useState(false);
   const [showManualForm, setShowManualForm] = useState(false);
 
   const [complexes, setComplexes] = useState<OwnedComplex[]>([]);
@@ -125,6 +78,13 @@ const AdminBookings: React.FC = () => {
   };
 
   const getBookingBadge = (booking: AdminBookingRow): BookingBadge => {
+    if (booking.status === 'confirmed') {
+      return {
+        label: 'Confirmada',
+        className: 'bg-emerald-600 text-white',
+      };
+    }
+
     if (booking.status === 'canceled') {
       return {
         label: 'Cancelada',
@@ -272,11 +232,13 @@ const AdminBookings: React.FC = () => {
     const active = bookings.filter((booking) => booking.status === 'active').length;
     const pending = bookings.filter((booking) => booking.status === 'active' && booking.approval === 'pending').length;
     const canceled = bookings.filter((booking) => booking.status === 'canceled').length;
+    const confirmed = bookings.filter((booking) => booking.status === 'confirmed').length;
     return {
       all: bookings.length,
       active,
       pending,
       canceled,
+      confirmed,
     };
   }, [bookings]);
 
@@ -285,6 +247,7 @@ const AdminBookings: React.FC = () => {
       if (filter === 'all') return true;
       if (filter === 'active') return booking.status === 'active';
       if (filter === 'canceled') return booking.status === 'canceled';
+      if (filter === 'confirmed') return booking.status === 'confirmed';
       return booking.status === 'active' && booking.approval === 'pending';
     });
   }, [bookings, filter]);
@@ -348,15 +311,31 @@ const AdminBookings: React.FC = () => {
     }
   };
 
-  const openQr = (booking: AdminBookingRow) => {
-    setSelectedBooking(booking);
-    setConfirmationCode(confirmationCodeFromBookingId(booking.id));
+  const openConfirm = (booking: AdminBookingRow) => {
+    setConfirmingBooking(booking);
+    setConfirmInput('');
   };
 
-  const qrPayload = useMemo(() => {
-    if (!selectedBooking || !confirmationCode) return '';
-    return buildBookingQrText(selectedBooking, confirmationCode);
-  }, [selectedBooking, confirmationCode]);
+  const handleConfirmCheckin = async () => {
+    if (!confirmingBooking || !confirmInput.trim()) return;
+    setConfirming(true);
+    try {
+      const code = confirmInput.trim();
+      const isToken = code.length > 10;
+      await bookingService.confirmBookingByToken(
+        isToken ? code : undefined,
+        isToken ? undefined : code,
+      );
+      await reloadBookingsForComplexes(complexes);
+      notify.success('¡Check-in confirmado!');
+      setConfirmingBooking(null);
+      setConfirmInput('');
+    } catch (err) {
+      notify.error((err as any)?.message || 'Error al confirmar la reserva');
+    } finally {
+      setConfirming(false);
+    }
+  };
 
   return (
     <div className="p-5 sm:p-8 space-y-6">
@@ -582,21 +561,28 @@ const AdminBookings: React.FC = () => {
 
                   <button
                     onClick={() => approveBooking(booking.id)}
-                    disabled={booking.status === 'canceled' || booking.approval === 'approved'}
+                    disabled={booking.status === 'canceled' || booking.status === 'confirmed' || booking.approval === 'approved'}
                     className="px-3 py-1.5 rounded-full bg-[var(--color-primary)] text-white text-sm font-extrabold inline-flex items-center gap-1.5 shadow-[var(--shadow-primary)] transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-55 disabled:cursor-not-allowed"
                   >
                     <Check className="w-3.5 h-3.5" />
                     Aprobar
                   </button>
 
-                  <button
-                    onClick={() => openQr(booking)}
-                    disabled={booking.status === 'canceled'}
-                    className="px-3 py-1.5 rounded-full border border-[var(--color-border)] text-[var(--color-text-2)] bg-white text-sm font-extrabold inline-flex items-center gap-1.5 hover:border-[var(--color-primary)] hover:-translate-y-0.5 transition-all active:scale-95 disabled:opacity-55 disabled:cursor-not-allowed"
-                  >
-                    <QrCode className="w-3.5 h-3.5" />
-                    Ver QR
-                  </button>
+                  {booking.status === 'confirmed' ? (
+                    <span className="px-3 py-1.5 rounded-full bg-emerald-600 text-white text-sm font-extrabold inline-flex items-center gap-1.5">
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      Confirmada
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => openConfirm(booking)}
+                      disabled={booking.status === 'canceled'}
+                      className="px-3 py-1.5 rounded-full border border-[var(--color-border)] text-[var(--color-text-2)] bg-white text-sm font-extrabold inline-flex items-center gap-1.5 hover:border-emerald-500 hover:text-emerald-700 hover:-translate-y-0.5 transition-all active:scale-95 disabled:opacity-55 disabled:cursor-not-allowed"
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                      Confirmar
+                    </button>
+                  )}
 
                   <button
                     onClick={() => cancelBooking(booking.id)}
@@ -625,62 +611,73 @@ const AdminBookings: React.FC = () => {
         </div>
       )}
 
-      {selectedBooking && (
+      {confirmingBooking && (
         <div
           className="fixed inset-0 z-50 bg-black/45 backdrop-blur-[2px] flex items-center justify-center p-4"
-          onClick={() => setSelectedBooking(null)}
+          onClick={() => !confirming && setConfirmingBooking(null)}
         >
           <div
             className="w-full max-w-sm bg-[var(--color-surface)] rounded-[var(--radius-2xl)] p-5 border border-[var(--color-border)] shadow-[var(--shadow-primary)]"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="flex items-center justify-between mb-3">
-              <p className="font-extrabold text-[var(--color-text)]">Verificar Reserva</p>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <p className="font-extrabold text-[var(--color-text)]">Confirmar Check-in</p>
+                <p className="text-xs text-[var(--color-text-3)] font-semibold mt-0.5">
+                  {confirmingBooking.customerName} · {confirmingBooking.fieldName}
+                </p>
+              </div>
               <button
-                onClick={() => setSelectedBooking(null)}
-                className="w-8 h-8 rounded-full bg-[var(--color-surf2)] inline-flex items-center justify-center hover:bg-[var(--color-border)]"
+                onClick={() => !confirming && setConfirmingBooking(null)}
+                className="w-8 h-8 rounded-full bg-[var(--color-surf2)] inline-flex items-center justify-center hover:bg-[var(--color-border)] transition-colors"
               >
                 <X className="w-4 h-4" />
               </button>
             </div>
 
-            <p className="text-sm text-[var(--color-text-3)] mb-3 text-center font-semibold">
-              {selectedBooking.customerName}
-            </p>
+            <div className="mb-4 p-3 bg-[var(--color-surf2)] rounded-[var(--radius-lg)] text-xs text-[var(--color-text-3)] font-semibold space-y-1">
+              <p>Pide al cliente que muestre su código y:</p>
+              <p>• Ingresa el <strong className="text-[var(--color-text)]">código corto</strong> (ej: <code>AB3XPQ</code>)</p>
+              <p>• O pega el token completo si usas un lector de QR</p>
+            </div>
 
-            <p className="text-[11px] text-[var(--color-text-3)] text-center mb-2 font-semibold">
-              Escanea para ver los datos de la reserva
-            </p>
-
-            <div className="rounded-[var(--radius-xl)] border border-[var(--color-border)] p-5 text-center mb-3 bg-white">
-              <QRCodeSVG
-                value={qrPayload}
-                size={180}
-                level="M"
-                includeMargin
-                className="mx-auto"
+            <div className="mb-4">
+              <label className="block mb-1.5 font-extrabold text-sm text-[var(--color-text-2)]">
+                Código del cliente *
+              </label>
+              <input
+                value={confirmInput}
+                onChange={(e) => setConfirmInput(e.target.value.toUpperCase())}
+                placeholder="Ej: AB3XPQ"
+                className="w-full h-10 px-3 rounded-[var(--radius-md)] border-[1.5px] border-[var(--color-border)] bg-white font-mono font-extrabold text-sm tracking-widest text-center focus:outline-none focus:border-emerald-500"
+                autoFocus
+                disabled={confirming}
               />
             </div>
 
-            <div className="rounded-[var(--radius-xl)] border border-dashed border-[var(--color-primary)] p-4 text-center mb-3 bg-[var(--color-surf2)]">
-              <p className="text-xs text-[var(--color-text-3)] font-bold mb-2">Código de Confirmación</p>
-              <p className="font-extrabold text-lg tracking-widest mt-3 text-[var(--color-text)]">
-                {confirmationCode}
-              </p>
+            <div className="flex gap-2">
+              <button
+                onClick={() => setConfirmingBooking(null)}
+                disabled={confirming}
+                className="flex-1 px-4 py-2.5 rounded-[var(--radius-md)] border border-[var(--color-border)] bg-white text-[var(--color-text-2)] font-extrabold text-sm hover:border-[var(--color-primary)] transition-colors disabled:opacity-60"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={handleConfirmCheckin}
+                disabled={confirming || !confirmInput.trim()}
+                className="flex-1 px-4 py-2.5 rounded-[var(--radius-md)] bg-emerald-600 text-white font-extrabold text-sm shadow-sm hover:-translate-y-0.5 transition-all disabled:opacity-60 disabled:cursor-not-allowed inline-flex items-center justify-center gap-2"
+              >
+                {confirming ? (
+                  <>
+                    <Loader className="w-3.5 h-3.5 animate-spin" />
+                    Confirmando...
+                  </>
+                ) : (
+                  'Confirmar Check-in'
+                )}
+              </button>
             </div>
-
-            <div className="text-sm text-[var(--color-text-2)] font-semibold text-center space-y-1">
-              <p>{selectedBooking.complexName}</p>
-              <p>{selectedBooking.fieldName} • {selectedBooking.timeRange}</p>
-              <p className="text-[var(--color-primary-dark)]">{selectedBooking.totalLabel}</p>
-            </div>
-
-            <button
-              onClick={() => setSelectedBooking(null)}
-              className="mt-4 w-full px-4 py-2.5 rounded-[var(--radius-md)] bg-[var(--color-primary)] text-white font-extrabold text-sm shadow-[var(--shadow-primary)] hover:-translate-y-0.5 transition-all"
-            >
-              Cerrar
-            </button>
           </div>
         </div>
       )}

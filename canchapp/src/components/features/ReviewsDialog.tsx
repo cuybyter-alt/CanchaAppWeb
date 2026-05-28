@@ -315,12 +315,14 @@ export function ReviewsDialog({
 
   // Does the user have a confirmed booking at this complex?
   // Only requires status === 'confirmed' — no time check needed since admin check-in is the gate.
+  // Uses OR so that if IDs don't match we still try name comparison as fallback.
   const confirmedBooking = userBookings.find(
     (b) =>
       b.status === 'confirmed' &&
-      (b.complexId && b.complexId !== ''
-        ? b.complexId === complexId
-        : b.complexName.trim().toLowerCase() === complexName.trim().toLowerCase()),
+      (
+        (b.complexId && b.complexId !== '' && complexId !== '' && b.complexId === complexId) ||
+        b.complexName.trim().toLowerCase() === complexName.trim().toLowerCase()
+      ),
   ) ?? null;
   const hasConfirmedBooking = confirmedBooking !== null;
 

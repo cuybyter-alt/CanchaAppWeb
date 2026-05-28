@@ -112,13 +112,24 @@ const Home: React.FC = () => {
     });
   };
 
-  // Load bookings from API on mount
+  // Load bookings from API on mount (upcoming for display + past for review eligibility)
   useEffect(() => {
     let cancelled = false;
     setBookingsLoading(true);
-    bookingService
-      .getMyBookings()
-      .then((data) => { if (!cancelled) setBookings(data); })
+    Promise.all([
+      bookingService.getMyBookings(),
+      bookingService.getMyBookings({ is_past: true }),
+    ])
+      .then(([upcoming, past]) => {
+        if (cancelled) return;
+        // Merge deduplicating by id; past bookings are needed for ReviewsDialog eligibility
+        const seen = new Set<string>();
+        const merged: typeof upcoming = [];
+        for (const b of [...upcoming, ...past]) {
+          if (!seen.has(b.id)) { seen.add(b.id); merged.push(b); }
+        }
+        setBookings(merged);
+      })
       .catch(() => {/* silent – section just stays empty */})
       .finally(() => { if (!cancelled) setBookingsLoading(false); });
     return () => { cancelled = true; };

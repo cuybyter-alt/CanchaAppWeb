@@ -314,10 +314,10 @@ export function ReviewsDialog({
   const [submitting, setSubmitting] = useState(false);
 
   // Does the user have a confirmed booking at this complex?
+  // Only requires status === 'confirmed' — no time check needed since admin check-in is the gate.
   const confirmedBooking = userBookings.find(
     (b) =>
       b.status === 'confirmed' &&
-      !!b.startIso && new Date(b.startIso) < new Date() &&
       (b.complexId && b.complexId !== ''
         ? b.complexId === complexId
         : b.complexName.trim().toLowerCase() === complexName.trim().toLowerCase()),

@@ -313,18 +313,9 @@ export function ReviewsDialog({
   const [formComment, setFormComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // Does the user have a confirmed booking at this complex?
-  // Only requires status === 'confirmed' — no time check needed since admin check-in is the gate.
-  // Uses OR so that if IDs don't match we still try name comparison as fallback.
-  const confirmedBooking = userBookings.find(
-    (b) =>
-      b.status === 'confirmed' &&
-      (
-        (b.complexId && b.complexId !== '' && complexId !== '' && b.complexId === complexId) ||
-        b.complexName.trim().toLowerCase() === complexName.trim().toLowerCase()
-      ),
-  ) ?? null;
-  const hasConfirmedBooking = confirmedBooking !== null;
+  // No local eligibility gate — backend rejects if the user cannot review.
+  const confirmedBooking = userBookings[0] ?? null;
+  const hasConfirmedBooking = currentUserId !== null;
 
   // ── Load reviews ────────────────────────────────────────────────────────────
   const loadReviews = useCallback(
@@ -398,12 +389,11 @@ export function ReviewsDialog({
         notify.success('Reseña actualizada.');
       } else {
         // Create
-        if (!confirmedBooking) return;
-        const resolvedFieldId = fieldId || confirmedBooking.fieldId;
+        const resolvedFieldId = fieldId || confirmedBooking?.fieldId || '';
         const payload: CreateReviewPayload = {
           complex_id: complexId,
           field_id: resolvedFieldId,
-          booking_id: confirmedBooking.id,
+          booking_id: confirmedBooking?.id || '',
           rating: formRating,
         };
         if (formComment.trim()) payload.comment = formComment.trim();

@@ -15,6 +15,7 @@ import type MapboxGeocoder from '@mapbox/mapbox-gl-geocoder';
  
 interface ComplexItem {
   complex_id: string;
+  owner_id?: string;
   name: string;
   address: string | null;
   city: string | null;
@@ -25,6 +26,7 @@ interface ComplexItem {
   telephones?: string[];
   latitude?: number | null;
   longitude?: number | null;
+  last_image?: { r2_key: string; image_url: string } | null;
 }
  
 interface ApiResponse<T> { data: T; message?: string; }
@@ -543,7 +545,7 @@ const AdminComplexes: React.FC = () => {
     setError(null);
     try {
       const res = await ApiClient.get<ApiResponse<PaginatedData>>(
-        `/complexes/?owner_id=${user.user_id}&page_size=50`,
+        `/complexes/manager/list/?page_size=50`,
         { withAuth: true }
       );
       const items: ComplexItem[] = Array.isArray(res.data)
@@ -747,9 +749,9 @@ const AdminComplexes: React.FC = () => {
             <Building2 className="w-9 h-9 text-[var(--color-primary)]" />
           </div>
           <div>
-            <p className="font-extrabold text-[var(--color-text)] text-xl">Sin complejos registrados</p>
+            <p className="font-extrabold text-[var(--color-text)] text-xl">Sin complejos asignados</p>
             <p className="text-sm text-[var(--color-text-3)] mt-1.5 max-w-xs">
-              Registra tu primer complejo deportivo para empezar a gestionar canchas y reservas.
+              Aún no eres propietario ni gestor de ningún complejo deportivo.
             </p>
           </div>
           <button

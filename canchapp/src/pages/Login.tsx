@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { useNavigate, Link } from "react-router-dom";
+import { useNavigate, Link, useLocation } from "react-router-dom";
 import { FcGoogle } from "react-icons/fc";
 import { SiInstagram, SiTiktok } from "react-icons/si";
 import { MdEmail, MdVisibility, MdVisibilityOff } from "react-icons/md";
@@ -20,7 +20,9 @@ interface LoginProps {
  
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const navigate = useNavigate();
-  const { loginWithGoogle } = useAuth();
+  const location = useLocation();
+  const { loginWithGoogle, refreshUser } = useAuth();
+  const redirectTo: string = (location.state as { redirect?: string } | null)?.redirect ?? '';
  
   const [view, setView] = useState<LoginView>("social");
   const [identifier, setIdentifier] = useState("");
@@ -42,9 +44,12 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     try {
       const result = await authService.login({ identifier, password });
       notify.success("¡Bienvenido de nuevo!", "Sesión iniciada correctamente.");
+      refreshUser();
       onLogin?.();
       const role = result.user?.role_name;
-      if (role === 'Owner' || role === 'Manager') {
+      if (redirectTo) {
+        navigate(redirectTo);
+      } else if (role === 'Owner' || role === 'Manager') {
         navigate('/admin');
       } else {
         navigate('/');

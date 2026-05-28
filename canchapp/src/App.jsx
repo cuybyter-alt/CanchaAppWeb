@@ -24,6 +24,7 @@ import AdminBookings from './pages/admin/AdminBookings'
 import AdminReports from './pages/admin/AdminReports'
 import Notifications from './pages/Notifications'
 import ForgotPassword from './pages/ForgotPassword'
+import InvitationAccept from './pages/InvitationAccept'
 
 function App() {
   return (
@@ -44,6 +45,8 @@ function App() {
         <Route path="/login" element={<Login />} />
         <Route path="/register" element={<Register />} />
         <Route path="/forgot-password" element={<ForgotPassword />} />
+        <Route path="/invitaciones" element={<InvitationAccept />} />
+        <Route path="/invitations/:token" element={<InvitationAccept />} />
 
         {/* Admin routes — Owner & Manager only */}
         <Route element={<RequireAdmin />}>

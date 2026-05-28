@@ -375,16 +375,30 @@ export function Topbar({ onSearch, searchValue = '', sidebarOpen: _sidebarOpen, 
                   </button>
 
                   {isAdmin && (
-                    <button
-                      onClick={() => {
-                        navigate('/admin');
-                        closeMobileMenu();
-                      }}
-                      className="w-full flex items-center gap-3 px-4 py-3 rounded-[var(--radius-lg)] text-left border-none bg-transparent cursor-pointer text-[var(--color-accent)] hover:bg-red-50 transition-all font-bold"
-                    >
-                      <Shield className="w-5 h-5" />
-                      <span>Administración</span>
-                    </button>
+                    <>
+                      <div className="h-px bg-[var(--color-border)] my-1" />
+                      <button
+                        onClick={() => {
+                          navigate('/admin');
+                          closeMobileMenu();
+                        }}
+                        className="w-full flex items-center gap-3 px-4 py-3 rounded-[var(--radius-lg)] text-left border-none cursor-pointer transition-all font-bold
+                          bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)]
+                          hover:bg-[var(--color-primary)] hover:text-white"
+                      >
+                        <Shield className="w-5 h-5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <span className="block">Panel Admin</span>
+                          <span className="text-[11px] font-semibold opacity-70">
+                            {user?.role_name === 'Owner' ? 'Propietario' : 'Manager'}
+                          </span>
+                        </div>
+                        <span className="text-[10px] font-black px-2 py-0.5 rounded-full bg-[var(--color-primary)] text-white">
+                          {user?.role_name}
+                        </span>
+                      </button>
+                      <div className="h-px bg-[var(--color-border)] my-1" />
+                    </>
                   )}
 
                   <button

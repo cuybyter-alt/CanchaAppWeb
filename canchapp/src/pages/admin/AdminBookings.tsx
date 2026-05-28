@@ -172,7 +172,7 @@ const AdminBookings: React.FC = () => {
     setError(null);
 
     try {
-      const complexItems = await ComplexesService.getComplexes({ ownerId: userId, pageSize: 50 });
+      const complexItems = await ComplexesService.getManagerComplexes({ pageSize: 50 });
       const owned = complexItems.map((complex) => ({ id: complex.id, name: complex.name }));
       setComplexes(owned);
 

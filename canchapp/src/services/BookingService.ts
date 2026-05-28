@@ -32,7 +32,7 @@ export interface AdminBookingRow {
   phone: string;
   totalLabel: string;
   totalPrice: number;
-  status: 'active' | 'canceled';
+  status: 'active' | 'canceled' | 'confirmed';
   isManual?: boolean;
   createdByAdmin?: boolean;
   startIso?: string;
@@ -240,7 +240,9 @@ function mapToAdminBookingRow(
     phone: manualMeta?.phone ?? pickPhone(raw, user),
     totalLabel: `$${price.toLocaleString('es-CO')}`,
     totalPrice: price,
-    status: status === 'rejected' || status === 'cancelled' || status === 'canceled' ? 'canceled' : 'active',
+    status: status === 'rejected' || status === 'cancelled' || status === 'canceled' ? 'canceled'
+      : status === 'confirmed' ? 'confirmed'
+      : 'active',
     isManual: (raw.created_by_admin ?? false) as boolean,
     createdByAdmin: (raw.created_by_admin ?? false) as boolean,
     startIso: startDt,
@@ -487,6 +489,32 @@ const bookingService = {
           });
         }
         return created;
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * POST /api/bookings/confirm/
+   * Manager/Owner confirms a player's check-in by entering their QR token or short code.
+   */
+  confirmBookingByToken: async (token?: string, shortCode?: string): Promise<void> => {
+    const body: Record<string, string> = {};
+    if (token) body.token = token;
+    if (shortCode) body.shortCode = shortCode;
+
+    const fetchOnce = async () => {
+      await ApiClient.post<ApiResponse<unknown>>('/bookings/confirm/', body, { withAuth: true });
+    };
+
+    try {
+      await fetchOnce();
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 401) {
+        await authService.refreshToken();
+        await fetchOnce();
+        return;
       }
       throw error;
     }

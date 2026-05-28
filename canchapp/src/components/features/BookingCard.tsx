@@ -1,6 +1,8 @@
 import { useState } from 'react';
-import { Calendar, Clock, CreditCard, MapPin, X as XIcon } from 'lucide-react';
+import { Calendar, Clock, CreditCard, Loader2, MapPin, X as XIcon } from 'lucide-react';
+import { QRCodeSVG } from 'qrcode.react';
 import type { Booking } from '../../types/field';
+import type { BookingConfirmation } from '../../types/notification';
 import { Typography } from '../ui/typography';
 import bookingService from '../../services/BookingService';
 import notify from '../../services/toast';
@@ -119,9 +121,27 @@ function CancelModal({ booking, onConfirm, onClose, loading }: CancelModalProps)
 export function BookingCard({ booking, onCancelled }: BookingCardProps) {
   const [showModal, setShowModal] = useState(false);
   const [cancelling, setCancelling] = useState(false);
+  const [showQrModal, setShowQrModal] = useState(false);
+  const [qrData, setQrData] = useState<BookingConfirmation | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
 
   const canCancel = booking.status !== 'cancelled';
   const locked = isWithinOneHour(booking.startIso);
+
+  const handleShowQr = async () => {
+    setShowQrModal(true);
+    setQrData(null);
+    setQrLoading(true);
+    try {
+      const data = await bookingService.getBookingConfirmation(booking.id);
+      setQrData(data);
+    } catch {
+      notify.error('No se pudo cargar el código de confirmación.');
+      setShowQrModal(false);
+    } finally {
+      setQrLoading(false);
+    }
+  };
 
   const handleConfirmCancel = async () => {
     setCancelling(true);
@@ -154,6 +174,60 @@ export function BookingCard({ booking, onCancelled }: BookingCardProps) {
           onClose={() => !cancelling && setShowModal(false)}
           loading={cancelling}
         />
+      )}
+
+      {showQrModal && (
+        <div
+          className="fixed inset-0 z-[9999] flex items-center justify-center p-4"
+          onClick={() => !qrLoading && setShowQrModal(false)}
+        >
+          <div className="absolute inset-0 bg-black/70 backdrop-blur-sm" />
+          <div
+            className="relative z-10 w-full max-w-sm bg-[var(--color-surface)] rounded-[var(--radius-2xl)] border-[1.5px] border-[var(--color-border)] shadow-[var(--shadow-xl)] p-6 space-y-4"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between">
+              <p className="font-extrabold text-[var(--color-text)]">Tu código de reserva</p>
+              <button
+                onClick={() => setShowQrModal(false)}
+                className="w-8 h-8 rounded-full bg-[var(--color-surf2)] flex items-center justify-center hover:bg-[var(--color-border)] transition-colors"
+              >
+                <XIcon className="w-4 h-4" />
+              </button>
+            </div>
+
+            {qrLoading && (
+              <div className="flex justify-center py-8">
+                <Loader2 className="w-8 h-8 animate-spin text-[var(--color-primary)]" />
+              </div>
+            )}
+
+            {qrData && (
+              <>
+                <div className="rounded-[var(--radius-xl)] border border-[var(--color-border)] p-5 text-center bg-white">
+                  <QRCodeSVG value={qrData.token} size={180} level="M" includeMargin className="mx-auto" />
+                </div>
+
+                <div className="rounded-[var(--radius-xl)] border border-dashed border-[var(--color-primary)] p-4 text-center bg-[var(--color-surf2)]">
+                  <p className="text-xs text-[var(--color-text-3)] font-bold mb-2">Código corto</p>
+                  <p className="font-mono font-extrabold text-2xl tracking-widest text-[var(--color-text)]">
+                    {qrData.short_code}
+                  </p>
+                </div>
+
+                {qrData.used && (
+                  <p className="text-xs text-center font-bold text-amber-600">
+                    ⚠ Este código ya fue utilizado.
+                  </p>
+                )}
+
+                <p className="text-xs text-center text-[var(--color-text-3)] font-semibold">
+                  {booking.complexName} · {booking.fieldName} · {booking.date}
+                </p>
+              </>
+            )}
+          </div>
+        </div>
       )}
 
       <div
@@ -219,7 +293,9 @@ export function BookingCard({ booking, onCancelled }: BookingCardProps) {
         {/* Acciones */}
         <div className="px-4 pb-4 flex gap-2 flex-wrap">
           {booking.status === 'confirmed' && (
-            <button className="inline-flex items-center justify-center gap-2 font-bold transition-all duration-[var(--duration-fast)] cursor-pointer
+            <button
+              onClick={handleShowQr}
+              className="inline-flex items-center justify-center gap-2 font-bold transition-all duration-[var(--duration-fast)] cursor-pointer
               bg-gradient-to-br from-[var(--color-primary-light)] via-[var(--color-primary)] to-[var(--color-primary-dark)]
               text-white shadow-[var(--shadow-primary)] hover:scale-105 active:scale-95
               px-3 py-1.5 text-xs rounded-[var(--radius-md)] flex-1">

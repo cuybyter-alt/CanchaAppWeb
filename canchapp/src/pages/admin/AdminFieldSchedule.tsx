@@ -34,6 +34,8 @@ const DAYS_SHORT = ['LUN', 'MAR', 'MIÉ', 'JUE', 'VIE', 'SÁB', 'DOM'];
 const DAYS_FULL  = ['Lunes', 'Martes', 'Miércoles', 'Jueves', 'Viernes', 'Sábado', 'Domingo'];
 const SLOT_DURATIONS = [30, 45, 60, 90, 120];
 
+const DEFAULT_PRICE = '50000';
+
 const DEFAULT_CONFIG: DayConfig = {
   isOpen: true,
   openingTime: '06:00',
@@ -41,6 +43,34 @@ const DEFAULT_CONFIG: DayConfig = {
   slotDuration: 60,
   pricings: [],
 };
+
+function formatPriceForApi(price: string): string {
+  const n = parseFloat(price.replace(/,/g, '').trim());
+  return Number.isFinite(n) && n >= 0 ? n.toFixed(2) : '0.00';
+}
+
+function buildDefaultPricing(openingTime: string, closingTime: string): PricingRow[] {
+  return [
+    {
+      id: `new-${Date.now()}`,
+      startTime: openingTime,
+      endTime: closingTime,
+      price: DEFAULT_PRICE,
+    },
+  ];
+}
+
+/** Sin al menos una tarifa el backend no genera time slots reservables. */
+function ensureDayHasPricing(cfg: DayConfig): DayConfig {
+  if (!cfg.isOpen) return cfg;
+  const hasValid = cfg.pricings.some((p) => p.price.trim() !== '');
+  if (hasValid) return cfg;
+  return { ...cfg, pricings: buildDefaultPricing(cfg.openingTime, cfg.closingTime) };
+}
+
+function getValidPricings(cfg: DayConfig): PricingRow[] {
+  return cfg.pricings.filter((p) => p.price.trim() !== '');
+}
 
 const QUICK_PRESETS = [
   { label: 'Toda la semana', days: [0, 1, 2, 3, 4, 5, 6] },
@@ -195,7 +225,9 @@ function PricingSection({ pricings, onChange, scheduleStart, scheduleEnd }: {
           </span>
         </div>
       </div>
-      <p className="text-[10px] text-[var(--color-text-3)] -mt-2">Configura precios distintos según la hora del día</p>
+      <p className="text-[10px] text-[var(--color-text-3)] -mt-2">
+        Obligatorio: sin al menos un rango de precio el sistema no crea horarios reservables.
+      </p>
 
       {pricings.map(row => (
         <div key={row.id} className="flex items-center gap-2">
@@ -252,8 +284,11 @@ function DayCard({ dayLabel, schedule, onEdit }: {
   onEdit: () => void;
 }) {
   const isOpen = !!schedule;
+  const missingPricing = isOpen && (!schedule?.pricings || schedule.pricings.length === 0);
   return (
-    <div className="relative bg-white rounded-[var(--radius-xl)] border border-[var(--color-border)] p-3 flex flex-col items-center gap-1.5 shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] transition-all min-h-[110px]">
+    <div className={`relative bg-white rounded-[var(--radius-xl)] border p-3 flex flex-col items-center gap-1.5 shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] transition-all min-h-[110px] ${
+      missingPricing ? 'border-amber-400 ring-1 ring-amber-200' : 'border-[var(--color-border)]'
+    }`}>
       <button
         onClick={onEdit}
         className="absolute top-2 right-2 w-6 h-6 rounded-full flex items-center justify-center hover:bg-[var(--color-primary-tint)] transition-colors"
@@ -273,6 +308,9 @@ function DayCard({ dayLabel, schedule, onEdit }: {
             <p className="text-[9px] text-[var(--color-text-3)]">—</p>
             <p className="text-[9px] font-extrabold text-[var(--color-primary)]">{to12h(schedule.closing_time.slice(0, 5))}</p>
           </div>
+          {missingPricing && (
+            <p className="text-[8px] font-extrabold text-amber-700 text-center leading-tight">Sin tarifa — edita y guarda</p>
+          )}
         </>
       ) : (
         <>
@@ -297,7 +335,7 @@ function DayConfigDialog({ dayLabel, initialConfig, onSave, onCancel, onApplyAll
   onDelete?: () => void;
   saving: boolean;
 }) {
-  const [cfg, setCfg] = useState<DayConfig>(initialConfig);
+  const [cfg, setCfg] = useState<DayConfig>(() => ensureDayHasPricing(initialConfig));
   const [confirmDelete, setConfirmDelete] = useState(false);
 
   const startPct = (toMinutes(cfg.openingTime) / 1440) * 100;
@@ -481,7 +519,7 @@ function DayConfigDialog({ dayLabel, initialConfig, onSave, onCancel, onApplyAll
                     return;
                   }
                 }
-                onSave(cfg);
+                onSave(ensureDayHasPricing(cfg));
               }}
               disabled={saving}
               className="flex-1 py-2.5 rounded-[var(--radius-lg)] bg-[var(--color-primary)] text-white text-sm font-extrabold shadow-[var(--shadow-primary)] hover:bg-[var(--color-primary-dark)] transition-all active:scale-95 disabled:opacity-60 flex items-center justify-center gap-2"
@@ -807,8 +845,20 @@ const AdminFieldSchedule: React.FC = () => {
 
     const pricingResults = await Promise.allSettled([
       ...toDelete.map(p => schedulingService.deleteSchedulePricing(p.pricing_id)),
-      ...toUpdate.map(r => schedulingService.updateSchedulePricing(r.id, { start_time: r.startTime, end_time: r.endTime, price: r.price })),
-      ...toCreate.map(r => schedulingService.createSchedulePricing(scheduleId, { start_time: r.startTime, end_time: r.endTime, price: r.price })),
+      ...toUpdate.map((r) =>
+        schedulingService.updateSchedulePricing(r.id, {
+          start_time: r.startTime,
+          end_time: r.endTime,
+          price: formatPriceForApi(r.price),
+        }),
+      ),
+      ...toCreate.map((r) =>
+        schedulingService.createSchedulePricing(scheduleId, {
+          start_time: r.startTime,
+          end_time: r.endTime,
+          price: formatPriceForApi(r.price),
+        }),
+      ),
     ]);
     const pricingFailed = pricingResults.filter(r => r.status === 'rejected').length;
     if (pricingFailed > 0) {
@@ -834,6 +884,12 @@ const AdminFieldSchedule: React.FC = () => {
         return;
       }
 
+      const validPricings = getValidPricings(cfg);
+      if (validPricings.length === 0) {
+        toast.error('Agrega al menos un rango de precio. Sin tarifas no se generan horarios reservables.');
+        return;
+      }
+
       let scheduleId: string;
 
       if (existing) {
@@ -853,13 +909,17 @@ const AdminFieldSchedule: React.FC = () => {
           slot_duration_minutes: cfg.slotDuration,
         });
         scheduleId = created.schedule_id;
-        const validPricings = cfg.pricings.filter(p => p.price.trim() !== '');
-        if (validPricings.length > 0) {
-          await Promise.allSettled(
-            validPricings.map(p =>
-              schedulingService.createSchedulePricing(scheduleId, { start_time: p.startTime, end_time: p.endTime, price: p.price }),
-            ),
-          );
+        const pricingResults = await Promise.allSettled(
+          validPricings.map((p) =>
+            schedulingService.createSchedulePricing(scheduleId, {
+              start_time: p.startTime,
+              end_time: p.endTime,
+              price: formatPriceForApi(p.price),
+            }),
+          ),
+        );
+        if (pricingResults.some((r) => r.status === 'rejected')) {
+          toast.warning('Horario guardado, pero alguna tarifa no se pudo registrar. Revisa los rangos de precio.');
         }
       }
 
@@ -877,8 +937,12 @@ const AdminFieldSchedule: React.FC = () => {
 
   const handleApplyQuick = async (days: number[], cfg: DayConfig) => {
     if (!complexId || !fieldId || days.length === 0) return;
+    const validPricings = getValidPricings(ensureDayHasPricing(cfg));
+    if (validPricings.length === 0) {
+      toast.error('Agrega al menos un rango de precio antes de aplicar.');
+      return;
+    }
     setApplying(true);
-    const validPricings = cfg.pricings.filter(p => p.price.trim() !== '');
     const results = await Promise.allSettled(
       days.map(async day => {
         const existing = scheduleByDay(day);
@@ -897,13 +961,15 @@ const AdminFieldSchedule: React.FC = () => {
             closing_time: `${cfg.closingTime}:00`,
             slot_duration_minutes: cfg.slotDuration,
           });
-          if (validPricings.length > 0) {
-            await Promise.allSettled(
-              validPricings.map(p =>
-                schedulingService.createSchedulePricing(created.schedule_id, { start_time: p.startTime, end_time: p.endTime, price: p.price }),
-              ),
-            );
-          }
+          await Promise.allSettled(
+            validPricings.map((p) =>
+              schedulingService.createSchedulePricing(created.schedule_id, {
+                start_time: p.startTime,
+                end_time: p.endTime,
+                price: formatPriceForApi(p.price),
+              }),
+            ),
+          );
         }
       }),
     );

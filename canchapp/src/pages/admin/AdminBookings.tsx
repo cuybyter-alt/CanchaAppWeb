@@ -17,7 +17,7 @@ import { QRCodeSVG } from 'qrcode.react';
 import { tokenStorage } from '../../services/AuthService';
 import bookingService, { type AdminBookingRow } from '../../services/BookingService';
 import ComplexesService from '../../services/ComplexesService';
-import schedulingService from '../../services/SchedulingService';
+import schedulingService, { localTodayISO } from '../../services/SchedulingService';
 import { notify } from '../../services/toast';
 import type { TimeSlotData } from '../../types/field';
 
@@ -112,10 +112,13 @@ const AdminBookings: React.FC = () => {
   const [timeSlots, setTimeSlots] = useState<TimeSlotData[]>([]);
 
   const [manualFieldId, setManualFieldId] = useState('');
+  const [manualDate, setManualDate] = useState(localTodayISO);
   const [manualSlotId, setManualSlotId] = useState('');
   const [manualClientName, setManualClientName] = useState('');
   const [manualClientPhone, setManualClientPhone] = useState('');
   const [submittingManual, setSubmittingManual] = useState(false);
+  const [slotsLoading, setSlotsLoading] = useState(false);
+  const [slotsHint, setSlotsHint] = useState<string | null>(null);
 
   const formatPrice = (value: number) => `$${value.toLocaleString('es-CO')}`;
 
@@ -236,28 +239,40 @@ const AdminBookings: React.FC = () => {
   }, [userId]);
 
   useEffect(() => {
-    if (!manualFieldId) {
+    if (!manualFieldId || !manualDate) {
       setTimeSlots([]);
       setManualSlotId('');
+      setSlotsHint(null);
       return;
     }
 
     let cancelled = false;
 
     const loadTimeSlots = async () => {
+      setSlotsLoading(true);
+      setSlotsHint(null);
       try {
-        const dateISO = new Date().toISOString().slice(0, 10);
-        const slots = await schedulingService.getFieldTimeSlots(manualFieldId, dateISO);
+        const slots = await schedulingService.getFieldTimeSlots(manualFieldId, manualDate);
         if (cancelled) return;
         const available = slots.filter((slot) => slot.status === 'available');
         setTimeSlots(available);
         setManualSlotId((current) => (available.some((slot) => slot.id === current) ? current : ''));
+        if (slots.length === 0) {
+          setSlotsHint(
+            'No hay franjas para esta fecha. En la cancha, abre Horarios, configura el día con al menos una tarifa y guarda.',
+          );
+        } else if (available.length === 0) {
+          setSlotsHint('Hay franjas pero todas están ocupadas o bloqueadas para esta fecha.');
+        }
       } catch (err) {
         if (cancelled) return;
         setTimeSlots([]);
         setManualSlotId('');
+        setSlotsHint(null);
         const msg = (err as any)?.message || 'No se pudieron cargar los horarios disponibles.';
         notify.error(msg);
+      } finally {
+        if (!cancelled) setSlotsLoading(false);
       }
     };
 
@@ -266,7 +281,7 @@ const AdminBookings: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [manualFieldId]);
+  }, [manualFieldId, manualDate]);
 
   const counts = useMemo(() => {
     const active = bookings.filter((booking) => booking.status === 'active').length;
@@ -418,21 +433,41 @@ const AdminBookings: React.FC = () => {
 
             <div>
               <label className="block mb-1.5 font-extrabold text-sm text-[var(--color-text-2)]">
+                Fecha de la reserva *
+              </label>
+              <input
+                type="date"
+                value={manualDate}
+                min={localTodayISO()}
+                onChange={(e) => {
+                  setManualDate(e.target.value);
+                  setManualSlotId('');
+                }}
+                className="w-full h-10 px-3 rounded-[var(--radius-md)] border-[1.5px] border-[var(--color-border)] bg-white font-semibold text-sm"
+                required
+                disabled={!manualFieldId || slotsLoading}
+              />
+            </div>
+
+            <div>
+              <label className="block mb-1.5 font-extrabold text-sm text-[var(--color-text-2)]">
                 Horario disponible *
               </label>
               <select
                 value={manualSlotId}
                 onChange={(e) => setManualSlotId(e.target.value)}
                 className="w-full h-10 px-3 rounded-[var(--radius-md)] border-[1.5px] border-[var(--color-border)] bg-white font-semibold text-sm disabled:opacity-60"
-                disabled={!manualFieldId || availableSlots.length === 0}
+                disabled={!manualFieldId || slotsLoading || availableSlots.length === 0}
                 required
               >
                 <option value="">
                   {!manualFieldId
                     ? 'Selecciona cancha primero'
-                    : availableSlots.length > 0
-                      ? 'Seleccionar horario'
-                      : 'Sin horarios disponibles'}
+                    : slotsLoading
+                      ? 'Cargando horarios...'
+                      : availableSlots.length > 0
+                        ? 'Seleccionar horario'
+                        : 'Sin horarios disponibles'}
                 </option>
                 {availableSlots.map((slot) => (
                   <option key={slot.id} value={slot.id}>
@@ -440,6 +475,9 @@ const AdminBookings: React.FC = () => {
                   </option>
                 ))}
               </select>
+              {slotsHint && (
+                <p className="mt-1.5 text-xs font-semibold text-amber-700 leading-snug">{slotsHint}</p>
+              )}
             </div>
 
             <div>

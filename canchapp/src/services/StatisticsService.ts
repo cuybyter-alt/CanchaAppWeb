@@ -74,6 +74,22 @@ export interface FieldUsage {
   end_date: string;
   usage: UsageDataPoint[];
 }
+
+export interface AdminComplexUsageSlice {
+  complex_id: string;
+  complex_name: string;
+  usage: UsageDataPoint[];
+}
+
+export interface AdminUsage {
+  interval: string;
+  start_date: string;
+  end_date: string;
+  order: string;
+  total_bookings: number;
+  usage: UsageDataPoint[];
+  complexes: AdminComplexUsageSlice[];
+}
  
 export interface UsageParams {
   start_date: string;
@@ -165,6 +181,23 @@ const statisticsService = {
     });
   },
  
+  /** GET /api/statistics/usage/ — uso agregado admin (total + por complejo) */
+  getAdminUsage: async (params: UsageParams): Promise<AdminUsage> => {
+    const query = new URLSearchParams({
+      start_date: params.start_date,
+      end_date: params.end_date,
+      interval: params.interval,
+      order: params.order,
+    });
+    return withAuthRetry(async () => {
+      const res = await ApiClient.get<ApiResponse<AdminUsage>>(
+        `/statistics/usage/?${query.toString()}`,
+        { withAuth: true },
+      );
+      return res.data;
+    });
+  },
+
   /** GET /api/statistics/complexes/<complex_id>/usage/ */
   getComplexUsage: async (complexId: string, params: UsageParams): Promise<ComplexUsage> => {
     const query = new URLSearchParams({

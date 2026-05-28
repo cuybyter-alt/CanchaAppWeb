@@ -21,6 +21,7 @@ export interface BookingOutput {
 
 export interface AdminBookingRow {
   id: string;
+  userId: string;
   customerName: string;
   approval: 'approved' | 'pending';
   fieldName: string;
@@ -35,6 +36,69 @@ export interface AdminBookingRow {
   isManual?: boolean;
   createdByAdmin?: boolean;
   startIso?: string;
+}
+
+const MANUAL_BOOKING_META_KEY = 'canchapp_manual_booking_meta';
+
+/** El backend no persiste client_name; guardamos metadatos de reservas manuales en local. */
+export const manualBookingMetaStorage = {
+  get(bookingId: string): { clientName: string; phone?: string } | null {
+    try {
+      const raw = localStorage.getItem(MANUAL_BOOKING_META_KEY);
+      if (!raw) return null;
+      const all = JSON.parse(raw) as Record<string, { clientName: string; phone?: string }>;
+      return all[bookingId] ?? null;
+    } catch {
+      return null;
+    }
+  },
+  save(bookingId: string, meta: { clientName: string; phone?: string }) {
+    if (!bookingId) return;
+    try {
+      const raw = localStorage.getItem(MANUAL_BOOKING_META_KEY);
+      const all = raw ? (JSON.parse(raw) as Record<string, { clientName: string; phone?: string }>) : {};
+      all[bookingId] = meta;
+      localStorage.setItem(MANUAL_BOOKING_META_KEY, JSON.stringify(all));
+    } catch {
+      /* ignore quota errors */
+    }
+  },
+};
+
+function formatPersonName(user: {
+  f_name?: string | null;
+  l_name?: string | null;
+  username?: string | null;
+  email?: string;
+}): string {
+  const full = `${user.f_name ?? ''} ${user.l_name ?? ''}`.trim();
+  if (full) return full;
+  if (user.username?.trim()) return user.username.trim();
+  if (user.email?.trim()) return user.email.trim();
+  return 'Usuario';
+}
+
+function pickCustomerName(raw: RawRecord, user?: { f_name?: string | null; l_name?: string | null; username?: string | null; email?: string } | null): string {
+  const nestedUser = raw.user as RawRecord | undefined;
+  const fromApi =
+    (typeof raw.client_name === 'string' && raw.client_name.trim()) ||
+    (typeof raw.customer_name === 'string' && raw.customer_name.trim()) ||
+    (nestedUser && formatPersonName({
+      f_name: nestedUser.f_name as string,
+      l_name: nestedUser.l_name as string,
+      username: nestedUser.username as string,
+      email: nestedUser.email as string,
+    }));
+
+  if (fromApi) return fromApi;
+  if (user) return formatPersonName(user);
+  return '—';
+}
+
+function pickPhone(raw: RawRecord, user?: { phone_number?: string | null } | null): string {
+  if (typeof raw.phone === 'string' && raw.phone.trim()) return raw.phone.trim();
+  if (user?.phone_number?.trim()) return user.phone_number.trim();
+  return '—';
 }
 
 type RawRecord = Record<string, unknown>;
@@ -139,7 +203,10 @@ function mapBackendBooking(raw: RawRecord): Booking {
   };
 }
 
-function mapToAdminBookingRow(raw: RawRecord): AdminBookingRow {
+function mapToAdminBookingRow(
+  raw: RawRecord,
+  user?: { f_name?: string | null; l_name?: string | null; username?: string | null; email?: string; phone_number?: string | null } | null,
+): AdminBookingRow {
   const slot = raw.time_slot as RawRecord | undefined;
   const slotField = slot ? (slot.field as RawRecord | undefined) : undefined;
   const startDt = (raw.start_datetime ?? slot?.start_datetime) as string | undefined;
@@ -148,6 +215,8 @@ function mapToAdminBookingRow(raw: RawRecord): AdminBookingRow {
   const price = (raw.total_price ?? slot?.price ?? 0) as number;
   const status = (raw.status ?? 'active') as string;
   const isApproved = status === 'accepted' || status === 'confirmed' || (raw.is_approved as boolean);
+  const bookingId = (raw.booking_id ?? raw.id ?? '') as string;
+  const manualMeta = manualBookingMetaStorage.get(bookingId);
 
   let timeRange = '—';
   if (startDt && endDt) {
@@ -159,15 +228,16 @@ function mapToAdminBookingRow(raw: RawRecord): AdminBookingRow {
   }
 
   return {
-    id: (raw.booking_id ?? raw.id ?? '') as string,
-    customerName: (raw.client_name ?? raw.customer_name ?? '—') as string,
+    id: bookingId,
+    userId: String(raw.user_id ?? ''),
+    customerName: manualMeta?.clientName ?? pickCustomerName(raw, user),
     approval: isApproved ? 'approved' : 'pending',
     fieldName,
     fieldId: (raw.field_id ?? slotField?.field_id ?? '') as string,
     complexName: (raw.complex_name ?? '—') as string,
     timeSlotId: (raw.time_slot_id ?? '') as string,
     timeRange,
-    phone: (raw.phone ?? '+57 300 000 0000') as string,
+    phone: manualMeta?.phone ?? pickPhone(raw, user),
     totalLabel: `$${price.toLocaleString('es-CO')}`,
     totalPrice: price,
     status: status === 'rejected' || status === 'cancelled' || status === 'canceled' ? 'canceled' : 'active',
@@ -175,6 +245,34 @@ function mapToAdminBookingRow(raw: RawRecord): AdminBookingRow {
     createdByAdmin: (raw.created_by_admin ?? false) as boolean,
     startIso: startDt,
   };
+}
+
+async function enrichAdminBookingsFromApi(items: RawRecord[]): Promise<AdminBookingRow[]> {
+  const userCache = new Map<string, Awaited<ReturnType<typeof authService.getUserProfile>> | null>();
+  const userIds = [
+    ...new Set(
+      items
+        .map((item) => String(item.user_id ?? ''))
+        .filter((id) => id.length > 0),
+    ),
+  ];
+
+  await Promise.all(
+    userIds.map(async (userId) => {
+      try {
+        const profile = await authService.getUserProfile(userId);
+        userCache.set(userId, profile);
+      } catch {
+        userCache.set(userId, null);
+      }
+    }),
+  );
+
+  return items.map((item) => {
+    const userId = String(item.user_id ?? '');
+    const user = userId ? userCache.get(userId) ?? null : null;
+    return mapToAdminBookingRow(item, user);
+  });
 }
 
 const bookingService = {
@@ -315,7 +413,8 @@ const bookingService = {
 
     const fetchOnce = async () => {
       const res = await ApiClient.get<unknown>(path, { withAuth: true });
-      return extractItems(res).map(mapToAdminBookingRow);
+      const items = extractItems(res);
+      return enrichAdminBookingsFromApi(items);
     };
 
     try {
@@ -352,25 +451,42 @@ const bookingService = {
     }
   },
 
-  createAdminBooking: async (timeSlotId: string, clientName: string, clientPhone?: string): Promise<BookingOutput> => {    const fetchOnce = async () => {
-      const res = await ApiClient.post<ApiResponse<BookingOutput>>('/bookings/', {
-        time_slot_id: timeSlotId,
-        client_name: clientName,
-        phone: clientPhone || '',
-        created_by_admin: true,
-      }, {
-        withAuth: true,
-      });
+  createAdminBooking: async (timeSlotId: string, clientName: string, clientPhone?: string): Promise<BookingOutput> => {
+    const fetchOnce = async () => {
+      const res = await ApiClient.post<ApiResponse<BookingOutput>>(
+        '/bookings/',
+        {
+          time_slot_id: timeSlotId,
+          client_name: clientName,
+          phone: clientPhone || '',
+          created_by_admin: true,
+        },
+        { withAuth: true },
+      );
       return res.data;
     };
 
     try {
-      return await fetchOnce();
+      const created = await fetchOnce();
+      if (created.booking_id && clientName.trim()) {
+        manualBookingMetaStorage.save(created.booking_id, {
+          clientName: clientName.trim(),
+          phone: clientPhone?.trim() || undefined,
+        });
+      }
+      return created;
     } catch (error) {
       const apiError = error as ApiError;
       if (apiError?.status === 401) {
         await authService.refreshToken();
-        return await fetchOnce();
+        const created = await fetchOnce();
+        if (created.booking_id && clientName.trim()) {
+          manualBookingMetaStorage.save(created.booking_id, {
+            clientName: clientName.trim(),
+            phone: clientPhone?.trim() || undefined,
+          });
+        }
+        return created;
       }
       throw error;
     }

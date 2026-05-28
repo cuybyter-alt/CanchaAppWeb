@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   BarChart3,
@@ -6,11 +6,14 @@ import {
   LogOut,
   Lock,
   Mail,
+  MapPin,
+  Phone,
   Save,
   Shield,
   Sparkles,
   User,
 } from 'lucide-react';
+import type { ApiError } from '../services/ApiClient';
 import { tokenStorage, type UpdateProfilePayload, type UserOutput } from '../services/AuthService';
 import bookingService from '../services/BookingService';
 import favoritesService from '../services/FavoritesService';
@@ -24,6 +27,8 @@ interface ProfileData {
   lastName: string;
   email: string;
   avatarUrl: string;
+  location: string;
+  phoneNumber: string;
 }
 
 const buildProfile = (user = tokenStorage.getUser()): ProfileData => ({
@@ -32,6 +37,8 @@ const buildProfile = (user = tokenStorage.getUser()): ProfileData => ({
   lastName: user?.l_name ?? '',
   email: user?.email ?? '',
   avatarUrl: user?.avatar_url ?? '',
+  location: user?.location ?? '',
+  phoneNumber: user?.phone_number ?? '',
 });
 
 const normalizeValue = (value: string): string | null => {
@@ -54,6 +61,13 @@ const Profile: React.FC = () => {
   const activeLoadKey = visibleUser?.user_id ?? (accessToken ? 'token' : null);
   const [stats, setStats] = useState({ reservations: 0, favorites: 0 });
   const [statsLoading, setStatsLoading] = useState(true);
+  const [showPasswordForm, setShowPasswordForm] = useState(false);
+  const [oldPassword, setOldPassword] = useState('');
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+  const [passwordError, setPasswordError] = useState<string | null>(null);
+  const profileLoadGen = useRef(0);
 
   useEffect(() => {
     if (authLoading) {
@@ -116,6 +130,7 @@ const Profile: React.FC = () => {
     }
 
     let cancelled = false;
+    const loadId = ++profileLoadGen.current;
 
     const loadProfile = async () => {
       setIsLoadingProfile(true);
@@ -123,7 +138,7 @@ const Profile: React.FC = () => {
 
       try {
         const backendProfile = await authService.getCurrentUserProfile();
-        if (cancelled) return;
+        if (cancelled || loadId !== profileLoadGen.current) return;
 
         tokenStorage.saveUser(backendProfile);
         refreshUser();
@@ -131,14 +146,14 @@ const Profile: React.FC = () => {
         setProfile(buildProfile(backendProfile));
       } catch (error) {
         console.error('Profile load error:', error);
-        if (cancelled) return;
+        if (cancelled || loadId !== profileLoadGen.current) return;
 
         const cachedUser = tokenStorage.getUser();
         setProfile(buildProfile(cachedUser ?? undefined));
         setProfileUser(cachedUser);
         setProfileError('No se pudo sincronizar el perfil con el backend.');
       } finally {
-        if (!cancelled) {
+        if (!cancelled && loadId === profileLoadGen.current) {
           setIsLoadingProfile(false);
         }
       }
@@ -209,6 +224,46 @@ const Profile: React.FC = () => {
     setIsEditing(false);
   };
 
+  const handleChangePassword = async () => {
+    setPasswordError(null);
+
+    if (!oldPassword || !newPassword || !confirmPassword) {
+      setPasswordError('Completa todos los campos de contraseña.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError('La nueva contraseña debe tener al menos 8 caracteres.');
+      return;
+    }
+    if (newPassword !== confirmPassword) {
+      setPasswordError('La confirmación no coincide con la nueva contraseña.');
+      return;
+    }
+
+    setIsChangingPassword(true);
+    try {
+      await authService.changePassword({
+        old_password: oldPassword,
+        new_password: newPassword,
+      });
+      setOldPassword('');
+      setNewPassword('');
+      setConfirmPassword('');
+      setShowPasswordForm(false);
+      notify.success('Contraseña actualizada', 'Tu contraseña se cambió correctamente.');
+    } catch (error) {
+      const err = error as ApiError;
+      const msg =
+        err.code === 'INVALID_OLD_PASSWORD'
+          ? 'La contraseña actual es incorrecta.'
+          : err.message ?? 'No se pudo cambiar la contraseña.';
+      setPasswordError(msg);
+      notify.error('Error al cambiar contraseña', msg);
+    } finally {
+      setIsChangingPassword(false);
+    }
+  };
+
   const handleLogout = async () => {
     try {
       await authService.logout();
@@ -226,6 +281,7 @@ const Profile: React.FC = () => {
     }
 
     setIsSaving(true);
+    profileLoadGen.current += 1;
 
     try {
       const payload: UpdateProfilePayload = {
@@ -233,13 +289,23 @@ const Profile: React.FC = () => {
         f_name: normalizeValue(profile.firstName),
         l_name: normalizeValue(profile.lastName),
         avatar_url: normalizeValue(profile.avatarUrl),
+        location: normalizeValue(profile.location),
+        phone_number: normalizeValue(profile.phoneNumber),
       };
 
       const updatedUser = await authService.updateCurrentUserProfile(payload);
       tokenStorage.saveUser(updatedUser);
       refreshUser();
       setProfileUser(updatedUser);
-      setProfile(buildProfile(updatedUser));
+      setProfile({
+        username: updatedUser.username ?? '',
+        firstName: updatedUser.f_name ?? '',
+        lastName: updatedUser.l_name ?? '',
+        email: updatedUser.email ?? '',
+        avatarUrl: updatedUser.avatar_url ?? '',
+        location: updatedUser.location ?? profile.location,
+        phoneNumber: updatedUser.phone_number ?? profile.phoneNumber,
+      });
       setIsEditing(false);
       notify.success('Perfil actualizado', 'Los cambios se guardaron en el backend.');
     } catch (error) {
@@ -441,6 +507,33 @@ const Profile: React.FC = () => {
                   />
                 </div>
 
+                <div className="animate-fade-in">
+                  <label className="block text-xs font-extrabold text-[var(--color-text-3)] uppercase tracking-[0.2em] mb-2">
+                    Teléfono
+                  </label>
+                  <input
+                    type="tel"
+                    value={profile.phoneNumber}
+                    onChange={(e) => setProfile((p) => ({ ...p, phoneNumber: e.target.value }))}
+                    disabled={!isEditing}
+                    placeholder="+57 300 123 4567"
+                    className="w-full h-12 px-4 rounded-[var(--radius-lg)] border-[1.5px] border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] font-semibold outline-none transition-all disabled:opacity-70 disabled:cursor-not-allowed focus:border-[var(--color-primary)] focus:shadow-[var(--shadow-primary)]"
+                  />
+                </div>
+
+                <div className="animate-fade-in">
+                  <label className="block text-xs font-extrabold text-[var(--color-text-3)] uppercase tracking-[0.2em] mb-2">
+                    Ubicación
+                  </label>
+                  <input
+                    value={profile.location}
+                    onChange={(e) => setProfile((p) => ({ ...p, location: e.target.value }))}
+                    disabled={!isEditing}
+                    placeholder="Ciudad, barrio o dirección"
+                    className="w-full h-12 px-4 rounded-[var(--radius-lg)] border-[1.5px] border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] font-semibold outline-none transition-all disabled:opacity-70 disabled:cursor-not-allowed focus:border-[var(--color-primary)] focus:shadow-[var(--shadow-primary)]"
+                  />
+                </div>
+
                 <div className="md:col-span-2 animate-fade-in">
                   <label className="block text-xs font-extrabold text-[var(--color-text-3)] uppercase tracking-[0.2em] mb-2">
                     Avatar URL
@@ -454,6 +547,23 @@ const Profile: React.FC = () => {
                   />
                 </div>
               </div>
+
+              {!isEditing && (profile.phoneNumber || profile.location) && (
+                <div className="mt-4 flex flex-wrap gap-2">
+                  {profile.phoneNumber && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--color-surf2)] text-[var(--color-text-2)] text-xs font-extrabold">
+                      <Phone className="w-3.5 h-3.5 text-[var(--color-primary)]" />
+                      {profile.phoneNumber}
+                    </span>
+                  )}
+                  {profile.location && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--color-surf2)] text-[var(--color-text-2)] text-xs font-extrabold">
+                      <MapPin className="w-3.5 h-3.5 text-[var(--color-primary)]" />
+                      {profile.location}
+                    </span>
+                  )}
+                </div>
+              )}
 
               <div className="mt-6 flex flex-wrap gap-3">
                 {isEditing ? (
@@ -497,9 +607,86 @@ const Profile: React.FC = () => {
                   </div>
                 </div>
 
-                <p className="text-sm font-semibold text-[var(--color-text-3)] leading-6">
-                  Por implementar ....
-                </p>
+                {resolvedUser.is_guest ? (
+                  <p className="text-sm font-semibold text-[var(--color-text-3)] leading-6">
+                    Tu cuenta es de invitado. Conviértela a cuenta completa para establecer una contraseña.
+                  </p>
+                ) : !showPasswordForm ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowPasswordForm(true);
+                      setPasswordError(null);
+                    }}
+                    className="w-full inline-flex items-center justify-center gap-2 px-4 py-2.5 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surf2)] text-[var(--color-text-2)] font-extrabold text-sm hover:border-[var(--color-primary)] hover:text-[var(--color-primary-dark)] transition-all"
+                  >
+                    <Lock className="w-4 h-4" />
+                    Cambiar contraseña
+                  </button>
+                ) : (
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-xs font-extrabold text-[var(--color-text-3)] uppercase tracking-[0.2em] mb-2">
+                        Contraseña actual
+                      </label>
+                      <input
+                        type="password"
+                        value={oldPassword}
+                        onChange={(e) => setOldPassword(e.target.value)}
+                        className="w-full h-11 px-4 rounded-[var(--radius-lg)] border-[1.5px] border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] font-semibold outline-none focus:border-[var(--color-primary)]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-extrabold text-[var(--color-text-3)] uppercase tracking-[0.2em] mb-2">
+                        Nueva contraseña
+                      </label>
+                      <input
+                        type="password"
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
+                        className="w-full h-11 px-4 rounded-[var(--radius-lg)] border-[1.5px] border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] font-semibold outline-none focus:border-[var(--color-primary)]"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-xs font-extrabold text-[var(--color-text-3)] uppercase tracking-[0.2em] mb-2">
+                        Confirmar nueva contraseña
+                      </label>
+                      <input
+                        type="password"
+                        value={confirmPassword}
+                        onChange={(e) => setConfirmPassword(e.target.value)}
+                        onKeyDown={(e) => e.key === 'Enter' && handleChangePassword()}
+                        className="w-full h-11 px-4 rounded-[var(--radius-lg)] border-[1.5px] border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] font-semibold outline-none focus:border-[var(--color-primary)]"
+                      />
+                    </div>
+                    {passwordError && (
+                      <p className="text-sm font-semibold text-[var(--color-accent)]">{passwordError}</p>
+                    )}
+                    <div className="flex gap-2 pt-1">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setShowPasswordForm(false);
+                          setOldPassword('');
+                          setNewPassword('');
+                          setConfirmPassword('');
+                          setPasswordError(null);
+                        }}
+                        className="flex-1 px-3 py-2 rounded-[var(--radius-lg)] border border-[var(--color-border)] text-[var(--color-text-2)] font-extrabold text-sm"
+                      >
+                        Cancelar
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleChangePassword}
+                        disabled={isChangingPassword}
+                        className="flex-1 px-3 py-2 rounded-[var(--radius-lg)] bg-[var(--color-primary)] text-white font-extrabold text-sm shadow-[var(--shadow-primary)] disabled:opacity-60"
+                      >
+                        {isChangingPassword ? 'Guardando...' : 'Actualizar'}
+                      </button>
+                    </div>
+                  </div>
+                )}
               </section>
 
               <section className="bg-[var(--color-surface)] rounded-[var(--radius-2xl)] border-[1.5px] border-[var(--color-border)] shadow-[var(--shadow-md)] p-5 sm:p-6 animate-fade-in">

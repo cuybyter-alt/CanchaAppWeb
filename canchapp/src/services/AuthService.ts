@@ -13,6 +13,8 @@ export interface UserOutput {
   status: string;
   avatar_url: string | null;
   is_guest: boolean;
+  location?: string | null;
+  phone_number?: string | null;
 }
 
 export interface TokenPairOutput {
@@ -40,6 +42,13 @@ export interface UpdateProfilePayload {
   f_name?: string | null;
   l_name?: string | null;
   avatar_url?: string | null;
+  location?: string | null;
+  phone_number?: string | null;
+}
+
+export interface ChangePasswordPayload {
+  old_password: string;
+  new_password: string;
 }
 
 // Wrapper que usa el backend: { data, success, message, meta }
@@ -49,6 +58,98 @@ interface ApiResponse<T> {
   message: string;
   meta?: Record<string, string | number | boolean>;
 }
+
+const asOptionalString = (value: unknown): string | null => {
+  if (value === null || value === undefined) return null;
+  const text = String(value).trim();
+  return text.length > 0 ? text : null;
+};
+
+/** Normaliza el usuario devuelto por el backend (soporta envelope y camelCase). */
+export const parseUserOutput = (raw: unknown): UserOutput => {
+  const source =
+    raw && typeof raw === "object" && "data" in (raw as Record<string, unknown>)
+      ? (raw as ApiResponse<unknown>).data
+      : raw;
+
+  const u = (source ?? {}) as Record<string, unknown>;
+  const roleNames = Array.isArray(u.role_names)
+    ? (u.role_names as string[])
+    : Array.isArray(u.roleNames)
+      ? (u.roleNames as string[])
+      : [];
+
+  return {
+    user_id: String(u.user_id ?? u.userId ?? ""),
+    username: asOptionalString(u.username),
+    email: String(u.email ?? ""),
+    f_name: String(u.f_name ?? u.fName ?? ""),
+    l_name: String(u.l_name ?? u.lName ?? ""),
+    role_names: roleNames,
+    role_name: String(u.role_name ?? u.roleName ?? roleNames[0] ?? ""),
+    status: String(u.status ?? "active"),
+    avatar_url: asOptionalString(u.avatar_url ?? u.avatarUrl),
+    is_guest: Boolean(u.is_guest ?? u.isGuest ?? false),
+    location: asOptionalString(u.location),
+    phone_number: asOptionalString(u.phone_number ?? u.phoneNumber),
+  };
+};
+
+const mergeProfilePayload = (
+  user: UserOutput,
+  payload?: UpdateProfilePayload
+): UserOutput => {
+  if (!payload) return user;
+  return {
+    ...user,
+    location: user.location ?? payload.location ?? null,
+    phone_number: user.phone_number ?? payload.phone_number ?? null,
+  };
+};
+
+const PROFILE_EXTRAS_PREFIX = "canchapp_profile_extras_";
+
+/** Respaldo local cuando el API no devuelve teléfono/ubicación en GET. */
+export const profileExtrasStorage = {
+  get(userId: string): Pick<UserOutput, "location" | "phone_number"> | null {
+    if (!userId) return null;
+    try {
+      const raw = localStorage.getItem(`${PROFILE_EXTRAS_PREFIX}${userId}`);
+      if (!raw) return null;
+      const parsed = JSON.parse(raw) as Record<string, unknown>;
+      return {
+        location: asOptionalString(parsed.location),
+        phone_number: asOptionalString(parsed.phone_number),
+      };
+    } catch {
+      return null;
+    }
+  },
+  save(
+    userId: string,
+    extras: { location?: string | null; phone_number?: string | null }
+  ) {
+    if (!userId) return;
+    localStorage.setItem(
+      `${PROFILE_EXTRAS_PREFIX}${userId}`,
+      JSON.stringify({
+        location: extras.location ?? null,
+        phone_number: extras.phone_number ?? null,
+      })
+    );
+  },
+};
+
+export const enrichUserWithStoredExtras = (user: UserOutput): UserOutput => {
+  if (!user.user_id) return user;
+  const extras = profileExtrasStorage.get(user.user_id);
+  if (!extras) return user;
+  return {
+    ...user,
+    location: user.location ?? extras.location ?? null,
+    phone_number: user.phone_number ?? extras.phone_number ?? null,
+  };
+};
 
 // ─── Token helpers ────────────────────────────────────────────────────────────
 
@@ -65,10 +166,10 @@ export const tokenStorage = {
   getAccess: () => localStorage.getItem("access_token"),
   getRefresh: () => localStorage.getItem("refresh_token"),
   saveUser: (user: UserOutput) => {
-    // Normalize: derive role_name from role_names if missing
+    const enriched = enrichUserWithStoredExtras(user);
     const normalized: UserOutput = {
-      ...user,
-      role_name: user.role_name || user.role_names?.[0] || '',
+      ...enriched,
+      role_name: enriched.role_name || enriched.role_names?.[0] || "",
     };
     localStorage.setItem("user", JSON.stringify(normalized));
   },
@@ -76,7 +177,8 @@ export const tokenStorage = {
     const raw = localStorage.getItem("user");
     if (!raw) return null;
     try {
-      return JSON.parse(raw) as UserOutput;
+      const parsed = JSON.parse(raw) as UserOutput;
+      return enrichUserWithStoredExtras(parsed);
     } catch {
       localStorage.removeItem("user");
       return null;
@@ -97,7 +199,7 @@ const authService = {
       payload
     );
     tokenStorage.save(res.data);
-    tokenStorage.saveUser(res.data.user);
+    tokenStorage.saveUser(enrichUserWithStoredExtras(parseUserOutput(res.data.user)));
     return res.data;
   },
 
@@ -120,20 +222,20 @@ const authService = {
    */
   getCurrentUserProfile: async (): Promise<UserOutput> => {
     try {
-      const res = await ApiClient.get<ApiResponse<UserOutput>>(
+      const res = await ApiClient.get<ApiResponse<unknown>>(
         "/identity/users/me/",
         { withAuth: true }
       );
-      return res.data;
+      return enrichUserWithStoredExtras(parseUserOutput(res));
     } catch (error) {
       const apiError = error as ApiError;
       if (apiError?.status === 401) {
         await authService.refreshToken();
-        const retry = await ApiClient.get<ApiResponse<UserOutput>>(
+        const retry = await ApiClient.get<ApiResponse<unknown>>(
           "/identity/users/me/",
           { withAuth: true }
         );
-        return retry.data;
+        return enrichUserWithStoredExtras(parseUserOutput(retry));
       }
       throw error;
     }
@@ -171,23 +273,36 @@ const authService = {
   updateCurrentUserProfile: async (
     payload: UpdateProfilePayload
   ): Promise<UserOutput> => {
+    const parseUpdateResponse = (res: ApiResponse<unknown>) => {
+      const merged = enrichUserWithStoredExtras(
+        mergeProfilePayload(parseUserOutput(res), payload)
+      );
+      if (merged.user_id) {
+        profileExtrasStorage.save(merged.user_id, {
+          location: merged.location ?? payload.location ?? null,
+          phone_number: merged.phone_number ?? payload.phone_number ?? null,
+        });
+      }
+      return merged;
+    };
+
     try {
-      const res = await ApiClient.put<ApiResponse<UserOutput>>(
+      const res = await ApiClient.put<ApiResponse<unknown>>(
         "/identity/users/me/",
         payload,
         { withAuth: true }
       );
-      return res.data;
+      return parseUpdateResponse(res);
     } catch (error) {
       const apiError = error as ApiError;
       if (apiError?.status === 401) {
         await authService.refreshToken();
-        const retry = await ApiClient.put<ApiResponse<UserOutput>>(
+        const retry = await ApiClient.put<ApiResponse<unknown>>(
           "/identity/users/me/",
           payload,
           { withAuth: true }
         );
-        return retry.data;
+        return parseUpdateResponse(retry);
       }
       throw error;
     }
@@ -236,7 +351,7 @@ const authService = {
       { firebase_id_token: firebaseIdToken, role_names: [roleName] }
     );
     tokenStorage.save(res.data);
-    tokenStorage.saveUser(res.data.user);
+    tokenStorage.saveUser(enrichUserWithStoredExtras(parseUserOutput(res.data.user)));
     return res.data;
   },
 
@@ -309,6 +424,32 @@ const authService = {
       "/identity/auth/password-reset/confirm/",
       { email, otp_code, new_password }
     );
+  },
+
+  /**
+   * POST /api/identity/auth/change-password/
+   * Cambia la contraseña del usuario autenticado (requiere contraseña actual).
+   */
+  changePassword: async (payload: ChangePasswordPayload): Promise<void> => {
+    const fetchOnce = async () => {
+      await ApiClient.post<ApiResponse<unknown>>(
+        "/identity/auth/change-password/",
+        payload,
+        { withAuth: true }
+      );
+    };
+
+    try {
+      await fetchOnce();
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 401 && apiError.code !== "INVALID_OLD_PASSWORD") {
+        await authService.refreshToken();
+        await fetchOnce();
+        return;
+      }
+      throw error;
+    }
   },
 
   isAuthenticated: (): boolean => !!tokenStorage.getAccess(),

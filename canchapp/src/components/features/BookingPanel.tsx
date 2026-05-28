@@ -6,7 +6,7 @@ import { MiniFieldSVG } from '../ui/svg-assets';
 import { formatPrice, formatPriceFull } from '../../lib/utils';
 import authService from '../../services/AuthService';
 import notify from '../../services/toast';
-import schedulingService from '../../services/SchedulingService';
+import schedulingService, { localTodayISO } from '../../services/SchedulingService';
 import bookingService from '../../services/BookingService';
 import type { ApiError } from '../../services/ApiClient';
 
@@ -30,7 +30,7 @@ function generateDates(count = 7) {
   return Array.from({ length: count }, (_, i) => {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
-    const iso = d.toISOString().slice(0, 10);
+    const iso = d.toLocaleDateString('en-CA');
     return {
       id: iso,
       name: DAY_NAMES[d.getDay()],
@@ -78,7 +78,7 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
 
   const isMockFieldId = (fieldId: string): boolean => /^field-\d+/i.test(fieldId);
 
-  const todayISO = dates[0].id;
+  const todayISO = localTodayISO();
   const isToday = selectedDate === todayISO;
 
   useEffect(() => {

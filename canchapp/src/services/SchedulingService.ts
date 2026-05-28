@@ -76,6 +76,10 @@ function defaultAvailability(price: number): TimeSlotData[] {
   });
 }
 
+export function localTodayISO(): string {
+  return new Date().toLocaleDateString('en-CA');
+}
+
 function toTimeSlotData(item: TimeSlotOutput, idx: number): TimeSlotData {
   const start = item.start_datetime ? new Date(item.start_datetime) : null;
   const hh = start ? start.getHours() : 8 + idx;
@@ -89,7 +93,9 @@ function toTimeSlotData(item: TimeSlotOutput, idx: number): TimeSlotData {
     status === 'booked' ||
     status === 'taken' ||
     status === 'reserved' ||
-    status === 'unavailable';
+    status === 'unavailable' ||
+    status === 'blocked' ||
+    status === 'inactive';
 
   return {
     id: item.time_slot_id ?? `slot-${idx}`,

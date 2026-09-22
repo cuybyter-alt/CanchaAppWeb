@@ -313,9 +313,16 @@ export function ReviewsDialog({
   const [formComment, setFormComment] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
-  // No local eligibility gate — backend rejects if the user cannot review.
-  const confirmedBooking = userBookings[0] ?? null;
-  const hasConfirmedBooking = currentUserId !== null;
+  // Reserve confirmed at THIS complex — required by CreateReviewView (booking must belong
+  // to the user, match field_id, be confirmed, and reference this complex).
+  const confirmedBooking =
+    userBookings.find(
+      (b) =>
+        b.status === 'confirmed' &&
+        ((b.complexId && b.complexId !== '' && complexId !== '' && b.complexId === complexId) ||
+          b.complexName.trim().toLowerCase() === complexName.trim().toLowerCase()),
+    ) ?? null;
+  const hasConfirmedBooking = confirmedBooking !== null;
 
   // ── Load reviews ────────────────────────────────────────────────────────────
   const loadReviews = useCallback(
@@ -379,7 +386,7 @@ export function ReviewsDialog({
     try {
       if (userReview) {
         // Update
-        const payload: UpdateReviewPayload = { rating: formRating };
+        const payload: UpdateReviewPayload = { rating: Math.round(formRating) };
         if (formComment.trim()) payload.comment = formComment.trim();
         const updated = await reviewService.updateReview(userReview.id, payload);
         setUserReview(updated);
@@ -388,13 +395,21 @@ export function ReviewsDialog({
         );
         notify.success('Reseña actualizada.');
       } else {
-        // Create
-        const resolvedFieldId = fieldId || confirmedBooking?.fieldId || '';
+        // Create — backend requires a confirmed booking for this complex with real UUIDs.
+        if (!confirmedBooking) {
+          notify.error('Necesitas una reserva confirmada en este complejo para dejar tu reseña.');
+          return;
+        }
+        const resolvedFieldId = fieldId || confirmedBooking.fieldId;
+        if (!resolvedFieldId || !confirmedBooking.id) {
+          notify.error('No se pudo validar tu reserva. Intenta de nuevo.');
+          return;
+        }
         const payload: CreateReviewPayload = {
           complex_id: complexId,
           field_id: resolvedFieldId,
-          booking_id: confirmedBooking?.id || '',
-          rating: formRating,
+          booking_id: confirmedBooking.id,
+          rating: Math.round(formRating),
         };
         if (formComment.trim()) payload.comment = formComment.trim();
         const created = await reviewService.createReview(payload);

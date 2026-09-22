@@ -39,7 +39,7 @@ const reviewService = {
   // ── POST /api/reviews/complex ─────────────────────────────────────────────
   async createReview(payload: CreateReviewPayload): Promise<ReviewOutput> {
     const doFetch = () =>
-      ApiClient.post<ReviewSingleResponse>('/reviews/complex', payload, { withAuth: true });
+      ApiClient.post<ReviewSingleResponse>('/reviews/complex/', payload, { withAuth: true });
     try {
       return (await doFetch()).data;
     } catch (e) {

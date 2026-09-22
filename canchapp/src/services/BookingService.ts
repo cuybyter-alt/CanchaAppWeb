@@ -171,10 +171,11 @@ function mapStatus(raw?: string, isApproved?: boolean): Booking['status'] {
 function mapBackendBooking(raw: RawRecord): Booking {
   const slot = raw.time_slot as RawRecord | undefined;
   const slotField = slot ? (slot.field as RawRecord | undefined) : undefined;
+  const rawField = raw.field as RawRecord | undefined;
   const startDt = (raw.start_datetime ?? slot?.start_datetime) as string | undefined;
   const endDt = (raw.end_datetime ?? slot?.end_datetime) as string | undefined;
-  const fieldName = (raw.field_name ?? slotField?.name ?? '—') as string;
-  const fieldType = (raw.field_type ?? slotField?.field_type ?? raw.sport) as string | undefined;
+  const fieldName = (raw.field_name ?? rawField?.name ?? slotField?.name ?? '—') as string;
+  const fieldType = (raw.field_type ?? rawField?.field_type ?? slotField?.field_type ?? raw.sport) as string | undefined;
   const { sport, sportLabel } = parseSport(fieldType);
   const price = (raw.total_price ?? slot?.price ?? 0) as number;
 
@@ -186,9 +187,9 @@ function mapBackendBooking(raw: RawRecord): Booking {
 
   return {
     id: (raw.booking_id ?? raw.id ?? '') as string,
-    fieldId: (raw.field_id ?? slotField?.field_id ?? '') as string,
-    complexId: (raw.complex_id ?? slotField?.complex_id ?? '') as string,
-    complexName: (raw.complex_name ?? slotField?.complex_name ?? '—') as string,
+    fieldId: (raw.field_id ?? rawField?.field_id ?? rawField?.id ?? slotField?.field_id ?? slotField?.id ?? '') as string,
+    complexId: (raw.complex_id ?? rawField?.complex_id ?? slot?.complex_id ?? '') as string,
+    complexName: (raw.complex_name ?? rawField?.complex_name ?? slotField?.complex_name ?? '—') as string,
     fieldName,
     sport,
     sportLabel,

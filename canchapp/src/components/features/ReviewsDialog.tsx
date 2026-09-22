@@ -2,6 +2,7 @@ import { useCallback, useEffect, useState } from 'react';
 import { CheckCircle, Loader2, Pencil, Star, X } from 'lucide-react';
 import { Dialog } from '../ui/dialog';
 import reviewService from '../../services/ReviewService';
+import complexesService from '../../services/ComplexesService';
 import { tokenStorage } from '../../services/AuthService';
 import { notify } from '../../services/toast';
 import type { Booking } from '../../types/field';
@@ -400,9 +401,30 @@ export function ReviewsDialog({
           notify.error('Necesitas una reserva confirmada en este complejo para dejar tu reseña.');
           return;
         }
-        const resolvedFieldId = fieldId || confirmedBooking.fieldId;
-        if (!resolvedFieldId || !confirmedBooking.id) {
-          notify.error('No se pudo validar tu reserva. Intenta de nuevo.');
+        if (!confirmedBooking.id) {
+          notify.error('No se pudo verificar tu reserva (falta el id). Intenta de nuevo.');
+          return;
+        }
+
+        // Resolve the real field UUID of the booked slot. Prefer explicit ids; fall back
+        // to matching the field by name within this complex when the API omits field_id.
+        let resolvedFieldId = fieldId || confirmedBooking.fieldId;
+        if (!resolvedFieldId && confirmedBooking.fieldName && confirmedBooking.fieldName !== '—') {
+          try {
+            const complexFields = await complexesService.getComplexFields(complexId);
+            const nameMatch = complexFields.find(
+              (f) =>
+                f.name.trim().toLowerCase() === confirmedBooking.fieldName.trim().toLowerCase() ||
+                confirmedBooking.fieldName.toLowerCase().includes(f.name.toLowerCase()),
+            );
+            resolvedFieldId = nameMatch?.fieldId ?? '';
+          } catch {
+            resolvedFieldId = '';
+          }
+        }
+
+        if (!resolvedFieldId) {
+          notify.error('No se pudo verificar tu reserva (falta la cancha). Intenta de nuevo.');
           return;
         }
         const payload: CreateReviewPayload = {

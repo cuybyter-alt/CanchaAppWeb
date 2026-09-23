@@ -201,6 +201,7 @@ function mapBackendBooking(raw: RawRecord): Booking {
     status: mapStatus(raw.status as string, raw.is_approved as boolean),
     price,
     startIso: startDt,
+    endIso: endDt,
   };
 }
 

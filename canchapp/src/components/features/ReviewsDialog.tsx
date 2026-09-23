@@ -316,10 +316,15 @@ export function ReviewsDialog({
 
   // Reserve confirmed at THIS complex — required by CreateReviewView (booking must belong
   // to the user, match field_id, be confirmed, and reference this complex).
+  const isBookingCompleted = (b: Booking): boolean => {
+    const end = b.endIso ?? b.startIso;
+    return !!end && new Date(end).getTime() < Date.now();
+  };
   const confirmedBooking =
     userBookings.find(
       (b) =>
         b.status === 'confirmed' &&
+        isBookingCompleted(b) &&
         ((b.complexId && b.complexId !== '' && complexId !== '' && b.complexId === complexId) ||
           b.complexName.trim().toLowerCase() === complexName.trim().toLowerCase()),
     ) ?? null;
@@ -398,7 +403,7 @@ export function ReviewsDialog({
       } else {
         // Create — backend requires a confirmed booking for this complex with real UUIDs.
         if (!confirmedBooking) {
-          notify.error('Necesitas una reserva confirmada en este complejo para dejar tu reseña.');
+          notify.error('Necesitas una reserva confirmada y ya finalizada en este complejo para dejar tu reseña.');
           return;
         }
         if (!confirmedBooking.id) {
@@ -602,7 +607,7 @@ export function ReviewsDialog({
                   <p className="text-sm text-[var(--color-text-3)] leading-relaxed">
                     Necesitas una{' '}
                     <span className="font-bold text-[var(--color-text-2)]">
-                      reserva confirmada
+                      reserva confirmada y ya finalizada
                     </span>{' '}
                     en este complejo para dejar tu reseña.
                   </p>

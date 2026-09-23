@@ -57,6 +57,8 @@ export interface Booking {
   price: number;
   /** ISO 8601 start datetime, used to distinguish past vs upcoming bookings */
   startIso?: string;
+  /** ISO 8601 end datetime — booking is completed when this is in the past */
+  endIso?: string;
 }
 
 export interface ComplexListItem {

@@ -48,6 +48,8 @@ const filters: { key: BookingFilter; label: string }[] = [
   { key: 'confirmed', label: 'Confirmadas' },
 ];
 
+const ADMIN_PAGE_SIZE = 10;
+
 const AdminBookings: React.FC = () => {
   const userId = tokenStorage.getUser()?.user_id ?? null;
 
@@ -59,6 +61,9 @@ const AdminBookings: React.FC = () => {
   const [confirmInput, setConfirmInput] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [showManualForm, setShowManualForm] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [bookingPages, setBookingPages] = useState<Record<string, number>>({});
+  const [bookingTotals, setBookingTotals] = useState<Record<string, number>>({});
 
   const [complexes, setComplexes] = useState<OwnedComplex[]>([]);
   const [fields, setFields] = useState<AdminFieldOption[]>([]);
@@ -108,29 +113,91 @@ const AdminBookings: React.FC = () => {
     };
   };
 
+  const mergeUniqueBookings = (rows: AdminBookingRow[]): AdminBookingRow[] =>
+    Array.from(new Map(rows.map((booking) => [booking.id, booking])).values())
+      .sort((left, right) => {
+        const leftTime = left.startIso ? new Date(left.startIso).getTime() : 0;
+        const rightTime = right.startIso ? new Date(right.startIso).getTime() : 0;
+        return rightTime - leftTime;
+      });
+
   const reloadBookingsForComplexes = async (complexList: OwnedComplex[]) => {
     if (complexList.length === 0) {
       setBookings([]);
+      setBookingTotals({});
+      setBookingPages({});
       return;
     }
 
     const settled = await Promise.allSettled(
-      complexList.map((complex) => bookingService.getComplexBookings(complex.id)),
+      complexList.map((complex) =>
+        bookingService.getComplexBookingsPaginated(complex.id, {
+          page: 1,
+          page_size: ADMIN_PAGE_SIZE,
+        }),
+      ),
     );
 
-    const merged = settled.flatMap((result) => (result.status === 'fulfilled' ? result.value : []));
-    const unique = Array.from(new Map(merged.map((booking) => [booking.id, booking])).values());
+    const merged: AdminBookingRow[] = [];
+    const totals: Record<string, number> = {};
+    const pages: Record<string, number> = {};
 
-    unique.sort((left, right) => {
-      const leftTime = left.startIso ? new Date(left.startIso).getTime() : 0;
-      const rightTime = right.startIso ? new Date(right.startIso).getTime() : 0;
-      return rightTime - leftTime;
+    settled.forEach((result, idx) => {
+      const complexId = complexList[idx].id;
+      if (result.status === 'fulfilled') {
+        merged.push(...result.value.items);
+        totals[complexId] = result.value.total;
+        pages[complexId] = 1;
+      }
     });
 
-    setBookings(unique);
+    setBookings(mergeUniqueBookings(merged));
+    setBookingTotals(totals);
+    setBookingPages(pages);
 
     if (settled.some((result) => result.status === 'rejected')) {
       notify.warning('Algunas reservas no pudieron cargarse.');
+    }
+  };
+
+  const handleLoadMore = async () => {
+    if (loadingMore) return;
+
+    const pending = complexes.filter((complex) => {
+      const loaded = (bookingPages[complex.id] ?? 1) * ADMIN_PAGE_SIZE;
+      return loaded < (bookingTotals[complex.id] ?? 0);
+    });
+    if (pending.length === 0) return;
+
+    setLoadingMore(true);
+    try {
+      const settled = await Promise.allSettled(
+        pending.map((complex) => {
+          const nextPage = (bookingPages[complex.id] ?? 1) + 1;
+          return bookingService.getComplexBookingsPaginated(complex.id, {
+            page: nextPage,
+            page_size: ADMIN_PAGE_SIZE,
+          });
+        }),
+      );
+
+      const merged: AdminBookingRow[] = [];
+      const nextPages = { ...bookingPages };
+
+      settled.forEach((result, idx) => {
+        const complex = pending[idx];
+        if (result.status === 'fulfilled') {
+          merged.push(...result.value.items);
+          nextPages[complex.id] = (bookingPages[complex.id] ?? 1) + 1;
+        }
+      });
+
+      setBookings((prev) => mergeUniqueBookings([...prev, ...merged]));
+      setBookingPages(nextPages);
+    } catch (err) {
+      notify.error((err as any)?.message || 'Error cargando más reservas');
+    } finally {
+      setLoadingMore(false);
     }
   };
 
@@ -266,6 +333,12 @@ const AdminBookings: React.FC = () => {
       return booking.status === 'active' && booking.approval === 'pending';
     });
   }, [bookings, filter]);
+
+  const hasMore = complexes.some((complex) => {
+    const total = bookingTotals[complex.id] ?? 0;
+    if (total <= 0) return false;
+    return (bookingPages[complex.id] ?? 1) * ADMIN_PAGE_SIZE < total;
+  });
 
   const availableSlots = useMemo(() => timeSlots, [timeSlots]);
 
@@ -645,6 +718,24 @@ const AdminBookings: React.FC = () => {
                 No hay reservas para los complejos de tu cuenta.
               </p>
             </div>
+          )}
+
+          {hasMore && (
+            <button
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              className="w-full py-3 rounded-[var(--radius-xl)] border border-dashed border-[var(--color-border)]
+                bg-white text-sm font-bold text-[var(--color-text-2)]
+                hover:bg-[var(--color-primary-tint)] hover:text-[var(--color-primary-dark)] hover:border-[var(--color-primary)]
+                disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200
+                flex items-center justify-center gap-2"
+            >
+              {loadingMore ? (
+                <><Loader className="w-4 h-4 animate-spin" /> Cargando…</>
+              ) : (
+                'Cargar más reservas'
+              )}
+            </button>
           )}
         </div>
       )}

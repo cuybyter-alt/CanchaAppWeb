@@ -19,6 +19,22 @@ export interface BookingOutput {
   total_price?: number;
 }
 
+export interface PaginatedBookingsOutput {
+  items: Booking[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
+export interface PaginatedAdminBookingsOutput {
+  items: AdminBookingRow[];
+  total: number;
+  page: number;
+  page_size: number;
+  total_pages: number;
+}
+
 export interface AdminBookingRow {
   id: string;
   userId: string;
@@ -121,6 +137,28 @@ function parseBookingsTotal(res: unknown): number {
     }
   }
   return extractItems(res).length;
+}
+
+function parseBookingsMeta(res: unknown): Pick<PaginatedBookingsOutput, 'page' | 'page_size' | 'total_pages'> {
+  const empty = { page: 1, page_size: 0, total_pages: 1 };
+  if (!res || typeof res !== 'object') return empty;
+
+  const r = res as RawRecord;
+  const data = r.data && typeof r.data === 'object' ? (r.data as RawRecord) : undefined;
+  const src = (data ?? r) as RawRecord;
+
+  const num = (v: unknown): number | undefined => {
+    if (typeof v === 'number' && Number.isFinite(v)) return v;
+    if (typeof v === 'string' && v.trim() !== '' && Number.isFinite(Number(v))) return Number(v);
+    return undefined;
+  };
+
+  const itemsLen = Array.isArray(src.items) ? (src.items as unknown[]).length : 0;
+  return {
+    page: num(src.page) ?? num(r.page) ?? 1,
+    page_size: num(src.page_size) ?? num(r.page_size) ?? itemsLen,
+    total_pages: num(src.total_pages) ?? num(r.total_pages) ?? 1,
+  };
 }
 
 function extractItems(data: unknown): RawRecord[] {
@@ -400,25 +438,34 @@ const bookingService = {
     }
   },
 
-  // Admin endpoints
-  getComplexBookings: async (complexId: string, params?: {
+  /**
+   * GET /api/bookings/my/?page=N&page_size=M
+   * Versión paginada: devuelve los items de una página junto con la metadata
+   * (total, page, page_size, total_pages) para implementar "Cargar más".
+   */
+  getMyBookingsPaginated: async (params?: {
     page?: number;
     page_size?: number;
-    status?: 'active' | 'canceled' | 'inactive';
+    status?: 'pending' | 'accepted' | 'rejected' | 'confirmed' | 'canceled';
     is_approved?: boolean;
-  }): Promise<AdminBookingRow[]> => {
+    is_past?: boolean;
+  }): Promise<PaginatedBookingsOutput> => {
     const query = new URLSearchParams();
     if (params?.page !== undefined) query.set('page', String(params.page));
     if (params?.page_size !== undefined) query.set('page_size', String(params.page_size));
     if (params?.status !== undefined) query.set('status', params.status);
     if (params?.is_approved !== undefined) query.set('is_approved', String(params.is_approved));
+    if (params?.is_past !== undefined) query.set('is_past', String(params.is_past));
     const qs = query.toString();
-    const path = `/bookings/complex/${complexId}/${qs ? `?${qs}` : ''}`;
+    const path = `/bookings/my/${qs ? `?${qs}` : ''}`;
 
     const fetchOnce = async () => {
       const res = await ApiClient.get<unknown>(path, { withAuth: true });
-      const items = extractItems(res);
-      return enrichAdminBookingsFromApi(items);
+      return {
+        items: extractItems(res).map(mapBackendBooking),
+        total: parseBookingsTotal(res),
+        ...parseBookingsMeta(res),
+      };
     };
 
     try {
@@ -431,6 +478,50 @@ const bookingService = {
       }
       throw error;
     }
+  },
+
+  // Admin endpoints
+  getComplexBookingsPaginated: async (complexId: string, params?: {
+    page?: number;
+    page_size?: number;
+    status?: 'active' | 'canceled' | 'inactive';
+    is_approved?: boolean;
+  }): Promise<PaginatedAdminBookingsOutput> => {
+    const query = new URLSearchParams();
+    if (params?.page !== undefined) query.set('page', String(params.page));
+    if (params?.page_size !== undefined) query.set('page_size', String(params.page_size));
+    if (params?.status !== undefined) query.set('status', params.status);
+    if (params?.is_approved !== undefined) query.set('is_approved', String(params.is_approved));
+    const qs = query.toString();
+    const path = `/bookings/complex/${complexId}/${qs ? `?${qs}` : ''}`;
+
+    const fetchOnce = async () => {
+      const res = await ApiClient.get<unknown>(path, { withAuth: true });
+      const items = await enrichAdminBookingsFromApi(extractItems(res));
+      return { items, total: parseBookingsTotal(res), ...parseBookingsMeta(res) };
+    };
+
+    try {
+      return await fetchOnce();
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 401) {
+        await authService.refreshToken();
+        return await fetchOnce();
+      }
+      throw error;
+    }
+  },
+
+  /** Primera página de reservas de un complejo (usado por dashboard/estadísticas). */
+  getComplexBookings: async (complexId: string, params?: {
+    page?: number;
+    page_size?: number;
+    status?: 'active' | 'canceled' | 'inactive';
+    is_approved?: boolean;
+  }): Promise<AdminBookingRow[]> => {
+    const data = await this.getComplexBookingsPaginated(complexId, params);
+    return data.items;
   },
 
   updateBookingStatus: async (bookingId: string, newStatus: 'accepted' | 'rejected'): Promise<void> => {

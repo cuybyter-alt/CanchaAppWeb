@@ -109,6 +109,31 @@ const asNumber = (value: unknown): number | undefined => {
   return undefined;
 };
 
+/** Extrae el total de una respuesta paginada ({ data: { total } } | { total } | meta.total). */
+const parseListTotal = (value: unknown): number => {
+  const readTotal = (obj: RawRecord): number | undefined => {
+    const t = obj.total;
+    if (typeof t === 'number' && Number.isFinite(t)) return t;
+    if (typeof t === 'string' && t.trim() !== '' && Number.isFinite(Number(t))) return Number(t);
+    return undefined;
+  };
+
+  if (value && typeof value === 'object') {
+    const obj = value as RawRecord;
+    if (obj.data && typeof obj.data === 'object') {
+      const total = readTotal(obj.data as RawRecord);
+      if (total !== undefined) return total;
+    }
+    const total = readTotal(obj);
+    if (total !== undefined) return total;
+    if (obj.meta && typeof obj.meta === 'object') {
+      const metaTotal = readTotal(obj.meta as RawRecord);
+      if (metaTotal !== undefined) return metaTotal;
+    }
+  }
+  return 0;
+};
+
 const parseSport = (rawType?: string): { sport: Sport; sportLabel: string } | null => {
   const t = (rawType ?? '').toLowerCase();
   const isFootballLike =
@@ -538,6 +563,65 @@ const complexesService = {
       .filter((m): m is NearbyComplex => m !== null)
       .sort((a, b) => a.distanceKm - b.distanceKm)
       .slice(0, max);
+  },
+
+  /**
+   * Igual que getNearbyComplexes pero trae TODAS las páginas (respetando el page_size
+   * real del backend), ordenadas por distancia. Permite cargar más complejos
+   * incrementalmente en la misma página ("Ver más").
+   */
+  async getNearbyComplexesAll(
+    userLat: number,
+    userLng: number,
+    fieldType?: string,
+  ): Promise<NearbyComplex[]> {
+    const PAGE_SIZE = 100;
+    const MAX_PAGES = 20;
+
+    const fetchPage = async (page: number): Promise<{ items: RawRecord[]; total: number }> => {
+      const params = new URLSearchParams({ page: String(page), page_size: String(PAGE_SIZE) });
+      if (fieldType) params.set('field_type', fieldType);
+      const res = await ApiClient.get<ApiResponse<unknown>>(`/complexes/?${params.toString()}`);
+      return { items: extractArray(res.data), total: parseListTotal(res.data) };
+    };
+
+    const first = await fetchPage(1);
+    const perPage = Math.max(1, first.items.length);
+    const totalPages = Math.min(MAX_PAGES, Math.max(1, Math.ceil(first.total / perPage)));
+
+    let rawItems = first.items;
+    if (totalPages > 1) {
+      const rest = await Promise.all(
+        Array.from({ length: totalPages - 1 }, (_, i) => fetchPage(i + 2)),
+      );
+      rawItems = [...rawItems, ...rest.flatMap((p) => p.items)];
+    }
+
+    return rawItems
+      .map((item): NearbyComplex | null => {
+        const id = asString(item.complex_id) ?? asString(item.id);
+        const lat = asNumber(item.latitude);
+        const lng = asNumber(item.longitude);
+        if (!id || lat === undefined || lng === undefined) return null;
+        const distKm = haversineKm(userLat, userLng, lat, lng);
+        return {
+          id,
+          name: asString(item.name) ?? 'Complejo deportivo',
+          address: asString(item.address) ?? '',
+          city: asString(item.city) ?? '',
+          latitude: lat,
+          longitude: lng,
+          minPrice: asNumber(item.min_price) ?? 0,
+          maxPrice: asNumber(item.max_price) ?? 0,
+          fieldsCount: asNumber(item.fields_count) ?? 0,
+          distanceKm: distKm,
+          distanceLabel: `${distKm.toFixed(1)} km`,
+          averageRating: asNumber(item.average_rating) ?? 0,
+          reviewCount: asNumber(item.review_count) ?? 0,
+        };
+      })
+      .filter((m): m is NearbyComplex => m !== null)
+      .sort((a, b) => a.distanceKm - b.distanceKm);
   },
 
   async getComplexFields(complexId: string): Promise<ComplexField[]> {

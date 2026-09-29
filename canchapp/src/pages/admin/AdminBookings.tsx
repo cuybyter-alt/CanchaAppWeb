@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   AlertCircle,
   Building2,
+  Calendar,
   CalendarCheck,
   Check,
   CheckCircle2,
@@ -48,7 +49,7 @@ const filters: { key: BookingFilter; label: string }[] = [
   { key: 'confirmed', label: 'Confirmadas' },
 ];
 
-const ADMIN_PAGE_SIZE = 10;
+const ADMIN_PAGE_SIZE = 100;
 
 const AdminBookings: React.FC = () => {
   const userId = tokenStorage.getUser()?.user_id ?? null;
@@ -333,6 +334,34 @@ const AdminBookings: React.FC = () => {
       return booking.status === 'active' && booking.approval === 'pending';
     });
   }, [bookings, filter]);
+
+  // Group filtered bookings by date — "Hoy" first, then most recent first.
+  const groupedByDate = useMemo(() => {
+    const today = localTodayISO();
+    const yesterday = new Date(Date.now() - 86400000).toLocaleDateString('en-CA');
+    const groups = new Map<string, { label: string; bookings: AdminBookingRow[] }>();
+
+    for (const booking of filteredBookings) {
+      const key = booking.startIso?.slice(0, 10) ?? '';
+      const label =
+        key === today ? 'Hoy'
+        : key === yesterday ? 'Ayer'
+        : booking.date ?? 'Sin fecha';
+      const entry = groups.get(key) ?? { label, bookings: [] };
+      entry.bookings.push(booking);
+      groups.set(key, entry);
+    }
+
+    return [...groups.entries()]
+      .map(([key, value]) => ({ key, ...value }))
+      .sort((a, b) => {
+        if (a.key === today) return -1;
+        if (b.key === today) return 1;
+        if (a.key === '') return 1;
+        if (b.key === '') return -1;
+        return b.key.localeCompare(a.key);
+      });
+  }, [filteredBookings]);
 
   const hasMore = complexes.some((complex) => {
     const total = bookingTotals[complex.id] ?? 0;
@@ -622,8 +651,20 @@ const AdminBookings: React.FC = () => {
       )}
 
       {!loading && !error && (
-        <div className="space-y-4">
-          {filteredBookings.map((booking) => (
+        <div className="space-y-6">
+          {groupedByDate.map((group) => (
+            <div key={group.key || 'unknown'}>
+              <div className="flex items-center gap-2 mb-3">
+                <Calendar className="w-4 h-4 text-[var(--color-primary)]" />
+                <span className="text-sm font-extrabold text-[var(--color-text)] uppercase tracking-wider">
+                  {group.label}
+                </span>
+                <span className="px-1.5 py-0.5 rounded-full bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)] text-[10px] font-black">
+                  {group.bookings.length}
+                </span>
+              </div>
+              <div className="space-y-4">
+                {group.bookings.map((booking) => (
             <article
               key={booking.id}
               className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-3.5 md:p-4 shadow-[var(--shadow-md)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--color-primary)] hover:shadow-[var(--shadow-primary)]"
@@ -653,6 +694,10 @@ const AdminBookings: React.FC = () => {
                     <span className="inline-flex items-center gap-1.5 text-[var(--color-text-3)]">
                       <Building2 className="w-4 h-4" />
                       {booking.complexName}
+                    </span>
+                    <span className="inline-flex items-center gap-1.5 text-[var(--color-text-3)]">
+                      <Calendar className="w-4 h-4 text-[var(--color-primary)]" />
+                      {booking.date ?? '—'}
                     </span>
                     <span className="inline-flex items-center gap-1.5">
                       <Clock3 className="w-4 h-4 text-[var(--color-primary)]" />
@@ -706,6 +751,9 @@ const AdminBookings: React.FC = () => {
                 </div>
               </div>
             </article>
+                ))}
+              </div>
+            </div>
           ))}
 
           {filteredBookings.length === 0 && (

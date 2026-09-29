@@ -1,12 +1,16 @@
-import React, { useMemo, useState, useEffect } from 'react';
-import { ArrowLeft, CalendarCheck, Search, X } from 'lucide-react';
+import React, { useMemo, useState, useEffect, useCallback } from 'react';
+import { ArrowLeft, CalendarCheck, Loader2, Search, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { BookingCard } from '../components/features/BookingCard';
 import { Typography } from '../components/ui/typography';
 import type { Booking } from '../types/field';
+import type { PaginatedBookingsOutput } from '../services/BookingService';
 import bookingService from '../services/BookingService';
+import notify from '../services/toast';
 
 type Tab = 'upcoming' | 'past';
+
+const PAGE_SIZE = 10;
 
 const Bookings: React.FC = () => {
   const navigate = useNavigate();
@@ -17,12 +21,20 @@ const Bookings: React.FC = () => {
   const [upcomingBookings, setUpcomingBookings] = useState<Booking[]>([]);
   const [upcomingLoading, setUpcomingLoading] = useState(true);
   const [upcomingError, setUpcomingError] = useState<string | null>(null);
+  const [upcomingMeta, setUpcomingMeta] = useState<PaginatedBookingsOutput>({
+    items: [], total: 0, page: 1, page_size: PAGE_SIZE, total_pages: 1,
+  });
+  const [upcomingLoadingMore, setUpcomingLoadingMore] = useState(false);
 
   // Past — lazy loaded on first tab switch
   const [pastBookings, setPastBookings] = useState<Booking[]>([]);
   const [pastLoading, setPastLoading] = useState(false);
   const [pastError, setPastError] = useState<string | null>(null);
   const [pastLoaded, setPastLoaded] = useState(false);
+  const [pastMeta, setPastMeta] = useState<PaginatedBookingsOutput>({
+    items: [], total: 0, page: 1, page_size: PAGE_SIZE, total_pages: 1,
+  });
+  const [pastLoadingMore, setPastLoadingMore] = useState(false);
 
   const [complexQuery, setComplexQuery] = useState('');
   const [dateFrom, setDateFrom] = useState('');
@@ -34,8 +46,12 @@ const Bookings: React.FC = () => {
     setUpcomingLoading(true);
     setUpcomingError(null);
     bookingService
-      .getMyBookings({ is_past: false, page_size: 100 })
-      .then((data) => { if (!cancelled) setUpcomingBookings(data); })
+      .getMyBookingsPaginated({ is_past: false, page: 1, page_size: PAGE_SIZE })
+      .then((data) => {
+        if (cancelled) return;
+        setUpcomingBookings(data.items);
+        setUpcomingMeta(data);
+      })
       .catch((err) => { if (!cancelled) setUpcomingError((err as { message?: string })?.message ?? 'Error al cargar reservas.'); })
       .finally(() => { if (!cancelled) setUpcomingLoading(false); });
     return () => { cancelled = true; };
@@ -48,12 +64,47 @@ const Bookings: React.FC = () => {
     setPastLoading(true);
     setPastError(null);
     bookingService
-      .getMyBookings({ is_past: true, page_size: 100 })
-      .then((data) => { if (!cancelled) { setPastBookings(data); setPastLoaded(true); } })
+      .getMyBookingsPaginated({ is_past: true, page: 1, page_size: PAGE_SIZE })
+      .then((data) => {
+        if (cancelled) return;
+        setPastBookings(data.items);
+        setPastMeta(data);
+        setPastLoaded(true);
+      })
       .catch((err) => { if (!cancelled) setPastError((err as { message?: string })?.message ?? 'Error al cargar reservas.'); })
       .finally(() => { if (!cancelled) setPastLoading(false); });
     return () => { cancelled = true; };
   }, [tab, pastLoaded]);
+
+  // Load more — appends next page for the active tab
+  const handleLoadMore = useCallback(async () => {
+    const isUpcoming = tab === 'upcoming';
+    const meta = isUpcoming ? upcomingMeta : pastMeta;
+    if (isUpcoming ? upcomingLoadingMore : pastLoadingMore) return;
+
+    const nextPage = meta.page + 1;
+    if (isUpcoming) setUpcomingLoadingMore(true); else setPastLoadingMore(true);
+
+    try {
+      const data = await bookingService.getMyBookingsPaginated({
+        is_past: !isUpcoming,
+        page: nextPage,
+        page_size: PAGE_SIZE,
+      });
+      if (isUpcoming) {
+        setUpcomingBookings((prev) => [...prev, ...data.items]);
+        setUpcomingMeta(data);
+      } else {
+        setPastBookings((prev) => [...prev, ...data.items]);
+        setPastMeta(data);
+      }
+    } catch (err) {
+      const message = (err as { message?: string })?.message ?? 'Error al cargar más reservas.';
+      notify.error(message);
+    } finally {
+      if (isUpcoming) setUpcomingLoadingMore(false); else setPastLoadingMore(false);
+    }
+  }, [tab, upcomingMeta, pastMeta, upcomingLoadingMore, pastLoadingMore]);
 
   // Sort upcoming ascending (soonest first)
   const sortedUpcoming = useMemo(
@@ -98,6 +149,10 @@ const Bookings: React.FC = () => {
   const loading = tab === 'upcoming' ? upcomingLoading : pastLoading;
   const error = tab === 'upcoming' ? upcomingError : pastError;
   const visibleBookings = tab === 'upcoming' ? sortedUpcoming : filteredPast;
+  const loadingMore = tab === 'upcoming' ? upcomingLoadingMore : pastLoadingMore;
+  const loadedCount = tab === 'upcoming' ? upcomingBookings.length : pastBookings.length;
+  const totalCount = tab === 'upcoming' ? upcomingMeta.total : pastMeta.total;
+  const hasMore = loadedCount < totalCount;
 
   const clearPastFilters = () => {
     setComplexQuery('');
@@ -135,9 +190,9 @@ const Bookings: React.FC = () => {
           }`}
         >
           Próximas
-          {!upcomingLoading && sortedUpcoming.length > 0 && (
+          {!upcomingLoading && upcomingMeta.total > 0 && (
             <span className="ml-2 px-1.5 py-0.5 rounded-full bg-[var(--color-primary)] text-white text-[10px] font-black">
-              {sortedUpcoming.length}
+              {upcomingMeta.total}
             </span>
           )}
         </button>
@@ -234,18 +289,38 @@ const Bookings: React.FC = () => {
           </Typography>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
-          {visibleBookings.map((booking) => (
-            <BookingCard
-              key={booking.id}
-              booking={booking}
-              onCancelled={(id) => {
-                setUpcomingBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' as const } : b)));
-                setPastBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' as const } : b)));
-              }}
-            />
-          ))}
-        </div>
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
+            {visibleBookings.map((booking) => (
+              <BookingCard
+                key={booking.id}
+                booking={booking}
+                onCancelled={(id) => {
+                  setUpcomingBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' as const } : b)));
+                  setPastBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' as const } : b)));
+                }}
+              />
+            ))}
+          </div>
+
+          {hasMore && (
+            <button
+              onClick={handleLoadMore}
+              disabled={loadingMore}
+              className="w-full py-3 rounded-[var(--radius-xl)] border border-dashed border-[var(--color-border)]
+                bg-white text-sm font-bold text-[var(--color-text-2)]
+                hover:bg-[var(--color-primary-tint)] hover:text-[var(--color-primary-dark)] hover:border-[var(--color-primary)]
+                disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200
+                flex items-center justify-center gap-2"
+            >
+              {loadingMore ? (
+                <><Loader2 className="w-4 h-4 animate-spin" /> Cargando…</>
+              ) : (
+                `Cargar más (${totalCount - loadedCount} restantes)`
+              )}
+            </button>
+          )}
+        </>
       )}
     </div>
   );

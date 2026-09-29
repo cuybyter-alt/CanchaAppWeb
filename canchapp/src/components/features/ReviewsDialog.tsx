@@ -3,7 +3,7 @@ import { CheckCircle, Loader2, Pencil, Star, X } from 'lucide-react';
 import { Dialog } from '../ui/dialog';
 import reviewService from '../../services/ReviewService';
 import complexesService from '../../services/ComplexesService';
-import { tokenStorage } from '../../services/AuthService';
+import authService, { tokenStorage } from '../../services/AuthService';
 import { notify } from '../../services/toast';
 import type { Booking } from '../../types/field';
 import type {
@@ -90,7 +90,7 @@ function formatReviewDate(iso: string): string {
 interface ReviewItemProps {
   review: ReviewOutput;
   isOwn: boolean;
-  isLoggedIn?: boolean;
+  canReply?: boolean;
   onEditClick?: () => void;
 }
 
@@ -98,16 +98,31 @@ interface ReviewItemProps {
 
 interface CommentRepliesPanelProps {
   commentId: string;
-  isLoggedIn: boolean;
+  canReply: boolean;
 }
 
-function CommentRepliesPanel({ commentId, isLoggedIn }: CommentRepliesPanelProps) {
+function CommentRepliesPanel({ commentId, canReply }: CommentRepliesPanelProps) {
   const [expanded, setExpanded] = useState(false);
   const [replies, setReplies] = useState<CommentOutput[]>([]);
+  const [totalReplies, setTotalReplies] = useState(0);
   const [loadingReplies, setLoadingReplies] = useState(false);
   const [loaded, setLoaded] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [submitting, setSubmitting] = useState(false);
+
+  // Lightweight count so the toggle can show "Ver N respuestas" before expanding.
+  useEffect(() => {
+    let cancelled = false;
+    reviewService
+      .getCommentReplies(commentId, { page_size: 1 })
+      .then((data) => {
+        if (!cancelled) setTotalReplies(data.total);
+      })
+      .catch(() => {});
+    return () => {
+      cancelled = true;
+    };
+  }, [commentId]);
 
   const load = async () => {
     if (loaded) return;
@@ -115,6 +130,7 @@ function CommentRepliesPanel({ commentId, isLoggedIn }: CommentRepliesPanelProps
     try {
       const data = await reviewService.getCommentReplies(commentId, { page_size: 50 });
       setReplies(data.items);
+      setTotalReplies(data.total);
     } catch {
       notify.error('No se pudieron cargar las respuestas.');
     } finally {
@@ -136,6 +152,7 @@ function CommentRepliesPanel({ commentId, isLoggedIn }: CommentRepliesPanelProps
     try {
       const created = await reviewService.createCommentReply(commentId, text);
       setReplies((prev) => [...prev, created]);
+      setTotalReplies((n) => n + 1);
       setReplyText('');
       setLoaded(true);
       if (!expanded) setExpanded(true);
@@ -147,20 +164,26 @@ function CommentRepliesPanel({ commentId, isLoggedIn }: CommentRepliesPanelProps
     }
   };
 
-  const replyCount = loaded ? replies.length : 0;
+  const replyCount = loaded ? replies.length : totalReplies;
+
+  const toggleLabel = expanded
+    ? 'Ocultar respuestas'
+    : replyCount > 0
+    ? `Ver ${replyCount} ${replyCount === 1 ? 'respuesta' : 'respuestas'}`
+    : canReply
+    ? 'Responder'
+    : null;
 
   return (
     <div className="mt-2.5">
-      <button
-        onClick={toggle}
-        className="text-xs font-bold text-[var(--color-primary)] hover:text-[var(--color-primary-dark)] transition-colors"
-      >
-        {expanded
-          ? 'Ocultar respuestas'
-          : loaded && replyCount > 0
-          ? `Ver ${replyCount} ${replyCount === 1 ? 'respuesta' : 'respuestas'}`
-          : 'Responder'}
-      </button>
+      {toggleLabel && (
+        <button
+          onClick={toggle}
+          className="text-xs font-bold text-[var(--color-primary)] hover:text-[var(--color-primary-dark)] transition-colors"
+        >
+          {toggleLabel}
+        </button>
+      )}
 
       {expanded && (
         <div className="mt-2.5 pl-3 border-l-2 border-[var(--color-border)] space-y-3">
@@ -171,7 +194,7 @@ function CommentRepliesPanel({ commentId, isLoggedIn }: CommentRepliesPanelProps
             </div>
           )}
 
-          {loaded && replies.length === 0 && !loadingReplies && !isLoggedIn && (
+          {loaded && replies.length === 0 && !loadingReplies && (
             <p className="text-xs text-[var(--color-text-3)]">Sin respuestas aún.</p>
           )}
 
@@ -192,7 +215,7 @@ function CommentRepliesPanel({ commentId, isLoggedIn }: CommentRepliesPanelProps
             </div>
           ))}
 
-          {isLoggedIn && (
+          {canReply && (
             <div className="flex gap-2 pt-1">
               <textarea
                 value={replyText}
@@ -223,7 +246,7 @@ function CommentRepliesPanel({ commentId, isLoggedIn }: CommentRepliesPanelProps
   );
 }
 
-function ReviewItem({ review, isOwn, isLoggedIn = false, onEditClick }: ReviewItemProps) {
+function ReviewItem({ review, isOwn, canReply = false, onEditClick }: ReviewItemProps) {
   const currentUser = tokenStorage.getUser();
   const displayName = isOwn
     ? `${currentUser?.f_name ?? ''} ${currentUser?.l_name ?? ''}`.trim() || 'Tú'
@@ -279,7 +302,7 @@ function ReviewItem({ review, isOwn, isLoggedIn = false, onEditClick }: ReviewIt
 
           {/* Replies */}
           {review.comment && !review.comment.is_deleted && (
-            <CommentRepliesPanel commentId={review.comment.id} isLoggedIn={isLoggedIn} />
+            <CommentRepliesPanel commentId={review.comment.id} canReply={canReply} />
           )}
         </div>
       </div>
@@ -305,6 +328,9 @@ export function ReviewsDialog({
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
+  // Complexes where the current user is owner/manager — only they can reply to comments.
+  const [managedComplexIds, setManagedComplexIds] = useState<Set<string>>(new Set());
+
   // Own review
   const [userReview, setUserReview] = useState<ReviewOutput | null>(null);
 
@@ -329,6 +355,10 @@ export function ReviewsDialog({
           b.complexName.trim().toLowerCase() === complexName.trim().toLowerCase()),
     ) ?? null;
   const hasConfirmedBooking = confirmedBooking !== null;
+
+  // Only the owner/manager of the reviewed complex can reply to its comments.
+  const canReplyFor = (review: ReviewOutput): boolean =>
+    currentUserId !== null && managedComplexIds.has(review.complex_id);
 
   // ── Load reviews ────────────────────────────────────────────────────────────
   const loadReviews = useCallback(
@@ -367,6 +397,13 @@ export function ReviewsDialog({
     setShowForm(false);
     setFormRating(0);
     setFormComment('');
+    setManagedComplexIds(new Set());
+    if (authService.isAuthenticated()) {
+      complexesService
+        .getManagerComplexes()
+        .then((list) => setManagedComplexIds(new Set(list.map((c) => c.id))))
+        .catch(() => {});
+    }
     void loadReviews(1, false);
   }, [isOpen, loadReviews]);
 
@@ -643,13 +680,13 @@ export function ReviewsDialog({
                     key={r.id}
                     review={r}
                     isOwn
-                    isLoggedIn={currentUserId !== null}
+                    canReply={canReplyFor(r)}
                     onEditClick={handleEditClick}
                   />
                 ))}
                 {/* Other reviews */}
                 {otherReviews.map((r) => (
-                  <ReviewItem key={r.id} review={r} isOwn={false} isLoggedIn={currentUserId !== null} />
+                  <ReviewItem key={r.id} review={r} isOwn={false} canReply={canReplyFor(r)} />
                 ))}
 
                 {/* Load more */}

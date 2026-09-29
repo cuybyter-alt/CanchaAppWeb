@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { MapPin, ArrowRight, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Typography } from '../components/ui/typography';
@@ -27,6 +27,8 @@ const FILTER_TO_API: Record<string, string | undefined> = {
   microfutbol: 'microfutbol',
   futsal: 'futsal',
 };
+
+const COMPLEX_BATCH_SIZE = 6;
 
 const COMPLEX_TO_SPORT: Record<ComplexFieldType, Field['sport']> = {
   futbol_5: 'futbol5',
@@ -85,6 +87,7 @@ const Home: React.FC = () => {
   const [activeFilter, setActiveFilter] = useState('all');
   // Nearby complexes
   const [nearbyComplexes, setNearbyComplexes] = useState<NearbyComplex[]>([]);
+  const [visibleComplexCount, setVisibleComplexCount] = useState(COMPLEX_BATCH_SIZE);
   const [isLoadingComplexes, setIsLoadingComplexes] = useState(false);
   const [userCoords, setUserCoords] = useState<{ lat: number; lng: number } | null>(null);
   const [selectedComplex, setSelectedComplex] = useState<NearbyComplex | null>(null);
@@ -99,7 +102,7 @@ const Home: React.FC = () => {
   const [reviewTarget, setReviewTarget] = useState<{ complexId: string; complexName: string } | null>(null);
   // Skip first run of filter effect (initial complexes loaded by geo effect)
   const skipFirstFilterEffect = useRef(true);
-  const { openMap } = useMapContext();
+  const { openMap, searchQuery } = useMapContext();
   const navigate = useNavigate();
 
   const selectedField = fields.find((f) => f.id === selectedFieldId) ?? fields[0] ?? null;
@@ -241,8 +244,11 @@ const Home: React.FC = () => {
       setUserCoords({ lat, lng });
       setIsLoadingComplexes(true);
       try {
-        const complexes = await complexesService.getNearbyComplexes(lat, lng);
-        if (!cancelled) setNearbyComplexes(complexes);
+        const complexes = await complexesService.getNearbyComplexesAll(lat, lng);
+        if (!cancelled) {
+          setNearbyComplexes(complexes);
+          setVisibleComplexCount(COMPLEX_BATCH_SIZE);
+        }
       } catch (err) {
         console.error('Error cargando complejos cercanos:', err);
       } finally {
@@ -300,8 +306,13 @@ const Home: React.FC = () => {
     setIsLoadingComplexes(true);
 
     complexesService
-      .getNearbyComplexes(userCoords.lat, userCoords.lng, 6, fieldType)
-      .then((results) => { if (!cancelled) setNearbyComplexes(results); })
+      .getNearbyComplexesAll(userCoords.lat, userCoords.lng, fieldType)
+      .then((results) => {
+        if (!cancelled) {
+          setNearbyComplexes(results);
+          setVisibleComplexCount(COMPLEX_BATCH_SIZE);
+        }
+      })
       .catch(console.error)
       .finally(() => { if (!cancelled) setIsLoadingComplexes(false); });
 
@@ -320,6 +331,35 @@ const Home: React.FC = () => {
     setBookingPanelOpen(true);
     setTimeout(() => setBookingPanelFlash(false), 2500);
   };
+
+  // Sort favorites-first over the FULL list, then reveal a slice with "Ver más".
+  // Also live-filter the loaded complexes when the topbar search has text.
+  const nearbyFiltered = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return nearbyComplexes;
+    return nearbyComplexes.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        c.city.toLowerCase().includes(q) ||
+        c.address.toLowerCase().includes(q),
+    );
+  }, [nearbyComplexes, searchQuery]);
+
+  // Reset the visible slice whenever the search query changes.
+  useEffect(() => {
+    setVisibleComplexCount(COMPLEX_BATCH_SIZE);
+  }, [searchQuery]);
+
+  const sortedNearbyComplexes = useMemo(() => {
+    return [...nearbyFiltered].sort((a, b) => {
+      const aFav = favoriteComplexIds.has(a.id) ? 0 : 1;
+      const bFav = favoriteComplexIds.has(b.id) ? 0 : 1;
+      return aFav - bFav;
+    });
+  }, [nearbyFiltered, favoriteComplexIds]);
+
+  const visibleComplexes = sortedNearbyComplexes.slice(0, visibleComplexCount);
+  const hasMoreComplexes = visibleComplexCount < nearbyFiltered.length;
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
@@ -375,12 +415,6 @@ const Home: React.FC = () => {
                 <i className="fa-solid fa-location-dot text-[var(--color-primary)] mr-2" />
                 Complejos Cercanos
               </Typography>
-              <button
-                onClick={() => navigate('/complexes')}
-                className="flex items-center gap-1 text-[13px] font-extrabold text-[var(--color-primary-dark)] cursor-pointer hover:underline"
-              >
-                Ver todos <ArrowRight className="w-3 h-3" />
-              </button>
             </div>
             {isLoadingComplexes ? (
               <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
@@ -406,30 +440,51 @@ const Home: React.FC = () => {
                   </button>.
                 </Typography>
               </div>
-            ) : (
-              <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
-                {[...nearbyComplexes].sort((a, b) => {
-                  const aFav = favoriteComplexIds.has(a.id) ? 0 : 1;
-                  const bFav = favoriteComplexIds.has(b.id) ? 0 : 1;
-                  return aFav - bFav;
-                }).map((complex) => (
-                  <ComplexCard
-                    key={complex.id}
-                    complex={complex}
-                    isFavorite={favoriteComplexIds.has(complex.id)}
-                    onToggleFavorite={handleToggleComplexFavorite}
-                    onReviewOpen={(cId, cName) => setReviewTarget({ complexId: cId, complexName: cName })}
-                    onSelect={() => {
-                      setSelectedComplex(complex);
-                      setIsComplexDialogOpen(true);
-                    }}
-                  />
-                ))}
+            ) : nearbyFiltered.length === 0 ? (
+              <div className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-6 text-center">
+                <Typography variant="h4" color="text" className="mb-2">
+                  Sin resultados para "{searchQuery.trim()}"
+                </Typography>
+                <Typography variant="small" color="text-3">
+                  Ningún complejo cercano coincide con tu búsqueda.
+                </Typography>
               </div>
-            )}
-            {locationGranted && nearbyComplexes.length > 0 && (
+            ) : (
+        <>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-5">
+            {visibleComplexes.map((complex) => (
+              <ComplexCard
+                key={complex.id}
+                complex={complex}
+                isFavorite={favoriteComplexIds.has(complex.id)}
+                onToggleFavorite={handleToggleComplexFavorite}
+                onReviewOpen={(cId, cName) => setReviewTarget({ complexId: cId, complexName: cName })}
+                onSelect={() => {
+                  setSelectedComplex(complex);
+                  setIsComplexDialogOpen(true);
+                }}
+              />
+            ))}
+          </div>
+
+          {hasMoreComplexes && (
+            <button
+              onClick={() => setVisibleComplexCount((c) => c + COMPLEX_BATCH_SIZE)}
+              className="w-full py-3 rounded-[var(--radius-xl)] border border-dashed border-[var(--color-border)]
+                bg-white text-sm font-bold text-[var(--color-text-2)]
+                hover:bg-[var(--color-primary-tint)] hover:text-[var(--color-primary-dark)] hover:border-[var(--color-primary)]
+                transition-all duration-200 flex items-center justify-center gap-2"
+            >
+              Ver más complejos
+            </button>
+          )}
+        </>
+      )}
+            {(locationGranted || nearbyFiltered.length > 0) && (
               <p className="mt-3 text-xs font-bold text-[var(--color-text-3)]">
-                Ordenados por distancia
+                {locationGranted && 'Ordenados por distancia'}
+                {locationGranted && nearbyFiltered.length > 0 && ' · '}
+                {nearbyFiltered.length > 0 && `Mostrando ${visibleComplexes.length} de ${nearbyFiltered.length} complejos`}
               </p>
             )}
           </div>

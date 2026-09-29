@@ -45,6 +45,8 @@ export interface AdminBookingRow {
   complexName: string;
   timeSlotId: string;
   timeRange: string;
+  /** Fecha formateada (ej. "12 ene 2026") derivada de startIso */
+  date?: string;
   phone: string;
   totalLabel: string;
   totalPrice: number;
@@ -277,6 +279,7 @@ function mapToAdminBookingRow(
     complexName: (raw.complex_name ?? '—') as string,
     timeSlotId: (raw.time_slot_id ?? '') as string,
     timeRange,
+    date: formatDate(startDt),
     phone: manualMeta?.phone ?? pickPhone(raw, user),
     totalLabel: `$${price.toLocaleString('es-CO')}`,
     totalPrice: price,
@@ -513,14 +516,14 @@ const bookingService = {
     }
   },
 
-  /** Primera página de reservas de un complejo (usado por dashboard/estadísticas). */
+  /** Reservas de un complejo (hasta 200 por request — suficiente para la gestión diaria). */
   getComplexBookings: async (complexId: string, params?: {
     page?: number;
     page_size?: number;
     status?: 'active' | 'canceled' | 'inactive';
     is_approved?: boolean;
   }): Promise<AdminBookingRow[]> => {
-    const data = await this.getComplexBookingsPaginated(complexId, params);
+    const data = await this.getComplexBookingsPaginated(complexId, { page: 1, page_size: 200, ...params });
     return data.items;
   },
 

@@ -239,13 +239,20 @@ const statisticsService = {
  
 export async function fetchAdminTodaySummary(): Promise<AdminTodaySummary> {
   const adminStats = await statisticsService.getAdminStats();
-  const todayBookings = await countAdminTodayBookings(
-    adminStats.complexes.map((c) => c.complex_id),
+  const complexIds = adminStats.complexes.map((c) => c.complex_id);
+  const today = todayLocalISO();
+
+  const results = await Promise.all(
+    complexIds.map((id) => bookingService.getComplexBookings(id).catch(() => [])),
   );
-  return {
-    todayBookings,
-    pendingBookings: adminStats.total_pending_bookings,
-  };
+  const all = results.flat();
+
+  const todayBookings = all.filter((b) => b.startIso?.slice(0, 10) === today).length;
+  const pendingBookings = all.filter(
+    (b) => b.startIso?.slice(0, 10) === today && b.approval === 'pending',
+  ).length;
+
+  return { todayBookings, pendingBookings };
 }
  
 export default statisticsService;

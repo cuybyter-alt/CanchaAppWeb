@@ -38,6 +38,7 @@ import statisticsService, {
   type IncomeDataPoint,
 } from '../../services/StatisticsService';
 import type { ComplexField, ComplexFieldType, ComplexListItem } from '../../types/field';
+import AvailabilitySearch from '../../components/features/AvailabilitySearch';
 
 const FIELD_TYPE_LABELS: Record<ComplexFieldType, string> = {
   futbol_5: 'Fútbol 5',
@@ -215,6 +216,7 @@ const AdminDashboard: React.FC = () => {
   const [occupancyHourly, setOccupancyHourly] = useState<HourlyOccupancyPoint[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
     let cancelled = false;
@@ -353,7 +355,7 @@ const AdminDashboard: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [userId]);
+  }, [userId, refreshKey]);
 
   const pendingBookings = stats?.total_pending_bookings ?? 0;
   const todayIncome = stats?.total_today_income ?? 0;
@@ -395,6 +397,9 @@ const AdminDashboard: React.FC = () => {
           {error}
         </div>
       )}
+
+      {/* Buscador rápido de disponibilidad (HU-012) */}
+      <AvailabilitySearch onBookingCreated={() => setRefreshKey((key) => key + 1)} />
 
       {/* Panel de control */}
       <div className="bg-gradient-to-br from-[var(--color-primary)] to-[var(--color-primary-dark)] rounded-[var(--radius-2xl)] border border-[var(--color-primary-dark)] shadow-[var(--shadow-lg)] p-6 animate-fade-in">

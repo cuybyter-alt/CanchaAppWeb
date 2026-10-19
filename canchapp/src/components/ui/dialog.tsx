@@ -1,4 +1,5 @@
 import { useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { X } from 'lucide-react';
 
 interface DialogProps {
@@ -47,9 +48,9 @@ export function Dialog({ isOpen, onClose, title, children, size = 'lg' }: Dialog
     full: 'max-w-[95vw]',
   };
 
-  return (
+  const modalContent = (
     <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center p-4 animate-fade-in"
+      className="fixed inset-0 z-[99999] flex items-center justify-center p-4 animate-fade-in"
       onClick={onClose}
     >
       {/* Backdrop */}
@@ -82,4 +83,6 @@ export function Dialog({ isOpen, onClose, title, children, size = 'lg' }: Dialog
       </div>
     </div>
   );
+
+  return typeof document !== 'undefined' ? createPortal(modalContent, document.body) : modalContent;
 }

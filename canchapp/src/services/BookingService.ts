@@ -58,23 +58,30 @@ export interface AdminBookingRow {
 
 const MANUAL_BOOKING_META_KEY = 'canchapp_manual_booking_meta';
 
+export interface ManualBookingMeta {
+  clientName: string;
+  phone?: string;
+  /** Identificador del método de pago registrado en la reserva presencial (ej. 'cash', 'nequi'). */
+  paymentMethod?: string;
+}
+
 /** El backend no persiste client_name; guardamos metadatos de reservas manuales en local. */
 export const manualBookingMetaStorage = {
-  get(bookingId: string): { clientName: string; phone?: string } | null {
+  get(bookingId: string): ManualBookingMeta | null {
     try {
       const raw = localStorage.getItem(MANUAL_BOOKING_META_KEY);
       if (!raw) return null;
-      const all = JSON.parse(raw) as Record<string, { clientName: string; phone?: string }>;
+      const all = JSON.parse(raw) as Record<string, ManualBookingMeta>;
       return all[bookingId] ?? null;
     } catch {
       return null;
     }
   },
-  save(bookingId: string, meta: { clientName: string; phone?: string }) {
+  save(bookingId: string, meta: ManualBookingMeta) {
     if (!bookingId) return;
     try {
       const raw = localStorage.getItem(MANUAL_BOOKING_META_KEY);
-      const all = raw ? (JSON.parse(raw) as Record<string, { clientName: string; phone?: string }>) : {};
+      const all = raw ? (JSON.parse(raw) as Record<string, ManualBookingMeta>) : {};
       all[bookingId] = meta;
       localStorage.setItem(MANUAL_BOOKING_META_KEY, JSON.stringify(all));
     } catch {
@@ -549,7 +556,12 @@ const bookingService = {
     }
   },
 
-  createAdminBooking: async (timeSlotId: string, clientName: string, clientPhone?: string): Promise<BookingOutput> => {
+  createAdminBooking: async (
+    timeSlotId: string,
+    clientName: string,
+    clientPhone?: string,
+    paymentMethod?: string,
+  ): Promise<BookingOutput> => {
     const fetchOnce = async () => {
       const res = await ApiClient.post<ApiResponse<BookingOutput>>(
         '/bookings/',
@@ -564,26 +576,26 @@ const bookingService = {
       return res.data;
     };
 
-    try {
-      const created = await fetchOnce();
+    const persistMeta = (created: BookingOutput) => {
       if (created.booking_id && clientName.trim()) {
         manualBookingMetaStorage.save(created.booking_id, {
           clientName: clientName.trim(),
           phone: clientPhone?.trim() || undefined,
+          paymentMethod: paymentMethod || undefined,
         });
       }
+    };
+
+    try {
+      const created = await fetchOnce();
+      persistMeta(created);
       return created;
     } catch (error) {
       const apiError = error as ApiError;
       if (apiError?.status === 401) {
         await authService.refreshToken();
         const created = await fetchOnce();
-        if (created.booking_id && clientName.trim()) {
-          manualBookingMetaStorage.save(created.booking_id, {
-            clientName: clientName.trim(),
-            phone: clientPhone?.trim() || undefined,
-          });
-        }
+        persistMeta(created);
         return created;
       }
       throw error;

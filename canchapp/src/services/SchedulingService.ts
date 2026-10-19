@@ -63,15 +63,30 @@ function parseSport(fieldType?: string): { sport: Sport; sportLabel: string } {
   return { sport: 'futbol5', sportLabel: 'Fútbol 5' };
 }
 
-function defaultAvailability(price: number): TimeSlotData[] {
+function defaultAvailability(price: number, dateISO?: string): TimeSlotData[] {
+  const targetDate = dateISO || localTodayISO();
+  const isToday = targetDate === localTodayISO();
+  const now = new Date();
+
   return FALLBACK_TIMES.map((slot, idx) => {
     const [time, period] = slot.split(' ');
+    const parts = time.split(':');
+    let h = parseInt(parts[0], 10);
+    const m = parseInt(parts[1] || '0', 10);
+    if (period === 'PM' && h < 12) h += 12;
+    if (period === 'AM' && h === 12) h = 0;
+
+    const slotDate = new Date(`${targetDate}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`);
+    const isPast = isToday && slotDate.getTime() <= now.getTime();
+
     return {
       id: `slot-${idx}`,
       time,
       period: period as 'AM' | 'PM',
       price,
-      status: 'available',
+      status: isPast ? 'taken' : 'available',
+      startIso: slotDate.toISOString(),
+      blockReason: isPast ? 'past' : undefined,
     };
   });
 }
@@ -80,15 +95,26 @@ export function localTodayISO(): string {
   return new Date().toLocaleDateString('en-CA');
 }
 
-function toTimeSlotData(item: TimeSlotOutput, idx: number): TimeSlotData {
-  const start = item.start_datetime ? new Date(item.start_datetime) : null;
+function toTimeSlotData(item: TimeSlotOutput, idx: number, dateISO?: string): TimeSlotData {
+  let start = item.start_datetime ? new Date(item.start_datetime) : null;
   const hh = start ? start.getHours() : 8 + idx;
   const mm = start ? String(start.getMinutes()).padStart(2, '0') : '00';
   const period: 'AM' | 'PM' = hh >= 12 ? 'PM' : 'AM';
   const hour12 = ((hh + 11) % 12) + 1;
 
+  const targetDate = dateISO || (item.start_datetime ? item.start_datetime.split('T')[0] : localTodayISO());
+  if (!start && targetDate) {
+    start = new Date(`${targetDate}T${String(hh).padStart(2, '0')}:${mm}:00`);
+  }
+
+  const now = new Date();
+  const isPast = start ? start.getTime() <= now.getTime() : false;
+
   const status = String(item.status ?? '').toLowerCase();
+  const isMaintenance = status === 'maintenance';
   const isTaken =
+    isMaintenance ||
+    isPast ||
     item.is_available === false ||
     status === 'booked' ||
     status === 'taken' ||
@@ -103,7 +129,9 @@ function toTimeSlotData(item: TimeSlotOutput, idx: number): TimeSlotData {
     period,
     price: Number(item.price ?? 0),
     status: isTaken ? 'taken' : 'available',
-    startIso: item.start_datetime,
+    startIso: item.start_datetime || (start ? start.toISOString() : undefined),
+    endIso: item.end_datetime,
+    blockReason: isTaken ? (isMaintenance ? 'maintenance' : (isPast ? 'past' : 'booked')) : undefined,
   };
 }
 
@@ -140,7 +168,7 @@ const schedulingService = {
             { icon: 'lightbulb', label: 'Iluminación' },
             { icon: 'shower', label: 'Duchas' },
           ],
-          availability: defaultAvailability(price),
+          availability: defaultAvailability(price, dateISO),
           isFavorite: false,
           capacity: sport === 'futbol11' ? 22 : sport === 'futbol7' ? 14 : 10,
         } as Field;
@@ -152,7 +180,7 @@ const schedulingService = {
     const res = await ApiClient.get<ApiResponse<TimeSlotOutput[]>>(`/scheduling/fields/${fieldId}/time-slots/?${query}`);
 
     const slotsRaw = extractArray(res.data) as TimeSlotOutput[];
-    return slotsRaw.map((item, idx) => toTimeSlotData(item, idx));
+    return slotsRaw.map((item, idx) => toTimeSlotData(item, idx, dateISO));
   },
 
   getComplexSchedules: async (complexId: string): Promise<FieldSchedule[]> => {

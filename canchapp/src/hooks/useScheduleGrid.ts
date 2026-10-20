@@ -97,7 +97,7 @@ export function useScheduleGrid(): UseScheduleGridReturn {
   weekEndRef.current = weekEnd;
 
   const loadGrid = useCallback(async (complexId: string) => {
-    setCurrentComplexId(complexId);
+    currentComplexIdRef.current = complexId;
     setIsLoading(true);
     setError(null);
     try {

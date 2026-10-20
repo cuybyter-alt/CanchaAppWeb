@@ -124,8 +124,10 @@ export function BookingCard({ booking, onCancelled }: BookingCardProps) {
   const [showQrModal, setShowQrModal] = useState(false);
   const [qrData, setQrData] = useState<BookingConfirmation | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
+  const [isPayingDeposit, setIsPayingDeposit] = useState(false);
+  const [depositPaid, setDepositPaid] = useState(false);
 
-  const canCancel = booking.status !== 'cancelled';
+  const canCancel = booking.status !== 'canceled' && booking.status !== 'rejected';
   const locked = isWithinOneHour(booking.startIso);
 
   const handleShowQr = async () => {
@@ -140,6 +142,20 @@ export function BookingCard({ booking, onCancelled }: BookingCardProps) {
       setShowQrModal(false);
     } finally {
       setQrLoading(false);
+    }
+  };
+
+  const handlePayDeposit = async () => {
+    setIsPayingDeposit(true);
+    try {
+      await bookingService.payDeposit(booking.id);
+      setDepositPaid(true);
+      notify.success('¡Abono exitoso!', 'Tu reserva está abonada. Ahora puedes ver tu código QR.');
+    } catch (err) {
+      const msg = (err as { message?: string })?.message ?? 'No se pudo procesar el abono.';
+      notify.error('Error al abonar', msg);
+    } finally {
+      setIsPayingDeposit(false);
     }
   };
 
@@ -158,12 +174,15 @@ export function BookingCard({ booking, onCancelled }: BookingCardProps) {
     }
   };
 
-  const statusConfig = {
-    confirmed: { label: 'CONFIRMADA', icon: 'check',  bg: 'bg-[var(--color-primary)] text-white' },
-    pending:   { label: 'PENDIENTE',  icon: 'clock',  bg: 'bg-[var(--color-score)] text-[var(--color-text)]' },
-    cancelled: { label: 'CANCELADA',  icon: 'xmark',  bg: 'bg-[var(--color-accent)] text-white' },
+  const statusConfig: Record<string, { label: string; icon: string; bg: string }> = {
+    confirmed:  { label: 'CONFIRMADA',  icon: 'check',    bg: 'bg-[var(--color-primary)] text-white' },
+    part_paid:  { label: 'ABONADA',     icon: 'credit-card', bg: 'bg-blue-600 text-white' },
+    pending:    { label: 'PENDIENTE',   icon: 'clock',    bg: 'bg-[var(--color-score)] text-[var(--color-text)]' },
+    canceled:   { label: 'CANCELADA',   icon: 'xmark',    bg: 'bg-[var(--color-accent)] text-white' },
+    rejected:   { label: 'RECHAZADA',   icon: 'xmark',    bg: 'bg-red-600 text-white' },
   };
-  const status = statusConfig[booking.status];
+  const currentStatus = depositPaid ? 'part_paid' : booking.status;
+  const status = statusConfig[currentStatus] ?? statusConfig.pending;
 
   return (
     <>
@@ -303,13 +322,37 @@ export function BookingCard({ booking, onCancelled }: BookingCardProps) {
               Código QR
             </button>
           )}
-          {booking.status === 'pending' && (
-            <button className="inline-flex items-center justify-center gap-2 font-bold transition-all duration-[var(--duration-fast)] cursor-pointer
-              bg-gradient-to-br from-[var(--color-primary-light)] via-[var(--color-primary)] to-[var(--color-primary-dark)]
-              text-white shadow-[var(--shadow-primary)] hover:scale-105 active:scale-95
+          {(booking.status === 'part_paid' || depositPaid) && (
+            <button
+              onClick={handleShowQr}
+              className="inline-flex items-center justify-center gap-2 font-bold transition-all duration-[var(--duration-fast)] cursor-pointer
+              bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700
+              text-white shadow-lg hover:scale-105 active:scale-95
               px-3 py-1.5 text-xs rounded-[var(--radius-md)] flex-1">
-              <CreditCard className="w-3 h-3" />
-              Pagar Ahora
+              <i className="fa-solid fa-qrcode" />
+              Ver Código QR
+            </button>
+          )}
+          {booking.status === 'pending' && !depositPaid && (
+            <button
+              onClick={handlePayDeposit}
+              disabled={isPayingDeposit}
+              className="inline-flex items-center justify-center gap-2 font-bold transition-all duration-[var(--duration-fast)] cursor-pointer
+                bg-gradient-to-br from-[var(--color-primary-light)] via-[var(--color-primary)] to-[var(--color-primary-dark)]
+                text-white shadow-[var(--shadow-primary)] hover:scale-105 active:scale-95
+                px-3 py-1.5 text-xs rounded-[var(--radius-md)] flex-1
+                disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100">
+              {isPayingDeposit ? (
+                <>
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                  Procesando...
+                </>
+              ) : (
+                <>
+                  <CreditCard className="w-3 h-3" />
+                  Abonar
+                </>
+              )}
             </button>
           )}
 

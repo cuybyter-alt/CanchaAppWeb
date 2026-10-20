@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Calendar, Clock, MapPin, Star, X, Zap } from 'lucide-react';
+import { Calendar, Clock, CreditCard, MapPin, Star, X, Zap, CheckCircle2, Loader2 } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { QRCodeSVG } from 'qrcode.react';
 import type { Booking, Field } from '../../types/field';
+import type { BookingConfirmation } from '../../types/notification';
 import { MiniFieldSVG } from '../ui/svg-assets';
 import { formatPrice, formatPriceFull } from '../../lib/utils';
 import authService from '../../services/AuthService';
@@ -84,6 +86,15 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
   const [justPreselected, setJustPreselected] = useState(false);
   // Tracks whether the next slot-load should honour preselectedSlotId
   const applyPreselection = useRef(false);
+
+  // Deposit flow states
+  type BookingStep = 'select' | 'deposit' | 'success';
+  const [bookingStep, setBookingStep] = useState<BookingStep>('select');
+  const [pendingBookingId, setPendingBookingId] = useState<string | null>(null);
+  const [isPayingDeposit, setIsPayingDeposit] = useState(false);
+  const [qrData, setQrData] = useState<BookingConfirmation | null>(null);
+  const [qrLoading, setQrLoading] = useState(false);
+  const [createdBooking, setCreatedBooking] = useState<Booking | null>(null);
 
   const getDateISO = (dateId: string): string => dateId;
 
@@ -232,12 +243,13 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
         endTime: '',
         duration: '60 min',
         players: 0,
-        status: bookingResponse.status === 'cancelled' ? 'cancelled' : 'confirmed',
+        status: 'pending',
         price: slot.price,
       };
 
-      onBookingCreated?.(newBooking);
-      onSlotBooked?.(field.id, slot.id);
+      setCreatedBooking(newBooking);
+      setPendingBookingId(bookingResponse.booking_id);
+      setBookingStep('deposit');
 
       try {
         const updatedSlots = await schedulingService.getFieldTimeSlots(field.id, dateISO);
@@ -253,7 +265,7 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
         setSelectedSlot((prev) => (prev === slot.id ? null : prev));
       }
 
-      notify.success('Reserva creada', 'Tu reserva fue registrada y el horario quedó bloqueado.');
+      notify.success('Reserva creada', 'Ahora abona para confirmar tu reserva.');
     } catch (error) {
       const apiError = error as ApiError;
       if (apiError?.status === 409) {
@@ -267,6 +279,49 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
     } finally {
       setIsBooking(false);
     }
+  };
+
+  const handlePayDeposit = async () => {
+    if (!pendingBookingId) return;
+    setIsPayingDeposit(true);
+    try {
+      await bookingService.payDeposit(pendingBookingId);
+      if (createdBooking) {
+        const updated = { ...createdBooking, status: 'part_paid' as const };
+        setCreatedBooking(updated);
+        onBookingCreated?.(updated);
+        onSlotBooked?.(field?.id ?? '', selectedSlot ?? '');
+      }
+      setBookingStep('success');
+      notify.success('¡Abono exitoso!', 'Tu reserva está abonada. Presenta el código QR al llegar.');
+
+      // Load QR data
+      setQrLoading(true);
+      try {
+        const data = await bookingService.getBookingConfirmation(pendingBookingId);
+        setQrData(data);
+      } catch {
+        // QR will be available later
+      } finally {
+        setQrLoading(false);
+      }
+    } catch (err) {
+      const apiError = err as ApiError;
+      if (apiError?.status === 409) {
+        notify.error('La reserva ya fue abonada o cancelada');
+      } else {
+        notify.error('No se pudo procesar el abono', 'Intenta de nuevo.');
+      }
+    } finally {
+      setIsPayingDeposit(false);
+    }
+  };
+
+  const handleReset = () => {
+    setBookingStep('select');
+    setPendingBookingId(null);
+    setCreatedBooking(null);
+    setQrData(null);
   };
 
   const handleSaveToFavorites = () => {
@@ -472,29 +527,121 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
 
       {/* ── Sticky CTA footer ── */}
       <div className="px-5 pb-5 pt-3 border-t border-[var(--color-border)] bg-[var(--color-surface)] flex-shrink-0">
-        {/* CTAs */}
-        <button
-          onClick={handleBookNow}
-          disabled={isLoadingSlots || isBooking || !selectedSlot}
-          className="inline-flex items-center justify-center gap-2 w-full px-8 py-4 rounded-[var(--radius-xl)] mb-2
-            font-[var(--font-display)] text-[22px] tracking-wider text-white font-black cursor-pointer
-            bg-gradient-to-br from-[var(--color-primary-light)] via-[var(--color-primary)] to-[var(--color-primary-dark)]
-            shadow-[var(--shadow-primary)] hover:scale-105 hover:-translate-y-0.5 active:scale-95
-            transition-all duration-[var(--duration-fast)] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:translate-y-0"
-        >
-          <Zap className="w-5 h-5" />
-          {isBooking ? 'RESERVANDO...' : 'RESERVAR AHORA'}
-        </button>
-        <button
-          onClick={handleSaveToFavorites}
-          className="inline-flex items-center justify-center gap-2 w-full px-6 py-3 rounded-[var(--radius-xl)]
-            bg-transparent border-2 border-[var(--color-border)] text-[var(--color-text-3)] font-bold cursor-pointer
-            hover:border-[var(--color-primary)] hover:text-[var(--color-primary-dark)] hover:bg-[var(--color-primary-tint)]
-            transition-all duration-[var(--duration-fast)]"
-        >
-          <i className="fa-regular fa-heart" />
-          Guardar en Favoritos
-        </button>
+        {/* Step: Select — Reserve button */}
+        {bookingStep === 'select' && (
+          <>
+            <button
+              onClick={handleBookNow}
+              disabled={isLoadingSlots || isBooking || !selectedSlot}
+              className="inline-flex items-center justify-center gap-2 w-full px-8 py-4 rounded-[var(--radius-xl)] mb-2
+                font-[var(--font-display)] text-[22px] tracking-wider text-white font-black cursor-pointer
+                bg-gradient-to-br from-[var(--color-primary-light)] via-[var(--color-primary)] to-[var(--color-primary-dark)]
+                shadow-[var(--shadow-primary)] hover:scale-105 hover:-translate-y-0.5 active:scale-95
+                transition-all duration-[var(--duration-fast)] disabled:opacity-60 disabled:cursor-not-allowed disabled:hover:scale-100 disabled:hover:translate-y-0"
+            >
+              <Zap className="w-5 h-5" />
+              {isBooking ? 'RESERVANDO...' : 'RESERVAR AHORA'}
+            </button>
+            <button
+              onClick={handleSaveToFavorites}
+              className="inline-flex items-center justify-center gap-2 w-full px-6 py-3 rounded-[var(--radius-xl)]
+                bg-transparent border-2 border-[var(--color-border)] text-[var(--color-text-3)] font-bold cursor-pointer
+                hover:border-[var(--color-primary)] hover:text-[var(--color-primary-dark)] hover:bg-[var(--color-primary-tint)]
+                transition-all duration-[var(--duration-fast)]"
+            >
+              <i className="fa-regular fa-heart" />
+              Guardar en Favoritos
+            </button>
+          </>
+        )}
+
+        {/* Step: Deposit — Pay deposit button */}
+        {bookingStep === 'deposit' && createdBooking && (
+          <div className="space-y-3">
+            <div className="bg-amber-50 border border-amber-200 rounded-[var(--radius-lg)] p-3 text-center">
+              <p className="text-xs font-extrabold text-amber-700 mb-1">Reserva creada — Pendiente de abono</p>
+              <p className="text-[10px] text-amber-600">
+                Abona para confirmar tu reserva y generar tu código QR de acceso.
+              </p>
+            </div>
+            <div className="bg-[var(--color-surf2)] rounded-[var(--radius-lg)] p-3 flex items-center justify-between">
+              <span className="text-sm font-bold text-[var(--color-text-2)]">Total a abonar</span>
+              <span className="font-[var(--font-display)] text-xl font-black text-[var(--color-primary)]">
+                {formatPriceFull(createdBooking.price)}
+              </span>
+            </div>
+            <button
+              onClick={handlePayDeposit}
+              disabled={isPayingDeposit}
+              className="inline-flex items-center justify-center gap-2 w-full px-8 py-4 rounded-[var(--radius-xl)]
+                font-[var(--font-display)] text-[18px] tracking-wider text-white font-black cursor-pointer
+                bg-gradient-to-br from-blue-500 via-blue-600 to-blue-700
+                shadow-lg hover:scale-105 hover:-translate-y-0.5 active:scale-95
+                transition-all duration-[var(--duration-fast)] disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              {isPayingDeposit ? (
+                <>
+                  <Loader2 className="w-5 h-5 animate-spin" />
+                  PROCESANDO...
+                </>
+              ) : (
+                <>
+                  <CreditCard className="w-5 h-5" />
+                  ABONAR AHORA
+                </>
+              )}
+            </button>
+            <button
+              onClick={handleReset}
+              disabled={isPayingDeposit}
+              className="w-full py-2 text-xs font-bold text-[var(--color-text-3)] hover:text-[var(--color-text-2)] transition-colors"
+            >
+              Cancelar y volver
+            </button>
+          </div>
+        )}
+
+        {/* Step: Success — QR code */}
+        {bookingStep === 'success' && createdBooking && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-center gap-2 text-[var(--color-primary)]">
+              <CheckCircle2 className="w-5 h-5" />
+              <p className="font-extrabold text-sm">¡Reserva abonada exitosamente!</p>
+            </div>
+
+            {qrLoading && (
+              <div className="flex justify-center py-4">
+                <Loader2 className="w-6 h-6 animate-spin text-[var(--color-primary)]" />
+              </div>
+            )}
+
+            {qrData && (
+              <div className="space-y-2">
+                <div className="rounded-[var(--radius-xl)] border border-[var(--color-border)] p-4 text-center bg-white">
+                  <QRCodeSVG value={qrData.token} size={140} level="M" includeMargin className="mx-auto" />
+                </div>
+                <div className="rounded-[var(--radius-xl)] border border-dashed border-[var(--color-primary)] p-3 text-center bg-[var(--color-surf2)]">
+                  <p className="text-[10px] text-[var(--color-text-3)] font-bold mb-1">Código corto</p>
+                  <p className="font-mono font-extrabold text-xl tracking-widest text-[var(--color-text)]">
+                    {qrData.short_code}
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <p className="text-[10px] text-center text-[var(--color-text-3)] font-semibold">
+              Presenta este código al llegar al complejo para confirmar tu reserva.
+            </p>
+
+            <button
+              onClick={() => { handleReset(); onClose?.(); }}
+              className="w-full py-3 rounded-[var(--radius-xl)] bg-[var(--color-primary)] text-white font-extrabold text-sm
+                shadow-[var(--shadow-primary)] hover:bg-[var(--color-primary-dark)] transition-all"
+            >
+              Cerrar
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

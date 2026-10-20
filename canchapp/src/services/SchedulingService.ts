@@ -1,5 +1,6 @@
 import ApiClient from './ApiClient';
 import type { Field, Sport, TimeSlotData } from '../types/field';
+import type { GridData, MoveResult } from '../types/grid';
 
 interface ApiResponse<T> {
   data: T;
@@ -207,6 +208,33 @@ const schedulingService = {
 
   deleteSchedulePricing: async (pricingId: string): Promise<void> => {
     await ApiClient.delete(`/scheduling/pricings/${pricingId}/`, { withAuth: true });
+  },
+
+  getGrid: async (
+    complexId: string,
+    params: { date?: string; startDate?: string; endDate?: string },
+  ): Promise<GridData> => {
+    const query = new URLSearchParams();
+    if (params.date) {
+      query.set('date', params.date);
+    } else if (params.startDate && params.endDate) {
+      query.set('start_date', params.startDate);
+      query.set('end_date', params.endDate);
+    }
+    const res = await ApiClient.get<ApiResponse<GridData>>(
+      `/scheduling/complexes/${complexId}/grid/?${query.toString()}`,
+      { withAuth: true },
+    );
+    return res.data as GridData;
+  },
+
+  moveBooking: async (bookingId: string, targetTimeSlotId: string): Promise<MoveResult> => {
+    const res = await ApiClient.put<ApiResponse<MoveResult>>(
+      `/bookings/${bookingId}/move/`,
+      { target_time_slot_id: targetTimeSlotId },
+      { withAuth: true },
+    );
+    return res.data as MoveResult;
   },
 };
 

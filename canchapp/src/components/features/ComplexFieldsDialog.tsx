@@ -192,7 +192,7 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
         endTime: '',
         duration: '1 hr',
         players: 10,
-        status: resp.status === 'cancelled' ? 'cancelled' : 'confirmed',
+        status: resp.status === 'canceled' ? 'canceled' : 'confirmed',
         price: selectedTimeSlot.price,
       };
       onBookingCreated?.(newBooking);

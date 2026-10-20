@@ -296,8 +296,8 @@ const Bookings: React.FC = () => {
                 key={booking.id}
                 booking={booking}
                 onCancelled={(id) => {
-                  setUpcomingBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' as const } : b)));
-                  setPastBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' as const } : b)));
+                  setUpcomingBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'canceled' as const } : b)));
+                  setPastBookings((prev) => prev.map((b) => (b.id === id ? { ...b, status: 'canceled' as const } : b)));
                 }}
               />
             ))}

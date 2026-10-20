@@ -547,7 +547,7 @@ const Home: React.FC = () => {
                       booking={booking}
                       onCancelled={(id) =>
                         setBookings((prev) =>
-                          prev.map((b) => (b.id === id ? { ...b, status: 'cancelled' as const } : b)),
+                          prev.map((b) => (b.id === id ? { ...b, status: 'canceled' as const } : b)),
                         )
                       }
                     />

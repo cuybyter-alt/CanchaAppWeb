@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { fetchAdminTodaySummary } from '../services/StatisticsService';
+import bookingService from '../services/BookingService';
 
 export interface AdminTodayStatsState {
   todayBookings: number;
@@ -20,16 +20,16 @@ export function useAdminTodayStats(): AdminTodayStatsState {
     const load = async () => {
       setState((prev) => ({ ...prev, loading: true }));
       try {
-        const summary = await fetchAdminTodaySummary();
+        const summary = await bookingService.getDashboardSummary();
         if (!cancelled) {
           setState({
-            todayBookings: summary.todayBookings,
-            pendingBookings: summary.pendingBookings,
+            todayBookings: summary.pending_today,
+            pendingBookings: summary.pending_approval,
             loading: false,
           });
         }
       } catch (error) {
-        console.error('Admin today stats error:', error);
+        console.error('Dashboard summary error:', error);
         if (!cancelled) {
           setState({ todayBookings: 0, pendingBookings: 0, loading: false });
         }

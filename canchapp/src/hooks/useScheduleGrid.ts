@@ -83,23 +83,33 @@ export function useScheduleGrid(): UseScheduleGridReturn {
   const [isMoving, setIsMoving] = useState(false);
   const [targetSlotId, setTargetSlotId] = useState<string | null>(null);
   const [currentComplexId, setCurrentComplexId] = useState<string | null>(null);
-  
-  // Use ref to keep draggedBooking in sync for callbacks
+
+  // Refs to read current state inside stable callbacks (avoids re-creating loadGrid)
+  const viewModeRef = useRef(viewMode);
+  const dateRef = useRef(date);
+  const weekStartRef = useRef(weekStart);
+  const weekEndRef = useRef(weekEnd);
   const draggedBookingRef = useRef<DraggedBooking | null>(null);
+
+  // Keep refs in sync
+  viewModeRef.current = viewMode;
+  dateRef.current = date;
+  weekStartRef.current = weekStart;
+  weekEndRef.current = weekEnd;
 
   const loadGrid = useCallback(async (complexId: string) => {
     setCurrentComplexId(complexId);
     setIsLoading(true);
     setError(null);
     try {
-      if (viewMode === 'week') {
+      if (viewModeRef.current === 'week') {
         const data = await schedulingService.getGrid(complexId, {
-          startDate: weekStart,
-          endDate: weekEnd,
+          startDate: weekStartRef.current,
+          endDate: weekEndRef.current,
         });
         setWeekData(data);
       } else {
-        const data = await schedulingService.getGrid(complexId, { date });
+        const data = await schedulingService.getGrid(complexId, { date: dateRef.current });
         setGridData(data);
       }
     } catch (err) {
@@ -110,7 +120,7 @@ export function useScheduleGrid(): UseScheduleGridReturn {
     } finally {
       setIsLoading(false);
     }
-  }, [viewMode, date, weekStart, weekEnd]);
+  }, []);
 
   const goToDay = useCallback((dateISO: string) => {
     setDate(dateISO);

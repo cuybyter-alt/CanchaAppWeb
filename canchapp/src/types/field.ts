@@ -57,7 +57,7 @@ export interface Booking {
   endTime: string;
   duration: string;
   players: number;
-  status: 'confirmed' | 'pending' | 'cancelled';
+  status: 'pending' | 'part_paid' | 'confirmed' | 'canceled' | 'rejected';
   price: number;
   /** ISO 8601 start datetime, used to distinguish past vs upcoming bookings */
   startIso?: string;

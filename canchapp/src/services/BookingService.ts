@@ -50,10 +50,16 @@ export interface AdminBookingRow {
   phone: string;
   totalLabel: string;
   totalPrice: number;
-  status: 'active' | 'canceled' | 'confirmed';
+  status: 'pending' | 'part_paid' | 'confirmed' | 'canceled' | 'rejected';
   isManual?: boolean;
   createdByAdmin?: boolean;
   startIso?: string;
+}
+
+export interface DashboardSummary {
+  pending_approval: number;
+  pending_today: number;
+  total_complexes: number;
 }
 
 const MANUAL_BOOKING_META_KEY = 'canchapp_manual_booking_meta';
@@ -209,9 +215,12 @@ function formatTime(isoString?: string): string {
   return new Date(isoString).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true });
 }
 
-function mapStatus(raw?: string, isApproved?: boolean): Booking['status'] {
-  if (raw === 'cancelled' || raw === 'canceled' || raw === 'rejected') return 'cancelled';
-  if (isApproved || raw === 'confirmed' || raw === 'active' || raw === 'accepted') return 'confirmed';
+function mapStatus(raw?: string): Booking['status'] {
+  if (raw === 'pending') return 'pending';
+  if (raw === 'part_paid') return 'part_paid';
+  if (raw === 'confirmed') return 'confirmed';
+  if (raw === 'canceled' || raw === 'cancelled') return 'canceled';
+  if (raw === 'rejected') return 'rejected';
   return 'pending';
 }
 
@@ -245,7 +254,7 @@ function mapBackendBooking(raw: RawRecord): Booking {
     endTime: formatTime(endDt),
     duration,
     players: (raw.players ?? 0) as number,
-    status: mapStatus(raw.status as string, raw.is_approved as boolean),
+    status: mapStatus(raw.status as string),
     price,
     startIso: startDt,
     endIso: endDt,
@@ -290,9 +299,7 @@ function mapToAdminBookingRow(
     phone: manualMeta?.phone ?? pickPhone(raw, user),
     totalLabel: `$${price.toLocaleString('es-CO')}`,
     totalPrice: price,
-    status: status === 'rejected' || status === 'cancelled' || status === 'canceled' ? 'canceled'
-      : status === 'confirmed' ? 'confirmed'
-      : 'active',
+    status: mapStatus(status),
     isManual: (raw.created_by_admin ?? false) as boolean,
     createdByAdmin: (raw.created_by_admin ?? false) as boolean,
     startIso: startDt,
@@ -494,7 +501,7 @@ const bookingService = {
   getComplexBookingsPaginated: async (complexId: string, params?: {
     page?: number;
     page_size?: number;
-    status?: 'active' | 'canceled' | 'inactive';
+    status?: 'pending' | 'part_paid' | 'confirmed' | 'canceled' | 'rejected';
     is_approved?: boolean;
   }): Promise<PaginatedAdminBookingsOutput> => {
     const query = new URLSearchParams();
@@ -527,17 +534,43 @@ const bookingService = {
   getComplexBookings: async (complexId: string, params?: {
     page?: number;
     page_size?: number;
-    status?: 'active' | 'canceled' | 'inactive';
+    status?: 'pending' | 'part_paid' | 'confirmed' | 'canceled' | 'rejected';
     is_approved?: boolean;
   }): Promise<AdminBookingRow[]> => {
     const data = await this.getComplexBookingsPaginated(complexId, { page: 1, page_size: 200, ...params });
     return data.items;
   },
 
-  updateBookingStatus: async (bookingId: string, newStatus: 'accepted' | 'rejected'): Promise<void> => {
+  updateBookingStatus: async (bookingId: string, newStatus: 'part_paid' | 'rejected'): Promise<void> => {
     const fetchOnce = async () => {
       await ApiClient.patch<ApiResponse<unknown>>(
         `/bookings/${bookingId}/status/${newStatus}/`,
+        {},
+        { withAuth: true },
+      );
+    };
+
+    try {
+      await fetchOnce();
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 401) {
+        await authService.refreshToken();
+        await fetchOnce();
+        return;
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * Player pays deposit → marks booking as part_paid.
+   * Generates QR/short code for admin confirmation.
+   */
+  payDeposit: async (bookingId: string): Promise<void> => {
+    const fetchOnce = async () => {
+      await ApiClient.patch<ApiResponse<unknown>>(
+        `/bookings/${bookingId}/status/part_paid/`,
         {},
         { withAuth: true },
       );
@@ -637,6 +670,30 @@ const bookingService = {
 
     const fetchOnce = async () => {
       const res = await ApiClient.get<BookingConfirmationResponse>(path, { withAuth: true });
+      return res.data;
+    };
+
+    try {
+      return await fetchOnce();
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 401) {
+        await authService.refreshToken();
+        return await fetchOnce();
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * GET /api/bookings/dashboard/summary/
+   * Returns dashboard summary for admin/owner sidebar badge.
+   */
+  getDashboardSummary: async (): Promise<DashboardSummary> => {
+    const fetchOnce = async () => {
+      const res = await ApiClient.get<ApiResponse<DashboardSummary>>('/bookings/dashboard/summary/', {
+        withAuth: true,
+      });
       return res.data;
     };
 

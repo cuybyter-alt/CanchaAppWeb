@@ -4,10 +4,11 @@ import {
   Building2,
   Calendar,
   CalendarCheck,
-  Check,
   CheckCircle2,
   CircleDot,
+  Clock,
   Clock3,
+  Grid3X3,
   Hand,
   Loader,
   Phone,
@@ -21,8 +22,9 @@ import ComplexesService from '../../services/ComplexesService';
 import schedulingService, { localTodayISO } from '../../services/SchedulingService';
 import { notify } from '../../services/toast';
 import type { TimeSlotData } from '../../types/field';
+import { ScheduleGrid } from '../../components/features/ScheduleGrid';
 
-type BookingFilter = 'all' | 'active' | 'pending' | 'canceled' | 'confirmed';
+type BookingFilter = 'all' | 'pending' | 'part_paid' | 'confirmed' | 'canceled' | 'rejected';
 
 interface OwnedComplex {
   id: string;
@@ -43,10 +45,11 @@ interface BookingBadge {
 
 const filters: { key: BookingFilter; label: string }[] = [
   { key: 'all', label: 'Todas' },
-  { key: 'active', label: 'Activas' },
   { key: 'pending', label: 'Pendientes' },
-  { key: 'canceled', label: 'Canceladas' },
+  { key: 'part_paid', label: 'Abonadas' },
   { key: 'confirmed', label: 'Confirmadas' },
+  { key: 'canceled', label: 'Canceladas' },
+  { key: 'rejected', label: 'Rechazadas' },
 ];
 
 const ADMIN_PAGE_SIZE = 100;
@@ -54,6 +57,7 @@ const ADMIN_PAGE_SIZE = 100;
 const AdminBookings: React.FC = () => {
   const userId = tokenStorage.getUser()?.user_id ?? null;
 
+  const [activeView, setActiveView] = useState<'bookings' | 'grid'>('bookings');
   const [filter, setFilter] = useState<BookingFilter>('all');
   const [bookings, setBookings] = useState<AdminBookingRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -87,31 +91,19 @@ const AdminBookings: React.FC = () => {
   };
 
   const getBookingBadge = (booking: AdminBookingRow): BookingBadge => {
-    if (booking.status === 'confirmed') {
-      return {
-        label: 'Confirmada',
-        className: 'bg-emerald-600 text-white',
-      };
+    switch (booking.status) {
+      case 'confirmed':
+        return { label: 'Confirmada', className: 'bg-emerald-600 text-white' };
+      case 'part_paid':
+        return { label: 'Abonada', className: 'bg-blue-600 text-white' };
+      case 'canceled':
+        return { label: 'Cancelada', className: 'bg-red-200 text-red-900' };
+      case 'rejected':
+        return { label: 'Rechazada', className: 'bg-red-600 text-white' };
+      case 'pending':
+      default:
+        return { label: 'Pendiente', className: 'bg-[var(--color-accent)] text-white' };
     }
-
-    if (booking.status === 'canceled') {
-      return {
-        label: 'Cancelada',
-        className: 'bg-red-200 text-red-900',
-      };
-    }
-
-    if (booking.approval === 'approved') {
-      return {
-        label: 'Aprobada',
-        className: 'bg-[var(--color-primary)] text-white',
-      };
-    }
-
-    return {
-      label: 'Pendiente',
-      className: 'bg-[var(--color-accent)] text-white',
-    };
   };
 
   const mergeUniqueBookings = (rows: AdminBookingRow[]): AdminBookingRow[] =>
@@ -312,26 +304,23 @@ const AdminBookings: React.FC = () => {
   }, [manualFieldId, manualDate]);
 
   const counts = useMemo(() => {
-    const active = bookings.filter((booking) => booking.status === 'active').length;
-    const pending = bookings.filter((booking) => booking.status === 'active' && booking.approval === 'pending').length;
+    const pending = bookings.filter((booking) => booking.status === 'pending').length;
     const canceled = bookings.filter((booking) => booking.status === 'canceled').length;
     const confirmed = bookings.filter((booking) => booking.status === 'confirmed').length;
     return {
       all: bookings.length,
-      active,
       pending,
-      canceled,
+      part_paid: bookings.filter((b) => b.status === 'part_paid').length,
       confirmed,
+      canceled,
+      rejected: bookings.filter((b) => b.status === 'rejected').length,
     };
   }, [bookings]);
 
   const filteredBookings = useMemo(() => {
     return bookings.filter((booking) => {
       if (filter === 'all') return true;
-      if (filter === 'active') return booking.status === 'active';
-      if (filter === 'canceled') return booking.status === 'canceled';
-      if (filter === 'confirmed') return booking.status === 'confirmed';
-      return booking.status === 'active' && booking.approval === 'pending';
+      return booking.status === filter;
     });
   }, [bookings, filter]);
 
@@ -404,18 +393,6 @@ const AdminBookings: React.FC = () => {
     }
   };
 
-  const approveBooking = async (id: string) => {
-    try {
-      await bookingService.updateBookingStatus(id, 'accepted');
-      await reloadBookingsForComplexes(complexes);
-      notify.success('Reserva aprobada.');
-    } catch (err) {
-      const msg = (err as any)?.message || 'Error aprobando reserva';
-      notify.error(msg);
-      console.error('Error approving booking:', err);
-    }
-  };
-
   const cancelBooking = async (id: string) => {
     try {
       await bookingService.updateBookingStatus(id, 'rejected');
@@ -476,6 +453,31 @@ const AdminBookings: React.FC = () => {
         >
           <Hand className="w-4 h-4" />
           {showManualForm ? 'Cancelar' : 'Reserva Manual'}
+        </button>
+      </div>
+
+      <div className="flex gap-1 p-1 bg-[var(--color-surf2)] rounded-[var(--radius-xl)] w-fit border border-[var(--color-border)]">
+        <button
+          onClick={() => setActiveView('bookings')}
+          className={`px-5 py-2 rounded-[var(--radius-lg)] text-sm font-extrabold transition-all duration-[var(--duration-fast)] flex items-center gap-2 ${
+            activeView === 'bookings'
+              ? 'bg-[var(--color-surface)] text-[var(--color-primary-dark)] shadow-[var(--shadow-sm)]'
+              : 'text-[var(--color-text-3)] hover:text-[var(--color-text-2)]'
+          }`}
+        >
+          <CalendarCheck className="w-4 h-4" />
+          Reservas
+        </button>
+        <button
+          onClick={() => setActiveView('grid')}
+          className={`px-5 py-2 rounded-[var(--radius-lg)] text-sm font-extrabold transition-all duration-[var(--duration-fast)] flex items-center gap-2 ${
+            activeView === 'grid'
+              ? 'bg-[var(--color-surface)] text-[var(--color-primary-dark)] shadow-[var(--shadow-sm)]'
+              : 'text-[var(--color-text-3)] hover:text-[var(--color-text-2)]'
+          }`}
+        >
+          <Grid3X3 className="w-4 h-4" />
+          Grilla
         </button>
       </div>
 
@@ -616,55 +618,57 @@ const AdminBookings: React.FC = () => {
         </div>
       )}
 
-      <div className="flex flex-wrap gap-2">
-        {filters.map((item) => (
-          <button
-            key={item.key}
-            onClick={() => setFilter(item.key)}
-            className={`px-5 py-2 rounded-full text-base font-extrabold border transition-all ${
-              filter === item.key
-                ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-[var(--shadow-primary)]'
-                : 'bg-[var(--color-surf2)] text-[var(--color-text-2)] border-[var(--color-border)] hover:border-[var(--color-primary)]'
-            }`}
-          >
-            {item.label}
-            <span className="ml-1 opacity-75">({counts[item.key]})</span>
-          </button>
-        ))}
-      </div>
-
-      {loading && (
-        <div className="flex flex-col items-center justify-center py-12">
-          <Loader className="w-8 h-8 text-[var(--color-primary)] animate-spin mb-3" />
-          <p className="text-[var(--color-text-2)] font-semibold">Cargando reservas...</p>
-        </div>
-      )}
-
-      {error && !loading && (
-        <div className="bg-red-50 border border-red-200 rounded-[var(--radius-2xl)] p-4 flex items-start gap-3">
-          <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
-          <div>
-            <p className="font-extrabold text-red-900">Error</p>
-            <p className="text-sm text-red-800 mt-1">{error}</p>
+      {activeView === 'bookings' && (
+        <>
+          <div className="flex flex-wrap gap-2">
+            {filters.map((item) => (
+              <button
+                key={item.key}
+                onClick={() => setFilter(item.key)}
+                className={`px-5 py-2 rounded-full text-base font-extrabold border transition-all ${
+                  filter === item.key
+                    ? 'bg-[var(--color-primary)] text-white border-[var(--color-primary)] shadow-[var(--shadow-primary)]'
+                    : 'bg-[var(--color-surf2)] text-[var(--color-text-2)] border-[var(--color-border)] hover:border-[var(--color-primary)]'
+                }`}
+              >
+                {item.label}
+                <span className="ml-1 opacity-75">({counts[item.key]})</span>
+              </button>
+            ))}
           </div>
-        </div>
-      )}
 
-      {!loading && !error && (
-        <div className="space-y-6">
-          {groupedByDate.map((group) => (
-            <div key={group.key || 'unknown'}>
-              <div className="flex items-center gap-2 mb-3">
-                <Calendar className="w-4 h-4 text-[var(--color-primary)]" />
-                <span className="text-sm font-extrabold text-[var(--color-text)] uppercase tracking-wider">
-                  {group.label}
-                </span>
-                <span className="px-1.5 py-0.5 rounded-full bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)] text-[10px] font-black">
-                  {group.bookings.length}
-                </span>
+          {loading && (
+            <div className="flex flex-col items-center justify-center py-12">
+              <Loader className="w-8 h-8 text-[var(--color-primary)] animate-spin mb-3" />
+              <p className="text-[var(--color-text-2)] font-semibold">Cargando reservas...</p>
+            </div>
+          )}
+
+          {error && !loading && (
+            <div className="bg-red-50 border border-red-200 rounded-[var(--radius-2xl)] p-4 flex items-start gap-3">
+              <AlertCircle className="w-5 h-5 text-red-600 flex-shrink-0 mt-0.5" />
+              <div>
+                <p className="font-extrabold text-red-900">Error</p>
+                <p className="text-sm text-red-800 mt-1">{error}</p>
               </div>
-              <div className="space-y-4">
-                {group.bookings.map((booking) => (
+            </div>
+          )}
+
+          {!loading && !error && (
+            <div className="space-y-6">
+              {groupedByDate.map((group) => (
+                <div key={group.key || 'unknown'}>
+                  <div className="flex items-center gap-2 mb-3">
+                    <Calendar className="w-4 h-4 text-[var(--color-primary)]" />
+                    <span className="text-sm font-extrabold text-[var(--color-text)] uppercase tracking-wider">
+                      {group.label}
+                    </span>
+                    <span className="px-1.5 py-0.5 rounded-full bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)] text-[10px] font-black">
+                      {group.bookings.length}
+                    </span>
+                  </div>
+                  <div className="space-y-4">
+                    {group.bookings.map((booking) => (
             <article
               key={booking.id}
               className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-3.5 md:p-4 shadow-[var(--shadow-md)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--color-primary)] hover:shadow-[var(--shadow-primary)]"
@@ -715,34 +719,29 @@ const AdminBookings: React.FC = () => {
                     {booking.totalLabel}
                   </p>
 
-                  <button
-                    onClick={() => approveBooking(booking.id)}
-                    disabled={booking.status === 'canceled' || booking.status === 'confirmed' || booking.approval === 'approved'}
-                    className="px-3 py-1.5 rounded-full bg-[var(--color-primary)] text-white text-sm font-extrabold inline-flex items-center gap-1.5 shadow-[var(--shadow-primary)] transition-all hover:-translate-y-0.5 active:scale-95 disabled:opacity-55 disabled:cursor-not-allowed"
-                  >
-                    <Check className="w-3.5 h-3.5" />
-                    Aprobar
-                  </button>
-
                   {booking.status === 'confirmed' ? (
                     <span className="px-3 py-1.5 rounded-full bg-emerald-600 text-white text-sm font-extrabold inline-flex items-center gap-1.5">
                       <CheckCircle2 className="w-3.5 h-3.5" />
                       Confirmada
                     </span>
-                  ) : (
+                  ) : booking.status === 'part_paid' ? (
                     <button
                       onClick={() => openConfirm(booking)}
-                      disabled={booking.status === 'canceled'}
-                      className="px-3 py-1.5 rounded-full border border-[var(--color-border)] text-[var(--color-text-2)] bg-white text-sm font-extrabold inline-flex items-center gap-1.5 hover:border-emerald-500 hover:text-emerald-700 hover:-translate-y-0.5 transition-all active:scale-95 disabled:opacity-55 disabled:cursor-not-allowed"
+                      className="px-3 py-1.5 rounded-full bg-blue-600 text-white text-sm font-extrabold inline-flex items-center gap-1.5 shadow-lg transition-all hover:-translate-y-0.5 active:scale-95"
                     >
                       <QrCode className="w-3.5 h-3.5" />
-                      Confirmar
+                      Confirmar con QR
                     </button>
-                  )}
+                  ) : booking.status === 'pending' ? (
+                    <span className="px-3 py-1.5 rounded-full bg-amber-100 text-amber-700 text-sm font-extrabold inline-flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5" />
+                      Esperando abono
+                    </span>
+                  ) : null}
 
                   <button
                     onClick={() => cancelBooking(booking.id)}
-                    disabled={booking.status === 'canceled'}
+                    disabled={booking.status === 'canceled' || booking.status === 'rejected'}
                     className="px-3 py-1.5 rounded-full bg-red-600 text-white text-sm font-extrabold inline-flex items-center gap-1.5 shadow-[var(--shadow-md)] hover:-translate-y-0.5 transition-all active:scale-95 disabled:opacity-55 disabled:cursor-not-allowed"
                   >
                     <X className="w-3.5 h-3.5" />
@@ -751,40 +750,68 @@ const AdminBookings: React.FC = () => {
                 </div>
               </div>
             </article>
-                ))}
-              </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+
+              {filteredBookings.length === 0 && (
+                <div className="bg-[var(--color-surface)] border-[1.5px] border-dashed border-[var(--color-border)] rounded-[var(--radius-2xl)] p-10 text-center">
+                  <div className="w-14 h-14 rounded-full bg-[var(--color-primary-tint)] flex items-center justify-center mx-auto mb-3">
+                    <CalendarCheck className="w-7 h-7 text-[var(--color-primary)]" />
+                  </div>
+                  <p className="font-extrabold text-[var(--color-text)] text-lg">Sin reservas</p>
+                  <p className="text-sm text-[var(--color-text-3)] mt-1">
+                    No hay reservas para los complejos de tu cuenta.
+                  </p>
+                </div>
+              )}
+
+              {hasMore && (
+                <button
+                  onClick={handleLoadMore}
+                  disabled={loadingMore}
+                  className="w-full py-3 rounded-[var(--radius-xl)] border border-dashed border-[var(--color-border)]
+                    bg-white text-sm font-bold text-[var(--color-text-2)]
+                    hover:bg-[var(--color-primary-tint)] hover:text-[var(--color-primary-dark)] hover:border-[var(--color-primary)]
+                    disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200
+                    flex items-center justify-center gap-2"
+                >
+                  {loadingMore ? (
+                    <><Loader className="w-4 h-4 animate-spin" /> Cargando…</>
+                  ) : (
+                    'Cargar más reservas'
+                  )}
+                </button>
+              )}
+            </div>
+          )}
+        </>
+      )}
+
+      {activeView === 'grid' && complexes.length > 0 && (
+        <div className="space-y-4">
+          {complexes.map((complex) => (
+            <div key={complex.id} className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-5 shadow-[var(--shadow-sm)]">
+              <h2 className="font-extrabold text-[var(--color-text)] text-lg mb-4 flex items-center gap-2">
+                <Grid3X3 className="w-5 h-5 text-[var(--color-primary)]" />
+                {complex.name}
+              </h2>
+              <ScheduleGrid complexId={complex.id} />
             </div>
           ))}
+        </div>
+      )}
 
-          {filteredBookings.length === 0 && (
-            <div className="bg-[var(--color-surface)] border-[1.5px] border-dashed border-[var(--color-border)] rounded-[var(--radius-2xl)] p-10 text-center">
-              <div className="w-14 h-14 rounded-full bg-[var(--color-primary-tint)] flex items-center justify-center mx-auto mb-3">
-                <CalendarCheck className="w-7 h-7 text-[var(--color-primary)]" />
-              </div>
-              <p className="font-extrabold text-[var(--color-text)] text-lg">Sin reservas</p>
-              <p className="text-sm text-[var(--color-text-3)] mt-1">
-                No hay reservas para los complejos de tu cuenta.
-              </p>
-            </div>
-          )}
-
-          {hasMore && (
-            <button
-              onClick={handleLoadMore}
-              disabled={loadingMore}
-              className="w-full py-3 rounded-[var(--radius-xl)] border border-dashed border-[var(--color-border)]
-                bg-white text-sm font-bold text-[var(--color-text-2)]
-                hover:bg-[var(--color-primary-tint)] hover:text-[var(--color-primary-dark)] hover:border-[var(--color-primary)]
-                disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200
-                flex items-center justify-center gap-2"
-            >
-              {loadingMore ? (
-                <><Loader className="w-4 h-4 animate-spin" /> Cargando…</>
-              ) : (
-                'Cargar más reservas'
-              )}
-            </button>
-          )}
+      {activeView === 'grid' && complexes.length === 0 && !loading && (
+        <div className="bg-[var(--color-surface)] border-[1.5px] border-dashed border-[var(--color-border)] rounded-[var(--radius-2xl)] p-10 text-center">
+          <div className="w-14 h-14 rounded-full bg-[var(--color-primary-tint)] flex items-center justify-center mx-auto mb-3">
+            <Grid3X3 className="w-7 h-7 text-[var(--color-primary)]" />
+          </div>
+          <p className="font-extrabold text-[var(--color-text)] text-lg">Sin complejos</p>
+          <p className="text-sm text-[var(--color-text-3)] mt-1">
+            No tienes complejos asociados para ver la grilla.
+          </p>
         </div>
       )}
 

@@ -194,9 +194,14 @@ export function useScheduleGrid(): UseScheduleGridReturn {
     setShowConfirmModal(true);
   }, []);
 
+  const currentComplexIdRef = useRef<string | null>(null);
+  // Keep ref in sync
+  currentComplexIdRef.current = currentComplexId;
+
   const confirmMove = useCallback(async () => {
     const currentDragged = draggedBookingRef.current;
-    if (!currentDragged || !targetSlotId || !currentComplexId) {
+    const complexId = currentComplexIdRef.current;
+    if (!currentDragged || !targetSlotId || !complexId) {
       notify.error('Error: faltan datos para confirmar el movimiento');
       return;
     }
@@ -213,7 +218,7 @@ export function useScheduleGrid(): UseScheduleGridReturn {
       draggedBookingRef.current = null;
       setTargetSlotId(null);
       notify.success('Reserva movida exitosamente');
-      await loadGrid(currentComplexId);
+      await loadGrid(complexId);
     } catch (err) {
       const apiError = err as ApiError;
       if (apiError?.status === 409) {
@@ -226,7 +231,7 @@ export function useScheduleGrid(): UseScheduleGridReturn {
     } finally {
       setIsMoving(false);
     }
-  }, [targetSlotId, currentComplexId, loadGrid]);
+  }, [targetSlotId, loadGrid]);
 
   const closeConfirmModal = useCallback(() => {
     setShowConfirmModal(false);

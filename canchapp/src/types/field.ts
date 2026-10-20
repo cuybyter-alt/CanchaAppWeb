@@ -16,6 +16,10 @@ export interface TimeSlotData {
   spotsLeft?: number;
   /** ISO 8601 start datetime for past-slot detection */
   startIso?: string;
+  /** ISO 8601 end datetime; permite calcular la duración real de la franja */
+  endIso?: string;
+  /** Motivo por el que la franja no está disponible (reservada o en mantenimiento) */
+  blockReason?: 'booked' | 'maintenance';
 }
 
 export interface Field {

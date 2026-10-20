@@ -45,8 +45,19 @@ function generateDates(count = 7) {
 const dates = generateDates();
 
 function isSlotPast(slot: import('../../types/field').TimeSlotData, isToday: boolean): boolean {
-  if (!isToday || !slot.startIso) return false;
-  return new Date(slot.startIso) < new Date();
+  if (!isToday) return false;
+  if (slot.blockReason === 'past') return true;
+  if (slot.startIso) return new Date(slot.startIso).getTime() <= Date.now();
+  if (slot.time && slot.period) {
+    const parts = slot.time.split(':');
+    let h = parseInt(parts[0], 10);
+    const m = parseInt(parts[1] || '0', 10);
+    if (slot.period === 'PM' && h < 12) h += 12;
+    if (slot.period === 'AM' && h === 12) h = 0;
+    const now = new Date();
+    return (h * 60 + m) <= (now.getHours() * 60 + now.getMinutes());
+  }
+  return false;
 }
 
 const sportIcons: Record<string, string> = {

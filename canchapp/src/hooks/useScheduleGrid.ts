@@ -82,9 +82,8 @@ export function useScheduleGrid(): UseScheduleGridReturn {
   const [moveResult, setMoveResult] = useState<MoveResult | null>(null);
   const [isMoving, setIsMoving] = useState(false);
   const [targetSlotId, setTargetSlotId] = useState<string | null>(null);
-  const [currentComplexId, setCurrentComplexId] = useState<string | null>(null);
 
-  // Refs to read current state inside stable callbacks (avoids re-creating loadGrid)
+  // Refs to read current state inside stable callbacks
   const viewModeRef = useRef(viewMode);
   const dateRef = useRef(date);
   const weekStartRef = useRef(weekStart);

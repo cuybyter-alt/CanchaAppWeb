@@ -84,7 +84,7 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ complexId }) => {
 
   useEffect(() => {
     void loadGrid(complexId);
-  }, [complexId, loadGrid]);
+  }, [complexId, viewMode, date, weekStart, weekEnd, loadGrid]);
 
   const activeData = viewMode === 'week' ? weekData : gridData;
 

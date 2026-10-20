@@ -89,6 +89,7 @@ export function useScheduleGrid(): UseScheduleGridReturn {
   const weekStartRef = useRef(weekStart);
   const weekEndRef = useRef(weekEnd);
   const draggedBookingRef = useRef<DraggedBooking | null>(null);
+  const currentComplexIdRef = useRef<string | null>(null);
 
   // Keep refs in sync
   viewModeRef.current = viewMode;
@@ -192,10 +193,6 @@ export function useScheduleGrid(): UseScheduleGridReturn {
     setTargetSlotId(targetSlot.time_slot_id);
     setShowConfirmModal(true);
   }, []);
-
-  const currentComplexIdRef = useRef<string | null>(null);
-  // Keep ref in sync
-  currentComplexIdRef.current = currentComplexId;
 
   const confirmMove = useCallback(async () => {
     const currentDragged = draggedBookingRef.current;

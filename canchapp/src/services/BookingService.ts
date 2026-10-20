@@ -589,7 +589,6 @@ const bookingService = {
     }
   },
 
-  createAdminBooking: async (timeSlotId: string, clientName: string, clientPhone?: string): Promise<BookingOutput> => {
   createAdminBooking: async (
     timeSlotId: string,
     clientName: string,

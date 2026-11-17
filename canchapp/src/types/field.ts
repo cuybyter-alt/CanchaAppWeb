@@ -77,6 +77,8 @@ export interface ComplexListItem {
   fieldsCount: number;
   averageRating?: number;
   reviewCount?: number;
+  lastImageUrl?: string | null;
+  imagesCount?: number;
 }
 
 export type ComplexFieldType = 'futbol_5' | 'futbol_7' | 'futbol_11' | 'microfutbol' | 'futsal';

@@ -89,13 +89,8 @@ const SHORTCUT_PRESETS = [
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
-function to12h(hhmm: string): string {
-  const parts = hhmm.split(':');
-  const h = parseInt(parts[0], 10);
-  const m = parts[1] ?? '00';
-  const period = h >= 12 ? 'p.m.' : 'a.m.';
-  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h;
-  return `${h12}:${m} ${period}`;
+function formatHHMM(hhmm: string): string {
+  return hhmm.slice(0, 5);
 }
 
 function toMinutes(hhmm: string): number {
@@ -110,7 +105,7 @@ function timeOptions(): { value: string; label: string }[] {
       const hStr = String(h).padStart(2, '0');
       const mStr = String(minVal).padStart(2, '0');
       const value = `${hStr}:${mStr}`;
-      opts.push({ value, label: to12h(value) });
+      opts.push({ value, label: formatHHMM(value) });
     }
   }
   return opts;
@@ -304,9 +299,9 @@ function DayCard({ dayLabel, schedule, onEdit }: {
             <Clock className="w-4 h-4 text-[var(--color-primary)]" />
           </div>
           <div className="text-center leading-tight">
-            <p className="text-[9px] font-extrabold text-[var(--color-primary)]">{to12h(schedule.opening_time.slice(0, 5))}</p>
+            <p className="text-[9px] font-extrabold text-[var(--color-primary)]">{formatHHMM(schedule.opening_time)}</p>
             <p className="text-[9px] text-[var(--color-text-3)]">—</p>
-            <p className="text-[9px] font-extrabold text-[var(--color-primary)]">{to12h(schedule.closing_time.slice(0, 5))}</p>
+            <p className="text-[9px] font-extrabold text-[var(--color-primary)]">{formatHHMM(schedule.closing_time)}</p>
           </div>
           {missingPricing && (
             <p className="text-[8px] font-extrabold text-amber-700 text-center leading-tight">Sin tarifa — edita y guarda</p>

@@ -5,6 +5,8 @@ export interface MapCenterCoords {
   lng: number;
   lat: number;
   zoom?: number;
+  complexId?: string;
+  complexName?: string;
 }
 
 interface MapContextType {

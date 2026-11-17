@@ -1,10 +1,18 @@
 import { useEffect, useState } from 'react';
 import bookingService from '../services/BookingService';
 
+const ADMIN_TODAY_STATS_EVENT = 'canchapp:admin-today-stats';
+
 export interface AdminTodayStatsState {
   todayBookings: number;
   pendingBookings: number;
   loading: boolean;
+}
+
+export function requestAdminTodayStatsRefresh(): void {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event(ADMIN_TODAY_STATS_EVENT));
+  }
 }
 
 export function useAdminTodayStats(): AdminTodayStatsState {
@@ -36,10 +44,16 @@ export function useAdminTodayStats(): AdminTodayStatsState {
       }
     };
 
+    const handleRefresh = () => {
+      void load();
+    };
+
     void load();
+    window.addEventListener(ADMIN_TODAY_STATS_EVENT, handleRefresh);
 
     return () => {
       cancelled = true;
+      window.removeEventListener(ADMIN_TODAY_STATS_EVENT, handleRefresh);
     };
   }, []);
 

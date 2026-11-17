@@ -28,21 +28,21 @@ interface LoadFieldsOptions {
 }
 
 const FALLBACK_TIMES = [
-  '8:00 AM',
-  '9:00 AM',
-  '10:00 AM',
-  '11:00 AM',
-  '12:00 PM',
-  '1:00 PM',
-  '3:00 PM',
-  '5:00 PM',
-  '7:00 PM',
-  '8:00 PM',
-  '9:00 PM',
-  '10:00 PM',
+  '08:00',
+  '09:00',
+  '10:00',
+  '11:00',
+  '12:00',
+  '13:00',
+  '15:00',
+  '17:00',
+  '19:00',
+  '20:00',
+  '21:00',
+  '22:00',
 ];
 
-const FIELDS_CACHE_KEY = 'canchapp-fields-cache-v1';
+const FIELDS_CACHE_KEY = 'canchapp-fields-cache-v2';
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const FIELDS_CONCURRENCY = 8;
 
@@ -109,6 +109,11 @@ const asNumber = (value: unknown): number | undefined => {
   return undefined;
 };
 
+const asImageUrl = (value: unknown): string | undefined => {
+  if (!value || typeof value !== 'object') return undefined;
+  return asString((value as RawRecord).image_url);
+};
+
 /** Extrae el total de una respuesta paginada ({ data: { total } } | { total } | meta.total). */
 const parseListTotal = (value: unknown): number => {
   const readTotal = (obj: RawRecord): number | undefined => {
@@ -162,12 +167,12 @@ const parseTag = (rawType?: string, surface?: string): FieldType => {
 };
 
 const defaultAvailability = (price: number): TimeSlotData[] =>
-  FALLBACK_TIMES.map((slot, idx) => {
-    const [time, period] = slot.split(' ');
+  FALLBACK_TIMES.map((time, idx) => {
+    const hour = Number(time.split(':')[0]);
     return {
       id: `slot-${idx}`,
       time,
-      period: period as 'AM' | 'PM',
+      period: hour >= 12 ? 'PM' : 'AM',
       price,
       status: 'available',
     };
@@ -292,6 +297,8 @@ const complexesService = {
           fieldsCount: asNumber(item.fields_count) ?? 0,
           averageRating: asNumber(item.average_rating) ?? 0,
           reviewCount: asNumber(item.total_reviews) ?? asNumber(item.review_count) ?? 0,
+          lastImageUrl: asImageUrl(item.last_image) ?? null,
+          imagesCount: asNumber(item.images_count) ?? 0,
         };
       })
       .filter((item): item is ComplexListItem => item !== null);
@@ -327,6 +334,8 @@ const complexesService = {
           fieldsCount: asNumber(item.fields_count) ?? 0,
           averageRating: asNumber(item.average_rating) ?? 0,
           reviewCount: asNumber(item.review_count) ?? 0,
+          lastImageUrl: asImageUrl(item.last_image) ?? null,
+          imagesCount: asNumber(item.images_count) ?? 0,
         };
       })
       .filter((item): item is ComplexListItem => item !== null);
@@ -558,6 +567,8 @@ const complexesService = {
           distanceLabel: `${distKm.toFixed(1)} km`,
           averageRating: asNumber(item.average_rating) ?? 0,
           reviewCount: asNumber(item.review_count) ?? 0,
+          imageUrl: asImageUrl(item.last_image) ?? null,
+          imagesCount: asNumber(item.images_count) ?? 0,
         };
       })
       .filter((m): m is NearbyComplex => m !== null)
@@ -618,6 +629,8 @@ const complexesService = {
           distanceLabel: `${distKm.toFixed(1)} km`,
           averageRating: asNumber(item.average_rating) ?? 0,
           reviewCount: asNumber(item.review_count) ?? 0,
+          imageUrl: asImageUrl(item.last_image) ?? null,
+          imagesCount: asNumber(item.images_count) ?? 0,
         };
       })
       .filter((m): m is NearbyComplex => m !== null)

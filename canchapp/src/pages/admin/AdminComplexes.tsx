@@ -1,7 +1,10 @@
-import React, { useEffect, useState, useRef } from 'react';
-import { Plus, Building2, MapPin, Phone, Target, Users, X, Loader2, AlertCircle, CheckCircle, Mail, Send, Trash2 } from 'lucide-react';
+import React, { useCallback, useEffect, useState, useRef } from 'react';
+import { Plus, Building2, MapPin, Phone, Target, Users, Images, Maximize2, X, Loader2, AlertCircle, CheckCircle, Mail, Send, Trash2 } from 'lucide-react';
 import invitationService from '../../services/InvitationService';
 import type { ComplexInvitation } from '../../types/invitation';
+import type { ComplexImage } from '../../types/complexImage';
+import { ComplexImagesDialog } from '../../components/features/ComplexImagesDialog';
+import { ImageLightbox } from '../../components/ui/image-lightbox';
 import { useNavigate } from 'react-router-dom';
 import mapboxgl from 'mapbox-gl';
 import ApiClient from '../../services/ApiClient';
@@ -27,6 +30,7 @@ interface ComplexItem {
   latitude?: number | null;
   longitude?: number | null;
   last_image?: { r2_key: string; image_url: string } | null;
+  images_count?: number;
 }
  
 interface ApiResponse<T> { data: T; message?: string; }
@@ -304,21 +308,55 @@ function AdminsModal({ complex, onClose }: { complex: ComplexItem; onClose: () =
  
 // ─── Complex Card ─────────────────────────────────────────────────────────────
  
-function ComplexCard({ c, onViewFields, onViewAdmins }: {
+function ComplexCard({ c, onViewFields, onViewAdmins, onManageImages }: {
   c: ComplexItem;
   onViewFields: () => void;
   onViewAdmins: () => void;
+  onManageImages: () => void;
 }) {
   const isActive = c.status === 'active';
   const phone = c.telephones?.[0] ?? null;
- 
+  const [thumbFailed, setThumbFailed] = useState(false);
+  const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
+
+  useEffect(() => {
+    setThumbFailed(false);
+    setImagePreviewOpen(false);
+  }, [c.last_image?.image_url]);
+
+  const showThumb = Boolean(c.last_image?.image_url) && !thumbFailed;
+
   return (
     <div className="bg-white rounded-[var(--radius-2xl)] border border-[var(--color-border)] overflow-hidden shadow-[var(--shadow-sm)] hover:shadow-[var(--shadow-md)] transition-all duration-200 hover:-translate-y-0.5">
       {/* Dark header */}
       <div className="bg-[var(--color-text)] px-5 pt-4 pb-3 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-[var(--radius-md)] bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-[var(--shadow-primary)]">
-          <Building2 className="w-4 h-4 text-white" />
-        </div>
+        {showThumb ? (
+          <button
+            type="button"
+            onClick={() => setImagePreviewOpen(true)}
+            title={`Ampliar imagen de ${c.name}`}
+            aria-label={`Ampliar imagen de ${c.name}`}
+            className="group/thumb relative w-9 h-9 flex-shrink-0 cursor-zoom-in rounded-[var(--radius-md)] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[var(--color-primary)] focus-visible:ring-offset-2 focus-visible:ring-offset-[var(--color-text)]"
+          >
+            <img
+              src={c.last_image?.image_url}
+              alt={c.name}
+              loading="lazy"
+              onError={() => setThumbFailed(true)}
+              className="w-full h-full rounded-[var(--radius-md)] object-cover border border-white/20"
+            />
+            <span className="absolute inset-0 flex items-center justify-center rounded-[var(--radius-md)] bg-black/45 opacity-0 transition-opacity group-hover/thumb:opacity-100 group-focus-visible/thumb:opacity-100">
+              <Maximize2 className="w-4 h-4 text-white" />
+            </span>
+            <span className="absolute -bottom-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full border border-[var(--color-text)] bg-[var(--color-primary)] text-white shadow-sm">
+              <Maximize2 className="w-2.5 h-2.5" />
+            </span>
+          </button>
+        ) : (
+          <div className="w-9 h-9 rounded-[var(--radius-md)] bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-[var(--shadow-primary)]">
+            <Building2 className="w-4 h-4 text-white" />
+          </div>
+        )}
         <h3 className="text-white font-extrabold text-[15px] flex-1 min-w-0 truncate leading-tight">{c.name}</h3>
         <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider flex-shrink-0 ${
           isActive ? 'bg-[var(--color-primary)] text-white' : 'bg-white/10 text-white/50'
@@ -361,8 +399,8 @@ function ComplexCard({ c, onViewFields, onViewAdmins }: {
         </div>
         <div className="w-px h-8 bg-[var(--color-border)]" />
         <div className="flex flex-col items-center gap-0.5">
-          <span className="text-[22px] font-extrabold text-[var(--color-accent)] leading-none">—</span>
-          <span className="text-[9px] font-extrabold uppercase tracking-widest text-[var(--color-text-3)]">Admins</span>
+          <span className="text-[22px] font-extrabold text-[var(--color-accent)] leading-none">{c.images_count ?? 0}</span>
+          <span className="text-[9px] font-extrabold uppercase tracking-widest text-[var(--color-text-3)]">Fotos</span>
         </div>
       </div>
  
@@ -370,19 +408,41 @@ function ComplexCard({ c, onViewFields, onViewAdmins }: {
       <div className="px-4 pb-4 flex gap-2">
         <button
           onClick={onViewFields}
-          className="flex-1 py-2.5 rounded-[var(--radius-full)] bg-[var(--color-primary)] text-white text-sm font-extrabold shadow-[var(--shadow-primary)] hover:bg-[var(--color-primary-dark)] transition-all active:scale-95 flex items-center justify-center gap-1.5"
+          className="flex-1 py-2.5 rounded-[var(--radius-full)] bg-[var(--color-primary)] text-white text-xs font-extrabold shadow-[var(--shadow-primary)] hover:bg-[var(--color-primary-dark)] transition-all active:scale-95 flex items-center justify-center gap-1.5"
         >
-          <Target className="w-4 h-4" />
-          Ver Canchas
+          <Target className="w-3.5 h-3.5" />
+          Canchas
         </button>
         <button
           onClick={onViewAdmins}
-          className="flex-1 py-2.5 rounded-[var(--radius-full)] bg-white text-[var(--color-text-2)] text-sm font-extrabold border border-[var(--color-border)] hover:bg-[var(--color-surf2)] transition-all active:scale-95 flex items-center justify-center gap-1.5"
+          className="flex-1 py-2.5 rounded-[var(--radius-full)] bg-white text-[var(--color-text-2)] text-xs font-extrabold border border-[var(--color-border)] hover:bg-[var(--color-surf2)] transition-all active:scale-95 flex items-center justify-center gap-1.5"
         >
-          <Users className="w-4 h-4" />
+          <Users className="w-3.5 h-3.5" />
           Admins
         </button>
+        <button
+          onClick={onManageImages}
+          className="flex-1 py-2.5 rounded-[var(--radius-full)] bg-white text-[var(--color-text-2)] text-xs font-extrabold border border-[var(--color-border)] hover:bg-[var(--color-primary-tint)] hover:border-[var(--color-primary)] hover:text-[var(--color-primary-dark)] transition-all active:scale-95 flex items-center justify-center gap-1.5"
+        >
+          <Images className="w-3.5 h-3.5" />
+          Fotos
+          {(c.images_count ?? 0) > 0 && (
+            <span className="text-[9px] font-extrabold bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)] px-1.5 rounded-full">
+              {c.images_count}
+            </span>
+          )}
+        </button>
       </div>
+
+      {showThumb && (
+        <ImageLightbox
+          isOpen={imagePreviewOpen}
+          src={c.last_image?.image_url ?? ''}
+          alt={c.name}
+          title={c.name}
+          onClose={() => setImagePreviewOpen(false)}
+        />
+      )}
     </div>
   );
 }
@@ -399,6 +459,27 @@ const AdminComplexes: React.FC = () => {
   const [submitting, setSubmitting] = useState(false);
   const [formErrors, setFormErrors] = useState<Partial<CreateComplexForm>>({});
   const [adminsModal, setAdminsModal] = useState<ComplexItem | null>(null);
+  const [imagesModal, setImagesModal] = useState<ComplexItem | null>(null);
+
+  const handleImagesChanged = useCallback((confirmed: ComplexImage[]) => {
+    const complexId = imagesModal?.complex_id;
+    if (!complexId) return;
+
+    const lastImage = confirmed[0];
+    setComplexes((prev) =>
+      prev.map((item) =>
+        item.complex_id === complexId
+          ? {
+              ...item,
+              images_count: confirmed.length,
+              last_image: lastImage
+                ? { r2_key: lastImage.r2_key, image_url: lastImage.image_url }
+                : null,
+            }
+          : item,
+      ),
+    );
+  }, [imagesModal]);
  
   const fetchedRef = useRef(false);
   const user = tokenStorage.getUser();
@@ -772,12 +853,20 @@ const AdminComplexes: React.FC = () => {
               c={c}
               onViewFields={() => navigate(`/admin/complexes/${c.complex_id}/fields`)}
               onViewAdmins={() => setAdminsModal(c)}
+              onManageImages={() => setImagesModal(c)}
             />
           ))}
         </div>
       )}
  
       {adminsModal && <AdminsModal complex={adminsModal} onClose={() => setAdminsModal(null)} />}
+      {imagesModal && (
+        <ComplexImagesDialog
+          complex={imagesModal}
+          onClose={() => setImagesModal(null)}
+          onChanged={handleImagesChanged}
+        />
+      )}
     </div>
   );
 };

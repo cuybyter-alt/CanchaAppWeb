@@ -1,5 +1,6 @@
 import ApiClient from './ApiClient';
 import authService from './AuthService';
+import { formatDateLabel, formatEndTime24, formatTime24, formatTimeRange24 } from '../lib/timezone';
 import type { ApiError } from './ApiClient';
 import type { Booking, Sport } from '../types/field';
 import type { BookingConfirmation, BookingConfirmationResponse } from '../types/notification';
@@ -206,13 +207,11 @@ function parseSport(fieldType?: string): { sport: Sport; sportLabel: string } {
 }
 
 function formatDate(isoString?: string): string {
-  if (!isoString) return '—';
-  return new Date(isoString).toLocaleDateString('es-CO', { year: 'numeric', month: 'short', day: 'numeric' });
+  return isoString ? formatDateLabel(isoString) : '—';
 }
 
 function formatTime(isoString?: string): string {
-  if (!isoString) return '—';
-  return new Date(isoString).toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: true });
+  return isoString ? formatTime24(isoString) : '—';
 }
 
 function mapStatus(raw?: string): Booking['status'] {
@@ -234,6 +233,14 @@ function mapBackendBooking(raw: RawRecord): Booking {
   const fieldType = (raw.field_type ?? rawField?.field_type ?? slotField?.field_type ?? raw.sport) as string | undefined;
   const { sport, sportLabel } = parseSport(fieldType);
   const price = (raw.total_price ?? slot?.price ?? 0) as number;
+  const dateLabel = typeof raw.date_label === 'string' ? raw.date_label : undefined;
+  const startLabel =
+    typeof raw.start_time_label === 'string'
+      ? raw.start_time_label
+      : typeof raw.time_label === 'string'
+        ? raw.time_label
+        : undefined;
+  const endLabel = typeof raw.end_time_label === 'string' ? raw.end_time_label : undefined;
 
   let duration = '60 min';
   if (startDt && endDt) {
@@ -249,9 +256,9 @@ function mapBackendBooking(raw: RawRecord): Booking {
     fieldName,
     sport,
     sportLabel,
-    date: formatDate(startDt),
-    time: formatTime(startDt),
-    endTime: formatTime(endDt),
+    date: dateLabel ?? formatDate(startDt),
+    time: startLabel ?? formatTime(startDt),
+    endTime: endLabel ?? (endDt ? formatEndTime24(endDt) : '—'),
     duration,
     players: (raw.players ?? 0) as number,
     status: mapStatus(raw.status as string),
@@ -275,15 +282,14 @@ function mapToAdminBookingRow(
   const isApproved = status === 'accepted' || status === 'confirmed' || (raw.is_approved as boolean);
   const bookingId = (raw.booking_id ?? raw.id ?? '') as string;
   const manualMeta = manualBookingMetaStorage.get(bookingId);
+  const dateLabel = typeof raw.date_label === 'string' ? raw.date_label : undefined;
 
-  let timeRange = '—';
-  if (startDt && endDt) {
-    const start = new Date(startDt);
-    const end = new Date(endDt);
-    const startStr = start.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
-    const endStr = end.toLocaleTimeString('es-CO', { hour: '2-digit', minute: '2-digit', hour12: false });
-    timeRange = `${startStr} - ${endStr}`;
-  }
+  const timeRange =
+    typeof raw.time_range_label === 'string'
+      ? raw.time_range_label
+      : startDt && endDt
+        ? formatTimeRange24(startDt, endDt)
+        : '—';
 
   return {
     id: bookingId,
@@ -295,7 +301,7 @@ function mapToAdminBookingRow(
     complexName: (raw.complex_name ?? '—') as string,
     timeSlotId: (raw.time_slot_id ?? '') as string,
     timeRange,
-    date: formatDate(startDt),
+    date: dateLabel ?? formatDate(startDt),
     phone: manualMeta?.phone ?? pickPhone(raw, user),
     totalLabel: `$${price.toLocaleString('es-CO')}`,
     totalPrice: price,

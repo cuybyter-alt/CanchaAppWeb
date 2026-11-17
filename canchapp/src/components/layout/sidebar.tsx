@@ -10,6 +10,7 @@ import { useNotifications } from '../../context/NotificationsContext';
 import complexesService from '../../services/ComplexesService';
 import schedulingService from '../../services/SchedulingService';
 import { formatPrice } from '../../lib/utils';
+import { getTodayISO } from '../../lib/timezone';
 import type { NearbyComplex } from '../../types/map';
 import type { ComplexField, ComplexFieldType, Field, TimeSlotData } from '../../types/field';
 
@@ -156,7 +157,7 @@ export function Sidebar({ onQuickBook }: SidebarProps = {}) {
         const activeFields = fields.filter(f => f.status === 'active');
         if (activeFields.length === 0) return;
 
-        const today = new Date().toISOString().split('T')[0];
+        const today = getTodayISO();
 
         // Try each field until we find an available slot
         for (const cf of activeFields) {
@@ -418,7 +419,7 @@ export function Sidebar({ onQuickBook }: SidebarProps = {}) {
               <div className="flex gap-3 text-xs text-white/50 font-semibold flex-wrap mb-3">
                 <span className="flex items-center gap-1">
                   <Calendar className="w-3 h-3" />
-                  {quickSlot.slot.time} {quickSlot.slot.period}
+                  {quickSlot.slot.time}
                 </span>
                 <span className="flex items-center gap-1">
                   <i className="fa-solid fa-tag text-[var(--color-primary)]" />

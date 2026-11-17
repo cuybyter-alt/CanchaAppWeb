@@ -30,6 +30,8 @@ function toNearbyComplex(c: ComplexListItem): NearbyComplex {
     distanceLabel: '',
     averageRating: c.averageRating ?? 0,
     reviewCount: c.reviewCount ?? 0,
+    imageUrl: c.lastImageUrl ?? null,
+    imagesCount: c.imagesCount ?? 0,
   };
 }
 

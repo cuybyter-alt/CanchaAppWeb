@@ -12,6 +12,8 @@ interface TopbarProps {
   onSearchClear?: () => void;
   sidebarOpen?: boolean;
   onToggleSidebar?: () => void;
+  layout?: 'player' | 'admin';
+  onOpenMobileSidebar?: () => void;
 }
 
 export function Topbar({
@@ -19,8 +21,10 @@ export function Topbar({
   onSearchChange,
   onSearchSubmit,
   onSearchClear,
-  sidebarOpen: _sidebarOpen,
+  sidebarOpen = true,
   onToggleSidebar,
+  layout = 'player',
+  onOpenMobileSidebar,
 }: TopbarProps) {
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -76,15 +80,24 @@ export function Topbar({
     setShowMobileMenu(false);
   };
 
+  const handleMobileMenu = () => {
+    if (layout === 'admin' && onOpenMobileSidebar) {
+      onOpenMobileSidebar();
+      return;
+    }
+    setShowMobileMenu(true);
+  };
+
   return (
     <>
       <header className="sticky top-0 z-[100] bg-[var(--color-text)] h-16 px-4 md:px-6 flex items-center justify-between gap-2 md:gap-4 shadow-[0_2px_16px_rgba(0,0,0,.25)]">
         {/* Mobile Menu Button */}
         <button
-          onClick={() => setShowMobileMenu(true)}
+          onClick={handleMobileMenu}
           className="lg:hidden w-10 h-10 rounded-[var(--radius-md)] border-none cursor-pointer flex items-center justify-center
             bg-white/8 text-white/90 transition-all duration-[var(--duration-fast)]
             hover:bg-white/15 hover:scale-105 active:scale-95"
+          aria-label="Abrir menú"
         >
           <Menu className="w-5 h-5" />
         </button>
@@ -96,7 +109,8 @@ export function Topbar({
             className="hidden lg:flex w-10 h-10 rounded-[var(--radius-md)] border-none cursor-pointer items-center justify-center
               bg-white/8 text-white/70 transition-all duration-[var(--duration-fast)]
               hover:bg-white/15 hover:text-white hover:scale-105 active:scale-95"
-            title="Alternar menú lateral"
+            title={sidebarOpen ? 'Contraer menú lateral' : 'Expandir menú lateral'}
+            aria-label={sidebarOpen ? 'Contraer menú lateral' : 'Expandir menú lateral'}
           >
             <Menu className="w-5 h-5" />
           </button>
@@ -315,7 +329,7 @@ export function Topbar({
       )}
 
       {/* Mobile Menu Drawer */}
-      {showMobileMenu && (
+      {showMobileMenu && layout !== 'admin' && (
         <>
           {/* Overlay */}
           <div

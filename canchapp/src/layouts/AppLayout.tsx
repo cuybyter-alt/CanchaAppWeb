@@ -86,14 +86,23 @@ function AppLayoutInner() {
         <LocationBanner />
 
         {/* Content below topbar */}
-        <div className={`grid grid-cols-1 ${sidebarOpen ? 'lg:grid-cols-[260px_1fr]' : ''}`}>
-          {/* Sidebar - hidden on mobile, toggleable on desktop */}
-          <div className={sidebarOpen ? 'hidden lg:block' : 'hidden'}>
-            <Sidebar onQuickBook={handleQuickBook} />
+        <div
+          className={`grid grid-cols-1 transition-[grid-template-columns] duration-300 ease-out ${
+            sidebarOpen
+              ? 'lg:grid-cols-[260px_minmax(0,1fr)]'
+              : 'lg:grid-cols-[80px_minmax(0,1fr)]'
+          }`}
+        >
+          {/* Sidebar - hidden on mobile; collapses to an icon rail on desktop */}
+          <div className="hidden lg:block">
+            <Sidebar
+              onQuickBook={handleQuickBook}
+              collapsed={!sidebarOpen}
+            />
           </div>
 
           {/* Main content area */}
-          <main className="min-h-[calc(100vh-64px)]">
+          <main className="min-h-[calc(100vh-64px)] min-w-0">
             <Outlet />
           </main>
         </div>

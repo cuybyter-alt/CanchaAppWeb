@@ -22,7 +22,7 @@ const ROLE_LABEL: Record<string, string> = {
   Manager: 'Gerente',
 };
 
-function AdminSidebar({ onClose }: { onClose?: () => void }) {
+function AdminSidebar({ onClose, collapsed = false }: { onClose?: () => void; collapsed?: boolean }) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const todayStats = useAdminTodayStats();
@@ -33,15 +33,20 @@ function AdminSidebar({ onClose }: { onClose?: () => void }) {
     navigate('/login');
   };
 
-  const navItem =
-    'flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold transition-all duration-[var(--duration-fast)] relative no-underline';
+  const navItem = `flex items-center rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold transition-all duration-[var(--duration-fast)] relative no-underline ${
+    collapsed ? 'justify-center px-0 py-3' : 'gap-3 px-3 py-3'
+  }`;
   const activeClass =
     'bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)] before:absolute before:left-0 before:top-[20%] before:bottom-[20%] before:w-[3px] before:rounded-r-[var(--radius-xs)] before:bg-[var(--color-primary)]';
   const inactiveClass =
     'text-[var(--color-text-2)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]';
 
   return (
-    <aside className="h-full bg-[var(--color-surface)] border-r-[1.5px] border-[var(--color-border)] p-5 flex flex-col gap-1 overflow-y-auto">
+    <aside
+      className={`flex h-full flex-col gap-1 overflow-y-auto border-r-[1.5px] border-[var(--color-border)] bg-[var(--color-surface)] transition-all duration-300 ${
+        collapsed ? 'p-2' : 'p-5'
+      }`}
+    >
       {/* Mobile close */}
       {onClose && (
         <div className="flex justify-end mb-2 lg:hidden">
@@ -52,97 +57,141 @@ function AdminSidebar({ onClose }: { onClose?: () => void }) {
       )}
 
       {/* User profile */}
-      <div className="flex items-center gap-3 mb-4 px-1">
-        <div className="w-12 h-12 rounded-full border-2 border-[var(--color-primary)] bg-[var(--color-text)] overflow-hidden flex-shrink-0 shadow-[var(--shadow-primary)]">
+      <div className={`mb-4 flex items-center ${collapsed ? 'justify-center px-0' : 'gap-3 px-1'}`}>
+        <div className={`rounded-full border-2 border-[var(--color-primary)] bg-[var(--color-text)] overflow-hidden flex-shrink-0 shadow-[var(--shadow-primary)] transition-all duration-300 ${
+          collapsed ? 'h-10 w-10' : 'h-12 w-12'
+        }`}>
           <img src="/cuypequeniologo.png" alt="avatar" className="w-full h-full object-cover" />
         </div>
-        <div className="min-w-0">
-          <p className="font-extrabold text-sm text-[var(--color-text)] truncate">
-            {user ? `${user.f_name} ${user.l_name}` : 'Admin'}
-          </p>
-          <span className="inline-block mt-0.5 px-2 py-0.5 rounded-full bg-[var(--color-primary)] text-white text-[10px] font-extrabold uppercase tracking-wide">
-            {roleLabel}
-          </span>
-        </div>
+        {!collapsed && (
+          <div className="min-w-0">
+            <p className="font-extrabold text-sm text-[var(--color-text)] truncate">
+              {user ? `${user.f_name} ${user.l_name}` : 'Admin'}
+            </p>
+            <span className="inline-block mt-0.5 px-2 py-0.5 rounded-full bg-[var(--color-primary)] text-white text-[10px] font-extrabold uppercase tracking-wide">
+              {roleLabel}
+            </span>
+          </div>
+        )}
       </div>
 
       <div className="h-[1.5px] bg-[var(--color-border)] rounded-sm mb-3" />
 
       {/* Panel Admin section */}
-      <p className="px-3 pb-1 text-[10px] font-extrabold tracking-widest text-[var(--color-text-3)] uppercase">
-        Panel Admin
-      </p>
+      {!collapsed ? (
+        <p className="px-3 pb-1 text-[10px] font-extrabold tracking-widest text-[var(--color-text-3)] uppercase">
+          Panel Admin
+        </p>
+      ) : (
+        <div className="mx-2 my-1 h-px bg-[var(--color-border)]" />
+      )}
 
       <NavLink
         to="/admin"
         end
+        title={collapsed ? 'Dashboard' : undefined}
+        aria-label="Dashboard"
         className={({ isActive }) => `${navItem} ${isActive ? activeClass : inactiveClass}`}
         onClick={onClose}
       >
         <LayoutDashboard className="w-[18px] h-[18px] flex-shrink-0" />
-        Dashboard
+        <span className={`overflow-hidden whitespace-nowrap transition-all duration-200 ${collapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+          Dashboard
+        </span>
       </NavLink>
 
       <NavLink
         to="/admin/complexes"
+        title={collapsed ? 'Mis Complejos' : undefined}
+        aria-label="Mis Complejos"
         className={({ isActive }) => `${navItem} ${isActive ? activeClass : inactiveClass}`}
         onClick={onClose}
       >
         <Building2 className="w-[18px] h-[18px] flex-shrink-0" />
-        Mis Complejos
+        <span className={`overflow-hidden whitespace-nowrap transition-all duration-200 ${collapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+          Mis Complejos
+        </span>
       </NavLink>
 
       <NavLink
         to="/admin/bookings"
+        title={collapsed ? 'Reservas' : undefined}
+        aria-label="Reservas"
         className={({ isActive }) => `${navItem} ${isActive ? activeClass : inactiveClass}`}
         onClick={onClose}
       >
         <CalendarCheck className="w-[18px] h-[18px] flex-shrink-0" />
-        Reservas
-        <AdminBookingsBadge pending={todayStats.pendingBookings} loading={todayStats.loading} />
+        <span className={`overflow-hidden whitespace-nowrap transition-all duration-200 ${collapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+          Reservas
+        </span>
+        <AdminBookingsBadge
+          pending={todayStats.pendingBookings}
+          loading={todayStats.loading}
+          collapsed={collapsed}
+        />
       </NavLink>
 
       <NavLink
         to="/admin/reports"
+        title={collapsed ? 'Reportes' : undefined}
+        aria-label="Reportes"
         className={({ isActive }) => `${navItem} ${isActive ? activeClass : inactiveClass}`}
         onClick={onClose}
       >
         <BarChart2 className="w-[18px] h-[18px] flex-shrink-0" />
-        Reportes
+        <span className={`overflow-hidden whitespace-nowrap transition-all duration-200 ${collapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+          Reportes
+        </span>
       </NavLink>
 
       <div className="h-[1.5px] bg-[var(--color-border)] rounded-sm my-3" />
 
       {/* Accesos section */}
-      <p className="px-3 pb-1 text-[10px] font-extrabold tracking-widest text-[var(--color-text-3)] uppercase">
-        Accesos
-      </p>
+      {!collapsed ? (
+        <p className="px-3 pb-1 text-[10px] font-extrabold tracking-widest text-[var(--color-text-3)] uppercase">
+          Accesos
+        </p>
+      ) : (
+        <div className="mx-2 my-1 h-px bg-[var(--color-border)]" />
+      )}
 
       <NavLink
         to="/"
+        title={collapsed ? 'Ver como Jugador' : undefined}
+        aria-label="Ver como Jugador"
         className={`${navItem} ${inactiveClass}`}
         onClick={onClose}
       >
         <Globe className="w-[18px] h-[18px] flex-shrink-0" />
-        Ver como Jugador
+        <span className={`overflow-hidden whitespace-nowrap transition-all duration-200 ${collapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+          Ver como Jugador
+        </span>
       </NavLink>
 
       <div className="h-[1.5px] bg-[var(--color-border)] rounded-sm my-3" />
 
       {/* Today's stats widget */}
-      <TodayWidget
-        todayBookings={todayStats.todayBookings}
-        pendingBookings={todayStats.pendingBookings}
-        loading={todayStats.loading}
-      />
+      {!collapsed && (
+        <TodayWidget
+          todayBookings={todayStats.todayBookings}
+          pendingBookings={todayStats.pendingBookings}
+          loading={todayStats.loading}
+        />
+      )}
 
       {/* Logout */}
       <button
         onClick={handleLogout}
-        className="mt-auto flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold text-[var(--color-accent)] transition-all hover:bg-red-50"
+        title={collapsed ? 'Cerrar Sesión' : undefined}
+        aria-label="Cerrar Sesión"
+        className={`mt-auto flex items-center rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold text-[var(--color-accent)] transition-all hover:bg-red-50 ${
+          collapsed ? 'justify-center px-0 py-3' : 'gap-3 px-3 py-3'
+        }`}
       >
         <LogOut className="w-[18px] h-[18px] flex-shrink-0" />
-        Cerrar Sesión
+        <span className={`overflow-hidden whitespace-nowrap transition-all duration-200 ${collapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'}`}>
+          Cerrar Sesión
+        </span>
       </button>
     </aside>
   );
@@ -151,11 +200,21 @@ function AdminSidebar({ onClose }: { onClose?: () => void }) {
 function AdminBookingsBadge({
   pending,
   loading,
+  collapsed,
 }: {
   pending: number;
   loading: boolean;
+  collapsed: boolean;
 }) {
   if (loading || pending <= 0) return null;
+
+  if (collapsed) {
+    return (
+      <span className="absolute right-1 top-1 flex h-[15px] min-w-[15px] items-center justify-center rounded-full bg-[var(--color-accent)] px-1 text-[8px] font-black text-white shadow-sm">
+        {pending}
+      </span>
+    );
+  }
 
   return (
     <span className="ml-auto px-1.5 py-0.5 min-w-[20px] text-center rounded-full bg-[var(--color-accent)] text-white text-[10px] font-extrabold">
@@ -207,16 +266,28 @@ function TodayWidget({
 
 export default function AdminLayout() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
 
   return (
     <NotificationsProvider>
       <div className="min-h-screen relative z-[1]">
-        <Topbar />
+        <Topbar
+          sidebarOpen={sidebarOpen}
+          onToggleSidebar={() => setSidebarOpen((open) => !open)}
+          layout="admin"
+          onOpenMobileSidebar={() => setMobileSidebarOpen(true)}
+        />
 
-        <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr]">
+        <div
+          className={`grid grid-cols-1 transition-[grid-template-columns] duration-300 ease-out ${
+            sidebarOpen
+              ? 'lg:grid-cols-[260px_minmax(0,1fr)]'
+              : 'lg:grid-cols-[80px_minmax(0,1fr)]'
+          }`}
+        >
         {/* Desktop sidebar */}
         <div className="hidden lg:block sticky top-16 h-[calc(100vh-64px)]">
-          <AdminSidebar />
+          <AdminSidebar collapsed={!sidebarOpen} />
         </div>
 
         {/* Mobile sidebar overlay */}
@@ -241,7 +312,7 @@ export default function AdminLayout() {
         </button>
 
         {/* Main content */}
-        <main className="min-h-[calc(100vh-64px)]">
+        <main className="min-h-[calc(100vh-64px)] min-w-0">
           <Outlet />
         </main>
         </div>

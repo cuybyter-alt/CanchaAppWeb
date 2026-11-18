@@ -1,8 +1,8 @@
-import { Bell, Calendar, Heart, Home, MapPin, Search, Settings, Wallet, User } from 'lucide-react';
+import { Bell, Calendar, Heart, Home, MapPin, Search, Settings, Wallet, User, Zap } from 'lucide-react';
 import { NavLink, useNavigate } from 'react-router-dom';
 import { Typography } from '../ui/typography';
 import { Badge } from '../ui/badge';
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import { useMapContext } from '../../context/MapContext';
 import authService from '../../services/AuthService';
 import bookingService from '../../services/BookingService';
@@ -27,6 +27,7 @@ interface QuickSlot {
 
 interface SidebarProps {
   onQuickBook?: (field: Field, slotId: string, date: string) => void;
+  collapsed?: boolean;
 }
 
 const COMPLEX_TO_SPORT: Record<ComplexFieldType, Field['sport']> = {
@@ -79,7 +80,125 @@ function getCachedCoords(): { lat: number; lng: number } | null {
   } catch { return null; }
 }
 
-export function Sidebar({ onQuickBook }: SidebarProps = {}) {
+const navItemClass = (isActive: boolean, collapsed: boolean) =>
+  `group relative flex items-center rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold transition-all duration-[var(--duration-fast)] no-underline ${
+    collapsed ? 'justify-center px-0 py-3' : 'gap-3 px-3 py-3'
+  } ${
+    isActive
+      ? 'bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)] before:absolute before:left-0 before:top-[20%] before:bottom-[20%] before:w-[3px] before:rounded-r-[var(--radius-xs)] before:bg-[var(--color-primary)]'
+      : 'text-[var(--color-text-2)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]'
+  }`;
+
+function SidebarNavContent({
+  icon,
+  label,
+  collapsed,
+  badgeText,
+  badgeVariant = 'primary',
+}: {
+  icon: ReactNode;
+  label: string;
+  collapsed: boolean;
+  badgeText?: string | number;
+  badgeVariant?: 'primary' | 'accent';
+}) {
+  const hasBadge = badgeText !== undefined && badgeText !== '' && badgeText !== 0;
+
+  return (
+    <>
+      <span className="flex h-[18px] w-[18px] flex-shrink-0 items-center justify-center">{icon}</span>
+      <span
+        className={`overflow-hidden whitespace-nowrap transition-all duration-200 ${
+          collapsed ? 'w-0 opacity-0' : 'w-auto opacity-100'
+        }`}
+      >
+        {label}
+      </span>
+
+      {hasBadge &&
+        (collapsed ? (
+          <span
+            className={`absolute right-1 top-1 flex h-[15px] min-w-[15px] items-center justify-center rounded-full px-1 text-[8px] font-black text-white shadow-sm ${
+              badgeVariant === 'accent'
+                ? 'bg-[var(--color-accent)]'
+                : 'bg-[var(--color-primary)]'
+            }`}
+          >
+            {badgeText}
+          </span>
+        ) : (
+          <Badge
+            variant={badgeVariant}
+            className="ml-auto"
+          >
+            {badgeText}
+          </Badge>
+        ))}
+    </>
+  );
+}
+
+function SidebarLink({
+  to,
+  end,
+  icon,
+  label,
+  collapsed,
+  badgeText,
+  badgeVariant,
+}: {
+  to: string;
+  end?: boolean;
+  icon: ReactNode;
+  label: string;
+  collapsed: boolean;
+  badgeText?: string | number;
+  badgeVariant?: 'primary' | 'accent';
+}) {
+  return (
+    <NavLink
+      to={to}
+      end={end}
+      title={collapsed ? label : undefined}
+      aria-label={label}
+      className={({ isActive }) => navItemClass(isActive, collapsed)}
+    >
+      <SidebarNavContent
+        icon={icon}
+        label={label}
+        collapsed={collapsed}
+        badgeText={badgeText}
+        badgeVariant={badgeVariant}
+      />
+    </NavLink>
+  );
+}
+
+function SidebarAction({
+  icon,
+  label,
+  collapsed,
+  onClick,
+}: {
+  icon: ReactNode;
+  label: string;
+  collapsed: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      title={collapsed ? label : undefined}
+      aria-label={label}
+      className={navItemClass(false, collapsed)}
+    >
+      <SidebarNavContent icon={icon} label={label} collapsed={collapsed} />
+    </button>
+  );
+}
+
+export function Sidebar({ onQuickBook, collapsed = false }: SidebarProps = {}) {
   const { openMap } = useMapContext();
   const navigate = useNavigate();
   const { unreadCount: notifUnreadCount } = useNotifications();
@@ -220,175 +339,123 @@ export function Sidebar({ onQuickBook }: SidebarProps = {}) {
   return (
     <aside className="sticky top-16 h-[calc(100vh-64px)] bg-[var(--color-surface)] border-r-[1.5px] border-[var(--color-border)] flex flex-col overflow-hidden">
       {/* Scrollable nav area */}
-      <div className="flex-1 overflow-y-auto min-h-0 flex flex-col gap-1 px-6 pt-6 pb-2">
-      {/* Menu Section */}
-      <Typography variant="pixel-sm" color="muted" className="px-3 pt-2 pb-1 mt-2">
-        MENÚ
-      </Typography>
-
-      <NavLink
-        to="/"
-        end
-        className={({ isActive }) =>
-          `flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold
-          transition-all duration-[var(--duration-fast)] relative no-underline
-          ${
-            isActive
-              ? 'bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)] before:absolute before:left-0 before:top-[20%] before:bottom-[20%] before:w-[3px] before:rounded-r-[var(--radius-xs)] before:bg-[var(--color-primary)]'
-              : 'text-[var(--color-text-2)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]'
-          }`
-        }
+      <div
+        className={`flex min-h-0 flex-1 flex-col gap-1 overflow-y-auto pb-2 pt-6 transition-all duration-300 ${
+          collapsed ? 'px-2' : 'px-6'
+        }`}
       >
-        <Home className="w-[18px] h-[18px] flex-shrink-0" />
-        Inicio
-      </NavLink>
-
-      <NavLink
-        to="/fields"
-        className={({ isActive }) =>
-          `flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold
-          transition-all duration-[var(--duration-fast)] relative no-underline
-          ${
-            isActive
-              ? 'bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)] before:absolute before:left-0 before:top-[20%] before:bottom-[20%] before:w-[3px] before:rounded-r-[var(--radius-xs)] before:bg-[var(--color-primary)]'
-              : 'text-[var(--color-text-2)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]'
-          }`
-        }
-      >
-        <Search className="w-[18px] h-[18px] flex-shrink-0" />
-        Buscar Canchas
-      </NavLink>
-
-      <NavLink
-        to="/bookings"
-        className={({ isActive }) =>
-          `flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold
-          transition-all duration-[var(--duration-fast)] relative no-underline
-          ${
-            isActive
-              ? 'bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)] before:absolute before:left-0 before:top-[20%] before:bottom-[20%] before:w-[3px] before:rounded-r-[var(--radius-xs)] before:bg-[var(--color-primary)]'
-              : 'text-[var(--color-text-2)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]'
-          }`
-        }
-      >
-        <Calendar className="w-[18px] h-[18px] flex-shrink-0" />
-        Mis Reservas
-        {!loadingBookingsCount && myBookingsCount > 0 && (
-          <Badge variant="primary" className="ml-auto">
-            {myBookingsCount}
-          </Badge>
+        {!collapsed ? (
+          <Typography variant="pixel-sm" color="muted" className="px-3 pt-2 pb-1 mt-2">
+            MENÚ
+          </Typography>
+        ) : (
+          <div className="mx-2 my-2 h-px bg-[var(--color-border)]" />
         )}
-      </NavLink>
 
-      <NavLink
-        to="/notifications"
-        className={({ isActive }) =>
-          `flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold
-          transition-all duration-[var(--duration-fast)] relative no-underline
-          ${
-            isActive
-              ? 'bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)] before:absolute before:left-0 before:top-[20%] before:bottom-[20%] before:w-[3px] before:rounded-r-[var(--radius-xs)] before:bg-[var(--color-primary)]'
-              : 'text-[var(--color-text-2)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]'
-          }`
-        }
-      >
-        <Bell className="w-[18px] h-[18px] flex-shrink-0" />
-        Notificaciones
-        {notifUnreadCount > 0 && (
-          <Badge variant="primary" className="ml-auto">
-            {notifUnreadCount}
-          </Badge>
+        <SidebarLink
+          to="/"
+          end
+          icon={<Home className="w-[18px] h-[18px]" />}
+          label="Inicio"
+          collapsed={collapsed}
+        />
+
+        <SidebarLink
+          to="/fields"
+          icon={<Search className="w-[18px] h-[18px]" />}
+          label="Buscar Canchas"
+          collapsed={collapsed}
+        />
+
+        <SidebarLink
+          to="/bookings"
+          icon={<Calendar className="w-[18px] h-[18px]" />}
+          label="Mis Reservas"
+          collapsed={collapsed}
+          badgeText={!loadingBookingsCount && myBookingsCount > 0 ? myBookingsCount : undefined}
+        />
+
+        <SidebarLink
+          to="/notifications"
+          icon={<Bell className="w-[18px] h-[18px]" />}
+          label="Notificaciones"
+          collapsed={collapsed}
+          badgeText={notifUnreadCount > 0 ? notifUnreadCount : undefined}
+        />
+
+        <SidebarLink
+          to="/favorites"
+          icon={<Heart className="w-[18px] h-[18px]" />}
+          label="Favoritos"
+          collapsed={collapsed}
+        />
+
+        <SidebarAction
+          icon={<MapPin className="w-[18px] h-[18px]" />}
+          label="Mapa Cercano"
+          collapsed={collapsed}
+          onClick={openMap}
+        />
+
+        <div className="my-2 h-[1.5px] rounded-sm bg-[var(--color-border)]" />
+
+        {!collapsed ? (
+          <Typography variant="pixel-sm" color="muted" className="px-3 pt-2 pb-1">
+            CUENTA
+          </Typography>
+        ) : (
+          <div className="mx-2 my-2 h-px bg-[var(--color-border)]" />
         )}
-      </NavLink>
 
-      <NavLink
-        to="/favorites"
-        className={({ isActive }) =>
-          `flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold
-          transition-all duration-[var(--duration-fast)] relative no-underline
-          ${
-            isActive
-              ? 'bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)] before:absolute before:left-0 before:top-[20%] before:bottom-[20%] before:w-[3px] before:rounded-r-[var(--radius-xs)] before:bg-[var(--color-primary)]'
-              : 'text-[var(--color-text-2)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]'
-          }`
-        }
-      >
-        <Heart className="w-[18px] h-[18px] flex-shrink-0" />
-        Favoritos
-      </NavLink>
+        <SidebarLink
+          to="/profile"
+          icon={<User className="w-[18px] h-[18px]" />}
+          label="Perfil"
+          collapsed={collapsed}
+        />
 
-      <button
-        className="flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold text-[var(--color-text-2)] transition-all duration-[var(--duration-fast)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]"
-        onClick={openMap}
-      >
-        <MapPin className="w-[18px] h-[18px] flex-shrink-0" />
-        Mapa Cercano
-      </button>
+        <SidebarLink
+          to="/payments"
+          icon={<Wallet className="w-[18px] h-[18px]" />}
+          label="Pagos"
+          collapsed={collapsed}
+          badgeText="!"
+          badgeVariant="accent"
+        />
 
-      {/* Divider */}
-      <div className="h-[1.5px] bg-[var(--color-border)] rounded-sm my-2" />
+        <SidebarLink
+          to="/settings"
+          icon={<Settings className="w-[18px] h-[18px]" />}
+          label="Configuración"
+          collapsed={collapsed}
+        />
 
-      {/* Account Section */}
-      <Typography variant="pixel-sm" color="muted" className="px-3 pt-2 pb-1">
-        CUENTA
-      </Typography>
-
-      <NavLink
-        to="/profile"
-        className={({ isActive }) =>
-          `flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold
-          transition-all duration-[var(--duration-fast)] relative no-underline
-          ${
-            isActive
-              ? 'bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)] before:absolute before:left-0 before:top-[20%] before:bottom-[20%] before:w-[3px] before:rounded-r-[var(--radius-xs)] before:bg-[var(--color-primary)]'
-              : 'text-[var(--color-text-2)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]'
-          }`
-        }
-      >
-        <User className="w-[18px] h-[18px] flex-shrink-0" />
-        Perfil
-      </NavLink>
-
-      <NavLink
-        to="/payments"
-        className={({ isActive }) =>
-          `flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold
-          transition-all duration-[var(--duration-fast)] relative no-underline
-          ${
-            isActive
-              ? 'bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)] before:absolute before:left-0 before:top-[20%] before:bottom-[20%] before:w-[3px] before:rounded-r-[var(--radius-xs)] before:bg-[var(--color-primary)]'
-              : 'text-[var(--color-text-2)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]'
-          }`
-        }
-      >
-        <Wallet className="w-[18px] h-[18px] flex-shrink-0" />
-        Pagos
-        <Badge variant="accent" className="ml-auto">
-          !
-        </Badge>
-      </NavLink>
-
-      <NavLink
-        to="/settings"
-        className={({ isActive }) =>
-          `flex items-center gap-3 px-3 py-3 rounded-[var(--radius-lg)] cursor-pointer text-sm font-extrabold
-          transition-all duration-[var(--duration-fast)] relative no-underline
-          ${
-            isActive
-              ? 'bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)] before:absolute before:left-0 before:top-[20%] before:bottom-[20%] before:w-[3px] before:rounded-r-[var(--radius-xs)] before:bg-[var(--color-primary)]'
-              : 'text-[var(--color-text-2)] hover:bg-[var(--color-surf2)] hover:text-[var(--color-primary-dark)]'
-          }`
-        }
-      >
-        <Settings className="w-[18px] h-[18px] flex-shrink-0" />
-        Configuración
-      </NavLink>
-
-      <div className="h-[1.5px] bg-[var(--color-border)] rounded-sm my-2" />
+        <div className="my-2 h-[1.5px] rounded-sm bg-[var(--color-border)]" />
       </div>{/* end scrollable nav */}
 
       {/* Quick-reserve widget — always visible, pinned at bottom */}
-      <div className="flex-shrink-0 px-6 pb-6 pt-3">
+      <div
+        className={`flex-shrink-0 pt-3 transition-all duration-300 ${
+          collapsed ? 'px-2 pb-4' : 'px-6 pb-6'
+        }`}
+      >
+      {collapsed ? (
+        <button
+          type="button"
+          title="Reserva rápida"
+          aria-label="Reserva rápida"
+          onClick={() => {
+            if (onQuickBook && quickSlot) {
+              onQuickBook(quickSlot.field, quickSlot.slot.id, quickSlot.date);
+            } else {
+              navigate('/complexes');
+            }
+          }}
+          className="flex h-12 w-full items-center justify-center rounded-[var(--radius-lg)] bg-[var(--color-text)] text-[var(--color-primary)] shadow-[var(--shadow-md)] transition-all hover:scale-[1.03] hover:text-[var(--color-primary-light)] active:scale-95"
+        >
+          <Zap className="h-[18px] w-[18px]" />
+        </button>
+      ) : (
       <div className="bg-[var(--color-text)] rounded-[var(--radius-xl)] p-4 relative overflow-hidden">
         <div
           className="absolute inset-0 pointer-events-none"
@@ -465,7 +532,8 @@ export function Sidebar({ onQuickBook }: SidebarProps = {}) {
             </>
           )}
         </div>
-      </div>{/* end pinned widget wrapper */}
+      </div>
+      )}{/* end pinned widget wrapper */}
       </div>
     </aside>
   );

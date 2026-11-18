@@ -405,6 +405,13 @@ body::before {
   animation: complex-marker-pulse 1.8s ease-out infinite;
 }
 
+.mapboxgl-user-location,
+.mapboxgl-user-location-dot,
+.mapboxgl-user-location-accuracy-circle,
+.mapboxgl-user-location-heading {
+  pointer-events: none !important;
+}
+
 @media (prefers-reduced-motion: reduce) {
   .complex-marker-pulse {
     animation: none;

@@ -91,7 +91,7 @@ export function MapDialog({ isOpen, onClose }: MapDialogProps) {
   const handleSlotBooked = (_fieldId: string, _slotId: string) => {};
 
   return (
-    <Dialog isOpen={isOpen} onClose={onClose} title="🗺️ Mapa de Canchas Cercanas" size="full">
+    <Dialog isOpen={isOpen} onClose={onClose} title="Mapa de Canchas Cercanas" size="full">
       {/* ── Two-column layout: map left, booking panel right (desktop) ── */}
       <div className="flex">
 

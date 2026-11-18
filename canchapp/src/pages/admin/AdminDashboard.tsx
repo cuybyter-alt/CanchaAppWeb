@@ -19,11 +19,9 @@ import {
   CalendarCheck,
   CircleDot,
   Clock3,
-  Hand,
   History,
   MapPin,
   Shield,
-  Smartphone,
   TrendingUp,
   Zap,
 } from 'lucide-react';
@@ -39,6 +37,7 @@ import statisticsService, {
 } from '../../services/StatisticsService';
 import type { ComplexField, ComplexFieldType, ComplexListItem } from '../../types/field';
 import AvailabilitySearch from '../../components/features/AvailabilitySearch';
+import { ComplexImageThumb } from '../../components/features/ComplexImageThumb';
 
 const FIELD_TYPE_LABELS: Record<ComplexFieldType, string> = {
   futbol_5: 'Fútbol 5',
@@ -748,19 +747,11 @@ const AdminDashboard: React.FC = () => {
                   key={booking.id}
                   className="flex items-center gap-4 p-3 rounded-[var(--radius-md)] bg-[var(--color-bg)] border border-[var(--color-border)]"
                 >
-                  <div
-                    className={`w-10 h-10 rounded-[var(--radius-md)] flex items-center justify-center text-white flex-shrink-0 ${
-                      booking.status === 'canceled'
-                        ? 'bg-[var(--color-accent)]'
-                        : 'bg-gradient-to-br from-[var(--color-primary-light)] to-[var(--color-primary-dark)]'
-                    }`}
-                  >
-                    {booking.isManual ? (
-                      <Hand className="w-4 h-4" />
-                    ) : (
-                      <Smartphone className="w-4 h-4" />
-                    )}
-                  </div>
+                  <ComplexImageThumb
+                    src={booking.complexImageUrl}
+                    alt={booking.complexName}
+                    size="sm"
+                  />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-extrabold text-[var(--color-text)] truncate">
                       {booking.customerName}

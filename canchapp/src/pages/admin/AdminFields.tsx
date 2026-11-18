@@ -1,8 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
-import { CircleDot, Building2, ChevronRight, Loader2, AlertCircle, Ruler } from 'lucide-react';
+import { CircleDot, Building2, ChevronRight, Loader2, AlertCircle, Ruler, Images } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import ApiClient from '../../services/ApiClient';
 import { tokenStorage } from '../../services/AuthService';
+import { ComplexImagesDialog } from '../../components/features/ComplexImagesDialog';
+import { ComplexImageThumb } from '../../components/features/ComplexImageThumb';
+import FieldImagesService from '../../services/FieldImagesService';
+import type { ComplexImage } from '../../types/complexImage';
  
 interface FieldItem {
   field_id: string;
@@ -20,6 +24,9 @@ interface ComplexWithFields {
   city: string | null;
   status: string;
   fields: FieldItem[];
+  last_image?: { r2_key: string; image_url: string } | null;
+  complex_image?: { r2_key: string; image_url: string } | null;
+  images_count?: number;
 }
  
 interface ApiResponse<T> { data: T; success?: boolean; message?: string; }
@@ -41,6 +48,8 @@ const AdminFields: React.FC = () => {
   const [complexes, setComplexes] = useState<ComplexWithFields[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [imagesModal, setImagesModal] = useState<ComplexWithFields | null>(null);
+  const [fieldImages, setFieldImages] = useState<Record<string, string | null>>({});
   const user = tokenStorage.getUser();
  
   const fetchAll = useCallback(async () => {
@@ -73,7 +82,54 @@ const AdminFields: React.FC = () => {
   }, [user]);
  
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  const handleImagesChanged = (confirmed: ComplexImage[]) => {
+    const complexId = imagesModal?.complex_id;
+    if (!complexId) return;
+
+    const lastImage = confirmed[0];
+    setComplexes((prev) =>
+      prev.map((complex) =>
+        complex.complex_id === complexId
+          ? {
+              ...complex,
+              images_count: confirmed.length,
+              last_image: lastImage
+                ? { r2_key: lastImage.r2_key, image_url: lastImage.image_url }
+                : null,
+            }
+          : complex,
+      ),
+    );
+  };
  
+  useEffect(() => {
+    const fields = complexes.flatMap((complex) => complex.fields);
+    if (fields.length === 0) {
+      setFieldImages({});
+      return;
+    }
+
+    let cancelled = false;
+
+    void Promise.all(
+      fields.map(async (field) => {
+        try {
+          const data = await FieldImagesService.list(field.field_id);
+          return [field.field_id, data.items[0]?.image_url ?? null] as const;
+        } catch {
+          return [field.field_id, null] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (!cancelled) setFieldImages(Object.fromEntries(entries));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [complexes]);
+
   const allFields = complexes.flatMap((c) => c.fields.map((f) => ({ ...f, complexName: c.name })));
   const activeCount = allFields.filter((f) => f.status === 'active').length;
   const maintenanceCount = allFields.filter((f) => f.status === 'maintenance').length;
@@ -148,21 +204,37 @@ const AdminFields: React.FC = () => {
               {/* Complex header */}
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <div className="w-8 h-8 rounded-[var(--radius-md)] bg-[var(--color-text)] flex items-center justify-center flex-shrink-0">
-                    <Building2 className="w-4 h-4 text-white" />
-                  </div>
+                  <ComplexImageThumb
+                    src={c.last_image?.image_url ?? c.complex_image?.image_url}
+                    alt={c.name}
+                    size="sm"
+                  />
                   <div>
                     <h2 className="font-extrabold text-[var(--color-text)] text-base">{c.name}</h2>
                     {c.city && <p className="text-xs text-[var(--color-text-3)]">{c.city}</p>}
                   </div>
                   <span className="ml-2 text-xs font-extrabold text-[var(--color-text-3)]">({c.fields.length} canchas)</span>
                 </div>
-                <button
-                  onClick={() => navigate(`/admin/complexes/${c.complex_id}/fields`)}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-lg)] text-xs font-extrabold text-[var(--color-primary)] border-[1.5px] border-[var(--color-primary)] hover:bg-[var(--color-primary-tint)] transition-colors"
-                >
-                  Gestionar <ChevronRight className="w-3.5 h-3.5" />
-                </button>
+                <div className="flex items-center gap-2">
+                  <button
+                    onClick={() => setImagesModal(c)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-lg)] text-xs font-extrabold text-[var(--color-text-2)] border border-[var(--color-border)] bg-white hover:border-[var(--color-primary)] hover:text-[var(--color-primary)] transition-colors"
+                  >
+                    <Images className="w-3.5 h-3.5" />
+                    Fotos
+                    {(c.images_count ?? 0) > 0 && (
+                      <span className="rounded-full bg-[var(--color-primary-tint)] px-1.5 text-[9px] text-[var(--color-primary-dark)]">
+                        {c.images_count}
+                      </span>
+                    )}
+                  </button>
+                  <button
+                    onClick={() => navigate(`/admin/complexes/${c.complex_id}/fields`)}
+                    className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-[var(--radius-lg)] text-xs font-extrabold text-[var(--color-primary)] border-[1.5px] border-[var(--color-primary)] hover:bg-[var(--color-primary-tint)] transition-colors"
+                  >
+                    Gestionar <ChevronRight className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
  
               {c.fields.length === 0 ? (
@@ -175,9 +247,17 @@ const AdminFields: React.FC = () => {
                     const statusConf = STATUS_CONFIG[f.status] ?? STATUS_CONFIG.inactive;
                     return (
                       <div key={f.field_id} className="bg-white rounded-[var(--radius-xl)] border-[1.5px] border-[var(--color-border)] px-4 py-3 flex items-center gap-3 shadow-[var(--shadow-sm)]">
-                        <div className="w-9 h-9 rounded-[var(--radius-lg)] bg-[var(--color-primary-tint)] flex items-center justify-center flex-shrink-0">
-                          <CircleDot className="w-5 h-5 text-[var(--color-primary)]" />
-                        </div>
+                        {fieldImages[f.field_id] ? (
+                          <ComplexImageThumb
+                            src={fieldImages[f.field_id]}
+                            alt={f.name}
+                            size="sm"
+                          />
+                        ) : (
+                          <div className="w-9 h-9 rounded-[var(--radius-lg)] bg-[var(--color-primary-tint)] flex items-center justify-center flex-shrink-0">
+                            <CircleDot className="w-5 h-5 text-[var(--color-primary)]" />
+                          </div>
+                        )}
                         <div className="flex-1 min-w-0">
                           <p className="font-extrabold text-sm text-[var(--color-text)] truncate">{f.name}</p>
                           <div className="flex items-center gap-2 mt-0.5">
@@ -200,6 +280,14 @@ const AdminFields: React.FC = () => {
             </div>
           ))}
         </>
+      )}
+
+      {imagesModal && (
+        <ComplexImagesDialog
+          complex={imagesModal}
+          onClose={() => setImagesModal(null)}
+          onChanged={handleImagesChanged}
+        />
       )}
     </div>
   );

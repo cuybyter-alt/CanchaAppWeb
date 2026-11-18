@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Bell, MapPin, Search, LogOut, User, Shield, Menu, X } from 'lucide-react';
 import { useNavigate, Link } from 'react-router-dom';
 import authService, { tokenStorage } from '../../services/AuthService';
@@ -6,19 +6,53 @@ import { useAuth } from '../../context/AuthContext';
 import { useNotifications } from '../../context/NotificationsContext';
 
 interface TopbarProps {
-  onSearch?: (query: string) => void;
   searchValue?: string;
+  onSearchChange?: (query: string) => void;
+  onSearchSubmit?: (query: string) => void;
+  onSearchClear?: () => void;
   sidebarOpen?: boolean;
   onToggleSidebar?: () => void;
 }
 
-export function Topbar({ onSearch, searchValue = '', sidebarOpen: _sidebarOpen, onToggleSidebar }: TopbarProps) {
+export function Topbar({
+  searchValue = '',
+  onSearchChange,
+  onSearchSubmit,
+  onSearchClear,
+  sidebarOpen: _sidebarOpen,
+  onToggleSidebar,
+}: TopbarProps) {
   const navigate = useNavigate();
   const [showUserMenu, setShowUserMenu] = useState(false);
   const [showMobileMenu, setShowMobileMenu] = useState(false);
   const [showMobileSearch, setShowMobileSearch] = useState(false);
+  const [searchInput, setSearchInput] = useState(searchValue);
   const { user } = useAuth();
   const { unreadCount } = useNotifications();
+
+  useEffect(() => {
+    setSearchInput(searchValue);
+  }, [searchValue]);
+
+  const handleSearchInput = (value: string) => {
+    setSearchInput(value);
+    onSearchChange?.(value);
+  };
+
+  const handleSearchSubmit = () => {
+    const query = searchInput.trim();
+    if (onSearchSubmit) {
+      onSearchSubmit(query);
+      return;
+    }
+    if (query) navigate(`/fields?q=${encodeURIComponent(query)}`);
+  };
+
+  const handleSearchClear = () => {
+    setSearchInput('');
+    onSearchChange?.('');
+    onSearchClear?.();
+  };
   
   // Use authService to check authentication
   const isAuthenticated = authService.isAuthenticated();
@@ -85,17 +119,23 @@ export function Topbar({ onSearch, searchValue = '', sidebarOpen: _sidebarOpen, 
           <input
             type="text"
             placeholder="Buscar canchas, barrios..."
-            value={searchValue}
+            value={searchInput}
             className="flex-1 bg-transparent border-none outline-none text-white text-sm font-bold py-2.5 placeholder:text-white/30 placeholder:font-semibold"
-            onChange={(e) => onSearch?.(e.target.value)}
+            onChange={(e) => handleSearchInput(e.target.value)}
             onKeyDown={(e) => {
-              if (e.key === 'Enter' && searchValue.trim()) {
-                navigate(`/fields?q=${encodeURIComponent(searchValue.trim())}`);
+              if (e.key === 'Enter') {
+                e.preventDefault();
+                handleSearchSubmit();
               }
             }}
           />
-          {searchValue && (
-            <button onClick={() => onSearch?.('')} className="text-white/40 hover:text-white/80 transition-colors">
+          {searchInput && (
+            <button
+              type="button"
+              onClick={handleSearchClear}
+              className="text-white/40 hover:text-white/80 transition-colors"
+              aria-label="Limpiar búsqueda"
+            >
               <X className="w-3.5 h-3.5" />
             </button>
           )}
@@ -244,19 +284,29 @@ export function Topbar({ onSearch, searchValue = '', sidebarOpen: _sidebarOpen, 
             <input
               type="text"
               placeholder="Buscar canchas, barrios..."
+              value={searchInput}
               className="flex-1 bg-transparent border-none outline-none text-white text-sm font-bold py-2.5 placeholder:text-white/30 placeholder:font-semibold"
-              onChange={(e) => onSearch?.(e.target.value)}
+              onChange={(e) => handleSearchInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === 'Enter' && e.currentTarget.value.trim()) {
-                  navigate(`/fields?q=${encodeURIComponent(e.currentTarget.value.trim())}`);
+                if (e.key === 'Enter') {
+                  e.preventDefault();
+                  handleSearchSubmit();
                   setShowMobileSearch(false);
                 }
               }}
               autoFocus
             />
             <button
-              onClick={() => setShowMobileSearch(false)}
+              type="button"
+              onClick={() => {
+                if (searchInput) {
+                  handleSearchClear();
+                } else {
+                  setShowMobileSearch(false);
+                }
+              }}
               className="text-white/50 hover:text-white"
+              aria-label={searchInput ? 'Limpiar búsqueda' : 'Cerrar búsqueda'}
             >
               <X className="w-4 h-4" />
             </button>

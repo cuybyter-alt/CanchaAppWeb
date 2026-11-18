@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
-import { Plus, Building2, MapPin, Phone, Target, Users, Images, Maximize2, X, Loader2, AlertCircle, CheckCircle, Mail, Send, Trash2 } from 'lucide-react';
+import { Plus, Building2, MapPin, Phone, Target, Users, Images, Maximize2, Pencil, X, Loader2, AlertCircle, CheckCircle, Mail, Send, Trash2 } from 'lucide-react';
 import invitationService from '../../services/InvitationService';
 import type { ComplexInvitation } from '../../types/invitation';
 import type { ComplexImage } from '../../types/complexImage';
@@ -309,8 +309,9 @@ function AdminsModal({ complex, onClose }: { complex: ComplexItem; onClose: () =
  
 // ─── Complex Card ─────────────────────────────────────────────────────────────
  
-function ComplexCard({ c, onViewFields, onViewAdmins, onManageImages }: {
+function ComplexCard({ c, onEdit, onViewFields, onViewAdmins, onManageImages }: {
   c: ComplexItem;
+  onEdit: () => void;
   onViewFields: () => void;
   onViewAdmins: () => void;
   onManageImages: () => void;
@@ -359,6 +360,15 @@ function ComplexCard({ c, onViewFields, onViewAdmins, onManageImages }: {
           </div>
         )}
         <h3 className="text-white font-extrabold text-[15px] flex-1 min-w-0 truncate leading-tight">{c.name}</h3>
+        <button
+          type="button"
+          onClick={onEdit}
+          title="Editar complejo"
+          aria-label={`Editar ${c.name}`}
+          className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-full border border-white/20 text-white/75 transition-colors hover:border-[var(--color-primary)] hover:bg-white/10 hover:text-white"
+        >
+          <Pencil className="w-3.5 h-3.5" />
+        </button>
         <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider flex-shrink-0 ${
           isActive ? 'bg-[var(--color-primary)] text-white' : 'bg-white/10 text-white/50'
         }`}>
@@ -656,6 +666,9 @@ const AdminComplexes: React.FC = () => {
     if (!form.name.trim()) errors.name = 'Requerido';
     if (!form.city.trim()) errors.city = 'Requerido';
     if (!form.address.trim()) errors.address = 'Requerido';
+    if (!form.latitude || !form.longitude) {
+      errors.latitude = 'Selecciona la ubicación del complejo en el mapa.';
+    }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -670,8 +683,8 @@ const AdminComplexes: React.FC = () => {
         city: form.city.trim(),
         address: form.address.trim(),
         telephones: phones,
-        latitude: form.latitude ? parseFloat(form.latitude) : 0,
-        longitude: form.longitude ? parseFloat(form.longitude) : 0,
+        latitude: parseFloat(form.latitude),
+        longitude: parseFloat(form.longitude),
       }, { withAuth: true });
       toast.success('¡Complejo creado exitosamente!');
       setForm(FORM_EMPTY);
@@ -757,7 +770,7 @@ const AdminComplexes: React.FC = () => {
             {/* Location picker — full width: geocoder input + visual map */}
             <div className="sm:col-span-2 space-y-2">
               <label className="block text-[11px] font-extrabold text-[var(--color-text-2)] mb-1.5 uppercase tracking-wide">
-                Ubicación en el mapa
+                Ubicación en el mapa *
               </label>
               <p className="text-[10px] text-[var(--color-text-3)] -mt-1">
                 Busca la dirección o haz clic directamente en el mapa. Arrastra el marcador verde para ajustar.
@@ -788,6 +801,9 @@ const AdminComplexes: React.FC = () => {
                     Limpiar
                   </button>
                 </div>
+              )}
+              {formErrors.latitude && (
+                <p className="text-xs font-bold text-[var(--color-accent)]">{formErrors.latitude}</p>
               )}
             </div>
           </div>
@@ -860,6 +876,7 @@ const AdminComplexes: React.FC = () => {
             <ComplexCard
               key={c.complex_id}
               c={c}
+              onEdit={() => navigate(`/admin/complexes/${c.complex_id}/edit`)}
               onViewFields={() => navigate(`/admin/complexes/${c.complex_id}/fields`)}
               onViewAdmins={() => setAdminsModal(c)}
               onManageImages={() => setImagesModal(c)}

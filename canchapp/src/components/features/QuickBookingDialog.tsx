@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { AlertTriangle, Building2, CalendarDays, CircleDot, Clock3, Loader, Search } from 'lucide-react';
 import { Dialog } from '../ui/dialog';
+import { ComplexImageCover } from './ComplexImageThumb';
 import availabilitySearchService from '../../services/AvailabilitySearchService';
 import { notify } from '../../services/toast';
 import {
@@ -112,6 +113,17 @@ const QuickBookingDialog: React.FC<QuickBookingDialogProps> = ({
     <Dialog isOpen={target !== null} onClose={handleClose} title="Reserva rápida" size="sm">
       {target && (
         <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4" noValidate>
+          <ComplexImageCover
+            src={target.fieldImageUrl ?? target.complexImageUrl}
+            alt={target.fieldName}
+            className="h-24 rounded-[var(--radius-xl)] border border-[var(--color-border)]"
+          >
+            <div className="absolute inset-x-0 bottom-0 p-3">
+              <p className="truncate text-sm font-extrabold text-white">{target.complexName}</p>
+              <p className="truncate text-xs font-semibold text-white/75">{target.fieldName}</p>
+            </div>
+          </ComplexImageCover>
+
           <div className="grid grid-cols-2 gap-3 p-4 rounded-[var(--radius-xl)] bg-[var(--color-primary-tint)] border border-[var(--color-border)]">
             <SummaryRow icon={<Building2 className="w-4 h-4" />} label="Complejo" value={target.complexName} />
             <SummaryRow

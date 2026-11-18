@@ -418,3 +418,98 @@ body::before {
     opacity: 0.55;
   }
 }
+
+@keyframes auth-gradient-pan {
+  0% {
+    background-position: 0% 50%;
+  }
+  50% {
+    background-position: 100% 50%;
+  }
+  100% {
+    background-position: 0% 50%;
+  }
+}
+
+.auth-animated-gradient {
+  background-size: 220% 220%;
+  animation: auth-gradient-pan 14s ease-in-out infinite;
+}
+
+@keyframes auth-wave-float {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    transform: translate3d(-26px, 18px, 0) scale(1.03);
+  }
+}
+
+.auth-wave-a {
+  animation: auth-wave-float 11s ease-in-out infinite;
+}
+
+.auth-wave-b {
+  animation: auth-wave-float 17s ease-in-out infinite reverse;
+}
+
+@keyframes auth-ambient-shift {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(180px, 120px, 0);
+  }
+}
+
+.auth-ambient-light {
+  animation: auth-ambient-shift 13s ease-in-out infinite;
+}
+
+@keyframes auth-field-draw {
+  to {
+    stroke-dashoffset: 0;
+  }
+}
+
+.auth-field-line {
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  animation: auth-field-draw 2.4s ease-out forwards;
+}
+
+@keyframes auth-field-pulse {
+  0%,
+  100% {
+    opacity: 0.14;
+  }
+  50% {
+    opacity: 0.26;
+  }
+}
+
+.auth-field-group {
+  opacity: 0.14;
+  animation: auth-field-pulse 6s ease-in-out 2.4s infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .auth-animated-gradient,
+  .auth-wave-a,
+  .auth-wave-b,
+  .auth-ambient-light,
+  .auth-field-line,
+  .auth-field-group {
+    animation: none;
+  }
+
+  .auth-field-line {
+    stroke-dashoffset: 0;
+  }
+
+  .auth-field-group {
+    opacity: 0.2;
+  }
+}

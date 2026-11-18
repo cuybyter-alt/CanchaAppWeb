@@ -75,6 +75,7 @@ function AppLayoutInner() {
         {/* Topbar - fixed at top */}
         <Topbar
           searchValue={searchQuery}
+          onSearchChange={setSearchQuery}
           onSearchSubmit={handleSearchSubmit}
           onSearchClear={handleSearchClear}
           sidebarOpen={sidebarOpen}

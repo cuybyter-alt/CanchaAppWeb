@@ -7,6 +7,7 @@ import { useNotifications } from '../../context/NotificationsContext';
 
 interface TopbarProps {
   searchValue?: string;
+  onSearchChange?: (query: string) => void;
   onSearchSubmit?: (query: string) => void;
   onSearchClear?: () => void;
   sidebarOpen?: boolean;
@@ -15,6 +16,7 @@ interface TopbarProps {
 
 export function Topbar({
   searchValue = '',
+  onSearchChange,
   onSearchSubmit,
   onSearchClear,
   sidebarOpen: _sidebarOpen,
@@ -32,6 +34,11 @@ export function Topbar({
     setSearchInput(searchValue);
   }, [searchValue]);
 
+  const handleSearchInput = (value: string) => {
+    setSearchInput(value);
+    onSearchChange?.(value);
+  };
+
   const handleSearchSubmit = () => {
     const query = searchInput.trim();
     if (onSearchSubmit) {
@@ -43,6 +50,7 @@ export function Topbar({
 
   const handleSearchClear = () => {
     setSearchInput('');
+    onSearchChange?.('');
     onSearchClear?.();
   };
   
@@ -113,7 +121,7 @@ export function Topbar({
             placeholder="Buscar canchas, barrios..."
             value={searchInput}
             className="flex-1 bg-transparent border-none outline-none text-white text-sm font-bold py-2.5 placeholder:text-white/30 placeholder:font-semibold"
-            onChange={(e) => setSearchInput(e.target.value)}
+            onChange={(e) => handleSearchInput(e.target.value)}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {
                 e.preventDefault();
@@ -278,7 +286,7 @@ export function Topbar({
               placeholder="Buscar canchas, barrios..."
               value={searchInput}
               className="flex-1 bg-transparent border-none outline-none text-white text-sm font-bold py-2.5 placeholder:text-white/30 placeholder:font-semibold"
-              onChange={(e) => setSearchInput(e.target.value)}
+              onChange={(e) => handleSearchInput(e.target.value)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();

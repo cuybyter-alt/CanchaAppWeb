@@ -666,6 +666,9 @@ const AdminComplexes: React.FC = () => {
     if (!form.name.trim()) errors.name = 'Requerido';
     if (!form.city.trim()) errors.city = 'Requerido';
     if (!form.address.trim()) errors.address = 'Requerido';
+    if (!form.latitude || !form.longitude) {
+      errors.latitude = 'Selecciona la ubicación del complejo en el mapa.';
+    }
     setFormErrors(errors);
     return Object.keys(errors).length === 0;
   };
@@ -680,8 +683,8 @@ const AdminComplexes: React.FC = () => {
         city: form.city.trim(),
         address: form.address.trim(),
         telephones: phones,
-        latitude: form.latitude ? parseFloat(form.latitude) : 0,
-        longitude: form.longitude ? parseFloat(form.longitude) : 0,
+        latitude: parseFloat(form.latitude),
+        longitude: parseFloat(form.longitude),
       }, { withAuth: true });
       toast.success('¡Complejo creado exitosamente!');
       setForm(FORM_EMPTY);
@@ -767,7 +770,7 @@ const AdminComplexes: React.FC = () => {
             {/* Location picker — full width: geocoder input + visual map */}
             <div className="sm:col-span-2 space-y-2">
               <label className="block text-[11px] font-extrabold text-[var(--color-text-2)] mb-1.5 uppercase tracking-wide">
-                Ubicación en el mapa
+                Ubicación en el mapa *
               </label>
               <p className="text-[10px] text-[var(--color-text-3)] -mt-1">
                 Busca la dirección o haz clic directamente en el mapa. Arrastra el marcador verde para ajustar.
@@ -798,6 +801,9 @@ const AdminComplexes: React.FC = () => {
                     Limpiar
                   </button>
                 </div>
+              )}
+              {formErrors.latitude && (
+                <p className="text-xs font-bold text-[var(--color-accent)]">{formErrors.latitude}</p>
               )}
             </div>
           </div>

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, Search, SlidersHorizontal, X } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ComplexCard } from '../components/features/ComplexCard';
 import { ComplexFieldsDialog } from '../components/features/ComplexFieldsDialog';
@@ -187,50 +187,99 @@ const Fields: React.FC = () => {
 
   return (
     <div className="p-4 sm:p-6 space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between gap-3">
-        <button
-          onClick={() => navigate('/')}
-          className="inline-flex items-center gap-2 px-4 py-2 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surface)] hover:bg-[var(--color-surf2)] transition-all duration-[var(--duration-fast)]"
-        >
-          <ArrowLeft className="w-4 h-4" />
-          Volver
-        </button>
-        <Typography variant="h3" color="text" className="text-right">
-          <i className="fa-solid fa-magnifying-glass text-[var(--color-primary)] mr-2" />
-          Buscar Canchas
-        </Typography>
-      </div>
+      {/* Hero */}
+      <section className="relative overflow-hidden rounded-[var(--radius-2xl)] border border-[var(--color-border)] bg-gradient-to-br from-[var(--color-primary-tint)] via-white to-emerald-50 p-5 shadow-[var(--shadow-sm)] sm:p-7">
+        <div
+          className="pointer-events-none absolute inset-0 opacity-[0.35]"
+          style={{
+            backgroundImage:
+              'repeating-linear-gradient(0deg, transparent, transparent 22px, rgba(98,191,59,.09) 23px), repeating-linear-gradient(90deg, transparent, transparent 22px, rgba(98,191,59,.09) 23px)',
+          }}
+        />
+        <div className="pointer-events-none absolute -right-16 -top-20 h-56 w-56 rounded-full bg-[var(--color-primary)]/10 blur-3xl" />
 
-      {/* Sort bar — la búsqueda se controla desde el navbar */}
-      <div className="flex items-center justify-end gap-2">
-        <label
-          htmlFor="fields-sort"
-          className="text-[11px] font-extrabold uppercase tracking-wider text-[var(--color-text-3)]"
-        >
-          Ordenar por
-        </label>
-        <select
-          id="fields-sort"
-          value={sortBy}
-          onChange={(e) => setSortBy(e.target.value as SortId)}
-          className="h-10 px-3 rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-bold text-[var(--color-text-2)] outline-none focus:border-[var(--color-primary)] flex-shrink-0"
-        >
-          {sortOptions.map((opt) => (
-            <option key={opt.id} value={opt.id}>{opt.label}</option>
-          ))}
-        </select>
-      </div>
+        <div className="relative flex flex-col gap-5 md:flex-row md:items-center md:justify-between">
+          <div className="flex items-start gap-4">
+            <button
+              type="button"
+              onClick={() => navigate('/')}
+              aria-label="Volver al inicio"
+              className="mt-1 flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-full border border-[var(--color-border)] bg-white/85 text-[var(--color-text-2)] shadow-[var(--shadow-sm)] transition-all hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </button>
 
-      {/* Result count */}
-      {!showSkeleton && !error && complexes.length > 0 && (
-        <p className="text-xs font-bold text-[var(--color-text-3)] -mt-2">
-          {appliedQuery
-            ? `${complexes.length} resultado${complexes.length !== 1 ? 's' : ''} para "${appliedQuery}"`
-            : `${complexes.length} complejo${complexes.length !== 1 ? 's' : ''} disponibles`}
-          {favoriteIds.size > 0 && ' · favoritos primero'}
-        </p>
-      )}
+            <div>
+              <p className="mb-1 flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-[0.18em] text-[var(--color-primary)]">
+                <Search className="h-3 w-3" />
+                Explorar complejos
+              </p>
+              <h1 className="text-3xl font-extrabold leading-tight text-[var(--color-text)] sm:text-4xl">
+                Buscar <span className="text-[var(--color-primary)]">canchas</span>
+              </h1>
+              <p className="mt-2 max-w-xl text-sm font-semibold leading-relaxed text-[var(--color-text-3)]">
+                Consulta complejos, revisa sus canchas y encuentra el horario ideal para tu próximo partido.
+              </p>
+            </div>
+          </div>
+
+          {appliedQuery && (
+            <div className="inline-flex max-w-full items-center gap-2 self-start rounded-full border border-[var(--color-primary)]/25 bg-white/85 px-4 py-2 shadow-[var(--shadow-sm)] md:self-auto">
+              <Search className="h-3.5 w-3.5 flex-shrink-0 text-[var(--color-primary)]" />
+              <span className="truncate text-sm font-extrabold text-[var(--color-text-2)]">
+                “{appliedQuery}”
+              </span>
+              <button
+                type="button"
+                onClick={() => {
+                  setSearchQuery('');
+                  navigate('/fields', { replace: true });
+                }}
+                aria-label="Limpiar búsqueda"
+                className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full bg-[var(--color-surf2)] text-[var(--color-text-3)] transition-colors hover:bg-[var(--color-primary)]/15 hover:text-[var(--color-primary)]"
+              >
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+        </div>
+      </section>
+
+      {/* Results toolbar */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <p className="text-sm font-extrabold text-[var(--color-text)]">
+            {appliedQuery ? 'Resultados de búsqueda' : 'Complejos disponibles'}
+          </p>
+          <p className="mt-0.5 text-xs font-semibold text-[var(--color-text-3)]">
+            {showSkeleton
+              ? 'Cargando resultados...'
+              : error
+                ? 'No se pudieron cargar los resultados'
+                : `${complexes.length} ${complexes.length === 1 ? 'complejo encontrado' : 'complejos encontrados'}${favoriteIds.size > 0 ? ' · favoritos primero' : ''}`}
+          </p>
+        </div>
+
+        <div className="flex items-center gap-2">
+          <SlidersHorizontal className="h-4 w-4 text-[var(--color-text-3)]" />
+          <label
+            htmlFor="fields-sort"
+            className="text-[11px] font-extrabold uppercase tracking-wider text-[var(--color-text-3)]"
+          >
+            Ordenar
+          </label>
+          <select
+            id="fields-sort"
+            value={sortBy}
+            onChange={(e) => setSortBy(e.target.value as SortId)}
+            className="h-10 rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-surface)] px-3 text-sm font-bold text-[var(--color-text-2)] outline-none transition-colors focus:border-[var(--color-primary)]"
+          >
+            {sortOptions.map((opt) => (
+              <option key={opt.id} value={opt.id}>{opt.label}</option>
+            ))}
+          </select>
+        </div>
+      </div>
 
       {/* Skeletons */}
       {showSkeleton && (

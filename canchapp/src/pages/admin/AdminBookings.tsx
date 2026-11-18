@@ -677,8 +677,22 @@ const AdminBookings: React.FC = () => {
               className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-3.5 md:p-4 shadow-[var(--shadow-md)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--color-primary)] hover:shadow-[var(--shadow-primary)]"
             >
               <div className="flex flex-col xl:flex-row xl:items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center flex-shrink-0 shadow-[var(--shadow-primary)]">
+                <div className="relative w-10 h-10 rounded-full overflow-hidden bg-[var(--color-primary)] text-white flex items-center justify-center flex-shrink-0 shadow-[var(--shadow-primary)]">
                   <Smartphone className="w-4 h-4" />
+                  {booking.complexImageUrl && (
+                    <img
+                      src={booking.complexImageUrl}
+                      alt={booking.complexName}
+                      loading="lazy"
+                      onLoad={(event) => {
+                        event.currentTarget.style.display = '';
+                      }}
+                      onError={(event) => {
+                        event.currentTarget.style.display = 'none';
+                      }}
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                  )}
                 </div>
 
                 <div className="flex-1 min-w-0">

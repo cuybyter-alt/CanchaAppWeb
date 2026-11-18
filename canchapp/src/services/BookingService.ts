@@ -55,6 +55,7 @@ export interface AdminBookingRow {
   isManual?: boolean;
   createdByAdmin?: boolean;
   startIso?: string;
+  complexImageUrl?: string | null;
 }
 
 export interface DashboardSummary {
@@ -131,6 +132,13 @@ function pickPhone(raw: RawRecord, user?: { phone_number?: string | null } | nul
   if (typeof raw.phone === 'string' && raw.phone.trim()) return raw.phone.trim();
   if (user?.phone_number?.trim()) return user.phone_number.trim();
   return '—';
+}
+
+function pickComplexImageUrl(raw: RawRecord): string | null {
+  const image = raw.complex_image;
+  if (!image || typeof image !== 'object') return null;
+  const url = (image as RawRecord).image_url;
+  return typeof url === 'string' && url.trim() ? url.trim() : null;
 }
 
 type RawRecord = Record<string, unknown>;
@@ -265,6 +273,7 @@ function mapBackendBooking(raw: RawRecord): Booking {
     price,
     startIso: startDt,
     endIso: endDt,
+    complexImageUrl: pickComplexImageUrl(raw),
   };
 }
 
@@ -309,6 +318,7 @@ function mapToAdminBookingRow(
     isManual: (raw.created_by_admin ?? false) as boolean,
     createdByAdmin: (raw.created_by_admin ?? false) as boolean,
     startIso: startDt,
+    complexImageUrl: pickComplexImageUrl(raw),
   };
 }
 
@@ -436,6 +446,7 @@ const bookingService = {
     is_past?: boolean;
   }): Promise<Booking[]> => {
     const query = new URLSearchParams();
+    query.set('include_complex_image', 'true');
     if (params?.page !== undefined) query.set('page', String(params.page));
     if (params?.page_size !== undefined) query.set('page_size', String(params.page_size));
     if (params?.status !== undefined) query.set('status', params.status);
@@ -474,6 +485,7 @@ const bookingService = {
     is_past?: boolean;
   }): Promise<PaginatedBookingsOutput> => {
     const query = new URLSearchParams();
+    query.set('include_complex_image', 'true');
     if (params?.page !== undefined) query.set('page', String(params.page));
     if (params?.page_size !== undefined) query.set('page_size', String(params.page_size));
     if (params?.status !== undefined) query.set('status', params.status);
@@ -511,6 +523,7 @@ const bookingService = {
     is_approved?: boolean;
   }): Promise<PaginatedAdminBookingsOutput> => {
     const query = new URLSearchParams();
+    query.set('include_complex_image', 'true');
     if (params?.page !== undefined) query.set('page', String(params.page));
     if (params?.page_size !== undefined) query.set('page_size', String(params.page_size));
     if (params?.status !== undefined) query.set('status', params.status);

@@ -63,6 +63,7 @@ export interface Booking {
   startIso?: string;
   /** ISO 8601 end datetime — booking is completed when this is in the past */
   endIso?: string;
+  complexImageUrl?: string | null;
 }
 
 export interface ComplexListItem {

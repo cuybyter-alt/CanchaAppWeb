@@ -30,6 +30,7 @@ interface ComplexItem {
   latitude?: number | null;
   longitude?: number | null;
   last_image?: { r2_key: string; image_url: string } | null;
+  complex_image?: { r2_key: string; image_url: string } | null;
   images_count?: number;
 }
  
@@ -626,12 +627,20 @@ const AdminComplexes: React.FC = () => {
     setError(null);
     try {
       const res = await ApiClient.get<ApiResponse<PaginatedData>>(
-        `/complexes/manager/list/?page_size=50`,
+        `/complexes/manager/list/?page_size=50&include_complex_image=true`,
         { withAuth: true }
       );
-      const items: ComplexItem[] = Array.isArray(res.data)
+      const rawItems: ComplexItem[] = Array.isArray(res.data)
         ? res.data
         : (res.data as PaginatedData)?.items ?? [];
+      const items = rawItems.map((item) => {
+        const image = item.last_image ?? item.complex_image ?? null;
+        return {
+          ...item,
+          last_image: image,
+          images_count: item.images_count ?? (image ? 1 : 0),
+        };
+      });
       setComplexes(items);
     } catch (e: unknown) {
       setError((e as { message?: string }).message ?? 'Error al cargar los complejos');

@@ -1,4 +1,6 @@
+import { fromZonedTime } from 'date-fns-tz';
 import ApiClient from './ApiClient';
+import { DEFAULT_VENUE_TIMEZONE, formatTime24, getNowMinutesInTimezone, getTodayISO } from '../lib/timezone';
 import type { Field, Sport, TimeSlotData } from '../types/field';
 import type { GridData, MoveResult } from '../types/grid';
 
@@ -51,9 +53,9 @@ function extractArray(value: unknown): RawRecord[] {
 }
 
 const FALLBACK_TIMES = [
-  '8:00 AM', '9:00 AM', '10:00 AM', '11:00 AM',
-  '12:00 PM', '1:00 PM', '3:00 PM', '5:00 PM',
-  '7:00 PM', '8:00 PM', '9:00 PM', '10:00 PM',
+  '08:00', '09:00', '10:00', '11:00',
+  '12:00', '13:00', '15:00', '17:00',
+  '19:00', '20:00', '21:00', '22:00',
 ];
 
 function parseSport(fieldType?: string): { sport: Sport; sportLabel: string } {
@@ -67,23 +69,20 @@ function parseSport(fieldType?: string): { sport: Sport; sportLabel: string } {
 function defaultAvailability(price: number, dateISO?: string): TimeSlotData[] {
   const targetDate = dateISO || localTodayISO();
   const isToday = targetDate === localTodayISO();
-  const now = new Date();
+  const nowMinutes = getNowMinutesInTimezone();
 
-  return FALLBACK_TIMES.map((slot, idx) => {
-    const [time, period] = slot.split(' ');
-    const parts = time.split(':');
-    let h = parseInt(parts[0], 10);
-    const m = parseInt(parts[1] || '0', 10);
-    if (period === 'PM' && h < 12) h += 12;
-    if (period === 'AM' && h === 12) h = 0;
-
-    const slotDate = new Date(`${targetDate}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00`);
-    const isPast = isToday && slotDate.getTime() <= now.getTime();
+  return FALLBACK_TIMES.map((time, idx) => {
+    const [hour, minute] = time.split(':').map(Number);
+    const slotDate = fromZonedTime(
+      `${targetDate}T${String(hour).padStart(2, '0')}:${String(minute).padStart(2, '0')}:00`,
+      DEFAULT_VENUE_TIMEZONE,
+    );
+    const isPast = isToday && hour * 60 + minute <= nowMinutes;
 
     return {
       id: `slot-${idx}`,
       time,
-      period: period as 'AM' | 'PM',
+      period: hour >= 12 ? 'PM' : 'AM',
       price,
       status: isPast ? 'taken' : 'available',
       startIso: slotDate.toISOString(),
@@ -93,23 +92,24 @@ function defaultAvailability(price: number, dateISO?: string): TimeSlotData[] {
 }
 
 export function localTodayISO(): string {
-  return new Date().toLocaleDateString('en-CA');
+  return getTodayISO();
 }
 
 function toTimeSlotData(item: TimeSlotOutput, idx: number, dateISO?: string): TimeSlotData {
-  let start = item.start_datetime ? new Date(item.start_datetime) : null;
-  const hh = start ? start.getHours() : 8 + idx;
-  const mm = start ? String(start.getMinutes()).padStart(2, '0') : '00';
-  const period: 'AM' | 'PM' = hh >= 12 ? 'PM' : 'AM';
-  const hour12 = ((hh + 11) % 12) + 1;
-
   const targetDate = dateISO || (item.start_datetime ? item.start_datetime.split('T')[0] : localTodayISO());
-  if (!start && targetDate) {
-    start = new Date(`${targetDate}T${String(hh).padStart(2, '0')}:${mm}:00`);
+  let start = item.start_datetime ? new Date(item.start_datetime) : null;
+
+  if (!start || Number.isNaN(start.getTime())) {
+    const fallbackHour = 8 + idx;
+    start = fromZonedTime(
+      `${targetDate}T${String(fallbackHour).padStart(2, '0')}:00:00`,
+      DEFAULT_VENUE_TIMEZONE,
+    );
   }
 
-  const now = new Date();
-  const isPast = start ? start.getTime() <= now.getTime() : false;
+  const time = formatTime24(start);
+  const period: 'AM' | 'PM' = Number(time.split(':')[0]) >= 12 ? 'PM' : 'AM';
+  const isPast = start.getTime() <= Date.now();
 
   const status = String(item.status ?? '').toLowerCase();
   const isMaintenance = status === 'maintenance';
@@ -126,11 +126,11 @@ function toTimeSlotData(item: TimeSlotOutput, idx: number, dateISO?: string): Ti
 
   return {
     id: item.time_slot_id ?? `slot-${idx}`,
-    time: `${hour12}:${mm}`,
+    time,
     period,
     price: Number(item.price ?? 0),
     status: isTaken ? 'taken' : 'available',
-    startIso: item.start_datetime || (start ? start.toISOString() : undefined),
+    startIso: item.start_datetime || start.toISOString(),
     endIso: item.end_datetime,
     blockReason: isTaken ? (isMaintenance ? 'maintenance' : (isPast ? 'past' : 'booked')) : undefined,
   };

@@ -81,4 +81,6 @@ export interface NearbyComplex {
   distanceLabel: string;
   averageRating?: number;
   reviewCount?: number;
+  imageUrl?: string | null;
+  imagesCount?: number;
 }

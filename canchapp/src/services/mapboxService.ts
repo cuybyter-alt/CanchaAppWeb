@@ -295,6 +295,7 @@ export function calculateDistance(
 function createComplexMarkerElement(
   complex: ComplexMarker,
   onNavigate?: (complex: ComplexMarker) => void,
+  isHighlighted = false,
 ): HTMLElement {
   // el must NOT have position:relative — Mapbox positions its markers with
   // transform:translate on a wrapper div inside the map canvas. Adding
@@ -304,6 +305,8 @@ function createComplexMarkerElement(
   // We give el explicit dimensions equal to the pin so Mapbox anchor logic works.
   const el = document.createElement('div');
   el.style.cssText = 'width:40px;height:40px;cursor:pointer;overflow:visible;';
+  el.dataset.complexId = complex.id;
+  if (isHighlighted) el.dataset.highlighted = 'true';
 
   const color = complex.fieldsCount > 0 ? '#62bf3b' : '#ff9f43';
   const minK = Math.round(complex.minPrice / 1000);
@@ -326,7 +329,7 @@ function createComplexMarkerElement(
     'max-width:210px',
     'box-shadow:0 8px 28px rgba(0,0,0,0.65)',
     'font-family:Nunito,sans-serif',
-    'z-index:9999',
+    'z-index:100000',
     'white-space:normal',
     'transform:translateY(8px)',
   ].join(';');
@@ -366,6 +369,23 @@ function createComplexMarkerElement(
   ].join(';');
   circle.innerHTML = `<i class="fa-solid fa-futbol" style="color:white;font-size:15px;pointer-events:none;"></i>`;
 
+  const baseShadow = isHighlighted
+    ? '0 0 0 6px rgba(98,191,59,0.28), 0 0 28px rgba(98,191,59,0.75), 0 6px 18px rgba(0,0,0,0.45)'
+    : '0 4px 12px rgba(0,0,0,0.4)';
+
+  if (isHighlighted) {
+    circle.style.position = 'relative';
+    circle.style.borderColor = '#ffffff';
+    circle.style.boxShadow = baseShadow;
+    circle.style.transform = 'scale(1.08)';
+
+    const pulse = document.createElement('span');
+    pulse.className = 'complex-marker-pulse';
+    pulse.style.cssText =
+      'position:absolute;inset:-7px;border-radius:50%;border:2px solid #62bf3b;pointer-events:none;';
+    circle.appendChild(pulse);
+  }
+
   el.appendChild(circle);
 
   // ── Hover: position tooltip via getBoundingClientRect ──────────────────
@@ -382,8 +402,10 @@ function createComplexMarkerElement(
     tooltip.style.top = `${rect.top - 10}px`;
     tooltip.style.transform = 'translateY(-100%)';
     tooltip.style.opacity = '1';
-    circle.style.transform = 'scale(1.18)';
-    circle.style.boxShadow = '0 6px 22px rgba(98,191,59,0.5)';
+    circle.style.transform = isHighlighted ? 'scale(1.22)' : 'scale(1.18)';
+    circle.style.boxShadow = isHighlighted
+      ? '0 0 0 8px rgba(98,191,59,0.32), 0 0 34px rgba(98,191,59,0.9), 0 8px 22px rgba(0,0,0,0.5)'
+      : '0 6px 22px rgba(98,191,59,0.5)';
     // suppress unused var warning
     void top;
   });
@@ -392,8 +414,8 @@ function createComplexMarkerElement(
     if (!el.contains(e.relatedTarget as Node | null)) {
       tooltip.style.opacity = '0';
       tooltip.style.transform = 'translateY(calc(-100% + 8px))';
-      circle.style.transform = 'scale(1)';
-      circle.style.boxShadow = '0 4px 12px rgba(0,0,0,0.4)';
+      circle.style.transform = isHighlighted ? 'scale(1.08)' : 'scale(1)';
+      circle.style.boxShadow = baseShadow;
     }
   });
 
@@ -417,11 +439,16 @@ export function addComplexMarkers(
   map: mapboxgl.Map,
   complexes: ComplexMarker[],
   onNavigate?: (complex: ComplexMarker) => void,
+  highlightedComplexId?: string,
 ): mapboxgl.Marker[] {
   const markers: mapboxgl.Marker[] = [];
 
   complexes.forEach((complex) => {
-    const el = createComplexMarkerElement(complex, onNavigate);
+    const el = createComplexMarkerElement(
+      complex,
+      onNavigate,
+      complex.id === highlightedComplexId,
+    );
     const marker = new mapboxgl.Marker({ element: el })
       .setLngLat([complex.longitude, complex.latitude])
       .addTo(map);

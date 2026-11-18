@@ -40,7 +40,7 @@ export interface AvailabilityFieldResult {
   hourlyRate: number | null;
   startIso?: string;
   endIso?: string;
-  /** Hora consultada, ej. "07:00 PM" */
+  /** Hora consultada, ej. "19:00" */
   timeLabel: string;
 }
 

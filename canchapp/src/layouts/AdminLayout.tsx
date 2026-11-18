@@ -14,6 +14,7 @@ import { tokenStorage } from '../services/AuthService';
 import authService from '../services/AuthService';
 import { Topbar } from '../components/layout/topbar';
 import { useAuth } from '../context/AuthContext';
+import { NotificationsProvider } from '../context/NotificationsContext';
 import { useAdminTodayStats } from '../hooks/useAdminTodayStats';
 
 const ROLE_LABEL: Record<string, string> = {
@@ -208,10 +209,11 @@ export default function AdminLayout() {
   const [mobileSidebarOpen, setMobileSidebarOpen] = useState(false);
 
   return (
-    <div className="min-h-screen relative z-[1]">
-      <Topbar />
+    <NotificationsProvider>
+      <div className="min-h-screen relative z-[1]">
+        <Topbar />
 
-      <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr]">
+        <div className="grid grid-cols-1 lg:grid-cols-[260px_1fr]">
         {/* Desktop sidebar */}
         <div className="hidden lg:block sticky top-16 h-[calc(100vh-64px)]">
           <AdminSidebar />
@@ -242,7 +244,8 @@ export default function AdminLayout() {
         <main className="min-h-[calc(100vh-64px)]">
           <Outlet />
         </main>
+        </div>
       </div>
-    </div>
+    </NotificationsProvider>
   );
 }

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Calendar, Clock, CreditCard, Loader2, MapPin, X as XIcon } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import type { Booking } from '../../types/field';
@@ -126,7 +126,13 @@ export function BookingCard({ booking, onCancelled }: BookingCardProps) {
   const [qrLoading, setQrLoading] = useState(false);
   const [isPayingDeposit, setIsPayingDeposit] = useState(false);
   const [depositPaid, setDepositPaid] = useState(false);
+  const [complexImageFailed, setComplexImageFailed] = useState(false);
 
+  useEffect(() => {
+    setComplexImageFailed(false);
+  }, [booking.complexImageUrl]);
+
+  const showComplexImage = Boolean(booking.complexImageUrl) && !complexImageFailed;
   const canCancel = booking.status !== 'canceled' && booking.status !== 'rejected';
   const locked = isWithinOneHour(booking.startIso);
 
@@ -254,8 +260,24 @@ export function BookingCard({ booking, onCancelled }: BookingCardProps) {
           shadow-[var(--shadow-md)] overflow-hidden relative cursor-pointer
           transition-all duration-[var(--duration-mid)] hover:-translate-y-1 hover:shadow-[var(--shadow-xl)]"
       >
-        {/* Header con gradiente del deporte */}
-        <div className="p-4 pb-5 relative overflow-hidden" style={{ background: getSportGradient(booking.sport) }}>
+        {/* Header con imagen del complejo o gradiente del deporte */}
+        <div
+          className="p-4 pb-5 relative overflow-hidden"
+          style={showComplexImage ? undefined : { background: getSportGradient(booking.sport) }}
+        >
+          {showComplexImage && (
+            <>
+              <img
+                src={booking.complexImageUrl ?? undefined}
+                alt={booking.complexName}
+                loading="lazy"
+                onError={() => setComplexImageFailed(true)}
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-black/80 via-black/50 to-black/20" />
+            </>
+          )}
+
           <div className="flex items-center gap-3 relative z-10">
             <div
               className="w-12 h-12 flex-shrink-0 rounded-[var(--radius-lg)] flex items-center justify-center text-[22px]

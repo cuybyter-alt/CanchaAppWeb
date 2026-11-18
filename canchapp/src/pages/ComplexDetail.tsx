@@ -2,6 +2,8 @@ import React, { useEffect, useState } from 'react';
 import { ArrowLeft, MapPin, Building2, Ruler } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Typography } from '../components/ui/typography';
+import { ComplexImageGallery } from '../components/features/ComplexImageGallery';
+import type { ComplexImage } from '../types/complexImage';
 import ApiClient from '../services/ApiClient';
 
 // ── Types ──────────────────────────────────────────────────────────────────
@@ -24,7 +26,7 @@ interface ComplexDetailData {
   min_price: number;
   max_price: number;
   fields: ComplexField[];
-  images: string[];
+  images?: ComplexImage[];
 }
 
 interface ApiWrapper {
@@ -187,6 +189,9 @@ const ComplexDetail: React.FC = () => {
           </div>
         </div>
       </div>
+
+      {/* ── Image gallery ── */}
+      <ComplexImageGallery images={complex.images ?? []} alt={complex.name} />
 
       {/* ── Field list ── */}
       <div>

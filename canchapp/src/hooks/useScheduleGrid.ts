@@ -1,30 +1,21 @@
 import { useState, useCallback, useRef } from 'react';
 import { format, addDays, subDays, startOfWeek, endOfWeek } from 'date-fns';
-import { toZonedTime } from 'date-fns-tz';
+import { formatDateLabel, formatTime24, getTodayISO } from '../lib/timezone';
 import schedulingService from '../services/SchedulingService';
 import { notify } from '../services/toast';
 import type { GridData, GridSlot, DraggedBooking, MoveResult } from '../types/grid';
 import type { ApiError } from '../services/ApiClient';
 
-const TIMEZONE = 'America/Bogota';
-
 function localTodayISO(): string {
-  const now = toZonedTime(new Date(), TIMEZONE);
-  return format(now, 'yyyy-MM-dd');
-}
-
-function utcToLocal(utcISO: string): Date {
-  return toZonedTime(new Date(utcISO), TIMEZONE);
+  return getTodayISO();
 }
 
 function formatTimeLocal(utcISO: string): string {
-  const local = utcToLocal(utcISO);
-  return format(local, 'h:mm a');
+  return formatTime24(utcISO);
 }
 
 function formatDateLocal(utcISO: string): string {
-  const local = utcToLocal(utcISO);
-  return format(local, 'd MMM yyyy');
+  return formatDateLabel(utcISO);
 }
 
 function getWeekRange(dateISO: string): { start: string; end: string } {

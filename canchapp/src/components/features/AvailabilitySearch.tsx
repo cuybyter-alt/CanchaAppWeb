@@ -13,6 +13,7 @@ import {
   validateAvailabilityQuery,
 } from '../../lib/availability';
 import { formatPriceFull } from '../../lib/utils';
+import { getMinutesInTimezone, getNowMinutesInTimezone } from '../../lib/timezone';
 import type { ComplexFieldType } from '../../types/field';
 import type {
   AdminComplexOption,
@@ -35,7 +36,7 @@ const labelClass = 'block mb-1.5 font-extrabold text-xs uppercase tracking-wider
 
 /** Próxima hora en punto (HH:00) como valor inicial; vacío si ya no queda hora en el día. */
 const getDefaultTime = (): string => {
-  const nextHour = new Date().getHours() + 1;
+  const nextHour = Math.floor(getNowMinutesInTimezone() / 60) + 1;
   return nextHour <= 23 ? `${String(nextHour).padStart(2, '0')}:00` : '';
 };
 
@@ -51,14 +52,14 @@ const AvailabilitySearch: React.FC<AvailabilitySearchProps> = ({ onBookingCreate
   const [formErrors, setFormErrors] = useState<AvailabilityFormErrors>({});
 
   const isToday = date === localTodayISO();
-  const now = new Date();
-  const currentHHMM = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+  const currentMinutes = getMinutesInTimezone(new Date()) ?? 0;
+  const currentHHMM = `${String(Math.floor(currentMinutes / 60)).padStart(2, '0')}:${String(currentMinutes % 60).padStart(2, '0')}`;
   const minTime = isToday ? currentHHMM : undefined;
 
   const handleDateChange = (newDate: string) => {
     setDate(newDate);
     if (newDate === localTodayISO()) {
-      const currentMinutes = new Date().getHours() * 60 + new Date().getMinutes();
+      const currentMinutes = getNowMinutesInTimezone();
       const parts = time.split(':');
       const inputMinutes = parts.length === 2 ? parseInt(parts[0], 10) * 60 + parseInt(parts[1], 10) : null;
       if (inputMinutes === null || inputMinutes <= currentMinutes) {

@@ -13,6 +13,7 @@ import {
     useContext,
   useCallback,
     useEffect,
+    useRef,
     useState,
     type ReactNode,
 } from "react";
@@ -24,6 +25,7 @@ import {
 } from "firebase/auth";
 import { auth, googleProvider } from "../firebase";
 import authService, {
+    syncCurrentUserTimezone,
     tokenStorage,
     type UserOutput,
 } from "../services/AuthService";
@@ -107,6 +109,30 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
     return unsubscribe;
   }, []);
+
+    const timezoneSyncRef = useRef<string | null>(null);
+
+    useEffect(() => {
+    if (loading || !user?.user_id) return;
+    if (timezoneSyncRef.current === user.user_id) return;
+
+    timezoneSyncRef.current = user.user_id;
+    let cancelled = false;
+
+    void syncCurrentUserTimezone(user)
+        .then((updated) => {
+        if (!cancelled && updated.timezone !== user.timezone) {
+            setUser(updated);
+        }
+        })
+        .catch((err) => {
+        console.error("[AuthContext] Error sincronizando zona horaria:", err);
+        });
+
+    return () => {
+        cancelled = true;
+    };
+    }, [loading, user]);
 
   // ── Acciones ────────────────────────────────────────────────────────────────
 

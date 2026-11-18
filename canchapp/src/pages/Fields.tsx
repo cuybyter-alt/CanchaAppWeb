@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ArrowLeft, Search, X } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { ComplexCard } from '../components/features/ComplexCard';
 import { ComplexFieldsDialog } from '../components/features/ComplexFieldsDialog';
@@ -14,6 +14,7 @@ import bookingService from '../services/BookingService';
 import authService from '../services/AuthService';
 import notify from '../services/toast';
 import { formatPrice } from '../lib/utils';
+import { useMapContext } from '../context/MapContext';
 
 function toNearbyComplex(c: ComplexListItem): NearbyComplex {
   return {
@@ -75,12 +76,11 @@ const sortOptions: Array<{ id: SortId; label: string }> = [
 
 const Fields: React.FC = () => {
   const navigate = useNavigate();
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
+  const { setSearchQuery } = useMapContext();
   const searchReqId = useRef(0);
 
-  // Initialise query from URL param ?q=
-  const [query, setQuery] = useState(() => searchParams.get('q') ?? '');
-  const [debouncedQuery, setDebouncedQuery] = useState(() => searchParams.get('q') ?? '');
+  const appliedQuery = (searchParams.get('q') ?? '').trim();
 
   const [complexes, setComplexes] = useState<NearbyComplex[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -100,32 +100,17 @@ const Fields: React.FC = () => {
   const [bookings, setBookings] = useState<Booking[]>([]);
   const [reviewTarget, setReviewTarget] = useState<{ complexId: string; complexName: string } | null>(null);
 
-  // Debounce
-  useEffect(() => {
-    const t = window.setTimeout(() => {
-      const trimmed = query.trim();
-      setDebouncedQuery(trimmed);
-      // Keep URL param in sync
-      if (trimmed) {
-        setSearchParams({ q: trimmed }, { replace: true });
-      } else {
-        setSearchParams({}, { replace: true });
-      }
-    }, 280);
-    return () => window.clearTimeout(t);
-  }, [query, setSearchParams]);
-
-  // Load complexes whenever debouncedQuery changes
+  // Load complexes whenever the applied navbar query changes
   useEffect(() => {
     let cancelled = false;
     const reqId = ++searchReqId.current;
 
-    if (debouncedQuery) setIsSearching(true);
+    if (appliedQuery) setIsSearching(true);
     else setIsLoading(true);
     setError(null);
 
     complexesService
-      .getComplexes({ search: debouncedQuery || undefined, pageSize: 50 })
+      .getComplexes({ search: appliedQuery || undefined, pageSize: 50 })
       .then((data) => {
         if (cancelled || reqId !== searchReqId.current) return;
         setComplexes(data.map(toNearbyComplex));
@@ -141,7 +126,7 @@ const Fields: React.FC = () => {
       });
 
     return () => { cancelled = true; };
-  }, [debouncedQuery]);
+  }, [appliedQuery]);
 
   // Load past bookings so ReviewsDialog can verify review eligibility
   useEffect(() => {
@@ -217,45 +202,19 @@ const Fields: React.FC = () => {
         </Typography>
       </div>
 
-      {/* Search + sort bar */}
-      <div className="flex gap-2 items-center">
-        <div className="relative flex-1">
-          <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-[var(--color-text-3)] pointer-events-none" />
-          <input
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter') {
-                const trimmed = query.trim();
-                setDebouncedQuery(trimmed);
-                if (trimmed) setSearchParams({ q: trimmed }, { replace: true });
-                else setSearchParams({}, { replace: true });
-              }
-            }}
-            placeholder="Buscar complejos por nombre o ciudad…"
-            className="w-full pl-10 pr-10 py-3 rounded-[var(--radius-xl)]
-              bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)]
-              text-[var(--color-text)] placeholder:text-[var(--color-text-3)]
-              text-sm font-semibold
-              focus:outline-none focus:border-[var(--color-primary)] focus:ring-2 focus:ring-[var(--color-primary)]/20
-              transition-all duration-[var(--duration-fast)]"
-          />
-          {query && (
-            <button
-              onClick={() => { setQuery(''); setSearchParams({}, { replace: true }); }}
-              className="absolute right-3.5 top-1/2 -translate-y-1/2 w-5 h-5 flex items-center justify-center
-                rounded-full bg-[var(--color-border)] text-[var(--color-text-3)] hover:bg-[var(--color-primary)]/20
-                hover:text-[var(--color-primary)] transition-all"
-            >
-              <X className="w-3 h-3" />
-            </button>
-          )}
-        </div>
+      {/* Sort bar — la búsqueda se controla desde el navbar */}
+      <div className="flex items-center justify-end gap-2">
+        <label
+          htmlFor="fields-sort"
+          className="text-[11px] font-extrabold uppercase tracking-wider text-[var(--color-text-3)]"
+        >
+          Ordenar por
+        </label>
         <select
+          id="fields-sort"
           value={sortBy}
           onChange={(e) => setSortBy(e.target.value as SortId)}
-          className="h-[46px] px-3 rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-bold text-[var(--color-text-2)] outline-none focus:border-[var(--color-primary)] flex-shrink-0"
+          className="h-10 px-3 rounded-[var(--radius-xl)] border border-[var(--color-border)] bg-[var(--color-surface)] text-sm font-bold text-[var(--color-text-2)] outline-none focus:border-[var(--color-primary)] flex-shrink-0"
         >
           {sortOptions.map((opt) => (
             <option key={opt.id} value={opt.id}>{opt.label}</option>
@@ -266,8 +225,8 @@ const Fields: React.FC = () => {
       {/* Result count */}
       {!showSkeleton && !error && complexes.length > 0 && (
         <p className="text-xs font-bold text-[var(--color-text-3)] -mt-2">
-          {debouncedQuery
-            ? `${complexes.length} resultado${complexes.length !== 1 ? 's' : ''} para "${debouncedQuery}"`
+          {appliedQuery
+            ? `${complexes.length} resultado${complexes.length !== 1 ? 's' : ''} para "${appliedQuery}"`
             : `${complexes.length} complejo${complexes.length !== 1 ? 's' : ''} disponibles`}
           {favoriteIds.size > 0 && ' · favoritos primero'}
         </p>
@@ -296,13 +255,19 @@ const Fields: React.FC = () => {
             <i className="fa-solid fa-building-circle-xmark text-2xl text-[var(--color-primary)]" />
           </div>
           <Typography variant="h4" color="text">
-            {debouncedQuery ? `Sin resultados para "${debouncedQuery}"` : 'No hay complejos disponibles'}
+            {appliedQuery ? `Sin resultados para "${appliedQuery}"` : 'No hay complejos disponibles'}
           </Typography>
           <Typography variant="small" color="text-3">
-            {debouncedQuery ? 'Intenta con otro nombre o ciudad.' : 'Vuelve más tarde.'}
+            {appliedQuery ? 'Intenta con otro nombre o ciudad.' : 'Vuelve más tarde.'}
           </Typography>
-          {debouncedQuery && (
-            <button onClick={() => setQuery('')} className="mt-1 text-sm font-bold text-[var(--color-primary-dark)] hover:underline">
+          {appliedQuery && (
+            <button
+              onClick={() => {
+                setSearchQuery('');
+                navigate('/fields', { replace: true });
+              }}
+              className="mt-1 text-sm font-bold text-[var(--color-primary-dark)] hover:underline"
+            >
               Limpiar búsqueda
             </button>
           )}

@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { Outlet } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Topbar } from '../components/layout/topbar';
 import { Sidebar } from '../components/layout/sidebar';
 import { MapDialog } from '../components/sections/MapDialog';
@@ -14,6 +14,8 @@ import type { MapCenterCoords } from '../context/MapContext';
 
 function AppLayoutInner() {
   usePushNotifications();
+  const navigate = useNavigate();
+  const location = useLocation();
 
   const [isMapOpen, setIsMapOpen] = useState(false);
   const [complexMarkers, setComplexMarkers] = useState<ComplexMarker[]>([]);
@@ -38,13 +40,43 @@ function AppLayoutInner() {
     setQuickBookOpen(false);
   };
 
+  useEffect(() => {
+    if (location.pathname !== '/fields') return;
+    const query = new URLSearchParams(location.search).get('q') ?? '';
+    setSearchQuery(query);
+  }, [location.pathname, location.search]);
+
+  const handleSearchSubmit = (query: string) => {
+    const trimmed = query.trim();
+    const isFieldsPage = location.pathname === '/fields';
+
+    setSearchQuery(trimmed);
+
+    if (!trimmed && !isFieldsPage) return;
+
+    const target = trimmed ? `/fields?q=${encodeURIComponent(trimmed)}` : '/fields';
+    const current = `${location.pathname}${location.search}`;
+
+    if (current !== target) {
+      navigate(target, { replace: isFieldsPage });
+    }
+  };
+
+  const handleSearchClear = () => {
+    setSearchQuery('');
+    if (location.pathname === '/fields') {
+      navigate('/fields', { replace: true });
+    }
+  };
+
   return (
     <MapContext.Provider value={{ openMap: () => setIsMapOpen(true), openMapAt: (coords) => { setCenterOn(coords); setIsMapOpen(true); }, complexMarkers, setComplexMarkers, searchQuery, setSearchQuery, centerOn, setCenterOn }}>
       <div className="min-h-screen relative z-[1]">
         {/* Topbar - fixed at top */}
         <Topbar
-          onSearch={setSearchQuery}
           searchValue={searchQuery}
+          onSearchSubmit={handleSearchSubmit}
+          onSearchClear={handleSearchClear}
           sidebarOpen={sidebarOpen}
           onToggleSidebar={() => setSidebarOpen(p => !p)}
         />

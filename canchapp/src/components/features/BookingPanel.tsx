@@ -5,11 +5,13 @@ import { QRCodeSVG } from 'qrcode.react';
 import type { Booking, Field } from '../../types/field';
 import type { BookingConfirmation } from '../../types/notification';
 import { MiniFieldSVG } from '../ui/svg-assets';
+import { ComplexImageCover } from './ComplexImageThumb';
 import { formatPrice, formatPriceFull } from '../../lib/utils';
 import authService from '../../services/AuthService';
 import notify from '../../services/toast';
 import schedulingService, { localTodayISO } from '../../services/SchedulingService';
 import bookingService from '../../services/BookingService';
+import FieldImagesService from '../../services/FieldImagesService';
 import { formatEndTime24, getMinutesInTimezone, getTodayISO } from '../../lib/timezone';
 import type { ApiError } from '../../services/ApiClient';
 
@@ -90,6 +92,7 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
   const [qrData, setQrData] = useState<BookingConfirmation | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
   const [createdBooking, setCreatedBooking] = useState<Booking | null>(null);
+  const [fieldImageUrl, setFieldImageUrl] = useState<string | null>(null);
 
   const getDateISO = (dateId: string): string => dateId;
 
@@ -97,6 +100,25 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
 
   const todayISO = localTodayISO();
   const isToday = selectedDate === todayISO;
+
+  useEffect(() => {
+    let cancelled = false;
+    setFieldImageUrl(null);
+
+    if (!field?.id || isMockFieldId(field.id)) return;
+
+    FieldImagesService.list(field.id)
+      .then((data) => {
+        if (!cancelled) setFieldImageUrl(data.items[0]?.image_url ?? null);
+      })
+      .catch(() => {
+        if (!cancelled) setFieldImageUrl(null);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [field?.id]);
 
   useEffect(() => {
     // Sync date when preselection changes (new slot chosen from dialog)
@@ -346,7 +368,11 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
     }`}>
 
       {/* ── Header dark ── */}
-      <div className="bg-[var(--color-text)] p-5 pb-6 relative overflow-hidden">
+      <ComplexImageCover
+        src={fieldImageUrl ?? field.complexImageUrl}
+        alt={field.location}
+        className="p-5 pb-6"
+      >
         <div
           className="absolute inset-0"
           style={{
@@ -392,7 +418,7 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
         <div className="absolute right-5 top-1/2 -translate-y-1/2 opacity-50">
           <MiniFieldSVG />
         </div>
-      </div>
+      </ComplexImageCover>
 
       {/* ── Body ── */}
       <div className="p-5 flex-1 overflow-y-auto min-h-0">

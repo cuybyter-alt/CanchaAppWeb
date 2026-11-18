@@ -46,6 +46,7 @@ function buildSyntheticField(
     rating: 0,
     reviewCount: 0,
     image: '',
+    complexImageUrl: complex.imageUrl ?? null,
     tags: [],
     amenities: [],
     availability: [slot],

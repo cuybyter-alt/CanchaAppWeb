@@ -103,13 +103,18 @@ const AvailabilitySearch: React.FC<AvailabilitySearchProps> = ({ onBookingCreate
       setFormErrors(validation);
       if (Object.keys(validation).length > 0) return;
 
-      const complexName = complexes.find((complex) => complex.id === query.complexId)?.name ?? '';
+      const selectedComplex = complexes.find((complex) => complex.id === query.complexId);
+      const complexName = selectedComplex?.name ?? '';
       const requestId = ++latestRequest.current;
 
       setSearching(true);
       setSearchError(null);
       try {
-        const searchResult = await availabilitySearchService.search(query, complexName);
+        const searchResult = await availabilitySearchService.search(
+          query,
+          complexName,
+          selectedComplex?.imageUrl,
+        );
         if (requestId !== latestRequest.current) return;
         setResult(searchResult);
       } catch (err) {

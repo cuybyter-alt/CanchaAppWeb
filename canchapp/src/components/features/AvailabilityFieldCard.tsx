@@ -1,5 +1,6 @@
 import React from 'react';
 import { CalendarPlus, CheckCircle2, Clock3, Wrench, XCircle } from 'lucide-react';
+import { ComplexImageThumb } from './ComplexImageThumb';
 import { FIELD_TYPE_LABELS } from '../../lib/availability';
 import { formatPriceFull } from '../../lib/utils';
 import type { AvailabilityFieldResult, AvailabilityStatus } from '../../types/availability';
@@ -51,11 +52,18 @@ const AvailabilityFieldCard: React.FC<AvailabilityFieldCardProps> = ({ result, o
       aria-label={`${result.fieldName}: ${badgeLabel}`}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="min-w-0">
-          <h4 className="font-extrabold text-[var(--color-text)] truncate">{result.fieldName}</h4>
-          <p className="text-xs font-semibold text-[var(--color-text-3)] mt-0.5 truncate">
-            {FIELD_TYPE_LABELS[result.fieldType] ?? result.fieldType} · {result.complexName}
-          </p>
+        <div className="flex min-w-0 items-start gap-3">
+          <ComplexImageThumb
+            src={result.fieldImageUrl ?? result.complexImageUrl}
+            alt={result.fieldName}
+            size="md"
+          />
+          <div className="min-w-0">
+            <h4 className="font-extrabold text-[var(--color-text)] truncate">{result.fieldName}</h4>
+            <p className="text-xs font-semibold text-[var(--color-text-3)] mt-0.5 truncate">
+              {FIELD_TYPE_LABELS[result.fieldType] ?? result.fieldType} · {result.complexName}
+            </p>
+          </div>
         </div>
         <span
           className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase flex-shrink-0 ${

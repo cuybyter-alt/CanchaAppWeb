@@ -36,6 +36,7 @@ export interface Field {
   complexId?: string;
   complexName?: string;
   image: string;
+  complexImageUrl?: string | null;
   tags: FieldType[];
   amenities: Amenity[];
   availability: TimeSlotData[];

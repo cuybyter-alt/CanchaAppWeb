@@ -12,6 +12,8 @@ import authService from '../../services/AuthService';
 import notify from '../../services/toast';
 import { formatPriceFull } from '../../lib/utils';
 import { formatEndTime24, getMinutesInTimezone, getTodayISO } from '../../lib/timezone';
+import FieldImagesService from '../../services/FieldImagesService';
+import { ComplexImageThumb } from './ComplexImageThumb';
 
 interface ComplexFieldsDialogProps {
   isOpen: boolean;
@@ -100,6 +102,7 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
   const [isMobileBooking, setIsMobileBooking] = useState(false);
   const [bookingDone, setBookingDone] = useState(false);
   const [bannerImageFailed, setBannerImageFailed] = useState(false);
+  const [fieldImages, setFieldImages] = useState<Record<string, string | null>>({});
   const navigate = useNavigate();
 
   const todayIso = getTodayISO();
@@ -109,6 +112,32 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
   useEffect(() => {
     setBannerImageFailed(false);
   }, [complex?.imageUrl, isOpen]);
+
+  useEffect(() => {
+    if (fields.length === 0) {
+      setFieldImages({});
+      return;
+    }
+
+    let cancelled = false;
+
+    void Promise.all(
+      fields.map(async (field) => {
+        try {
+          const images = await FieldImagesService.list(field.fieldId);
+          return [field.fieldId, images.items[0]?.image_url ?? null] as const;
+        } catch {
+          return [field.fieldId, null] as const;
+        }
+      }),
+    ).then((entries) => {
+      if (!cancelled) setFieldImages(Object.fromEntries(entries));
+    });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fields]);
 
   const fetchFields = (complexId: string) => {
     abortRef.current?.();
@@ -443,12 +472,21 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
                   >
                     {/* Left: icon + info */}
                     <div className="flex items-center gap-3 min-w-0">
-                      <div
-                        className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center"
-                        style={{ background: 'linear-gradient(135deg, #1a3810, #2d5a1a)' }}
-                      >
-                        <i className="fa-solid fa-futbol text-white text-xs" />
-                      </div>
+                      {fieldImages[field.fieldId] ? (
+                        <ComplexImageThumb
+                          src={fieldImages[field.fieldId]}
+                          alt={field.name}
+                          size="sm"
+                          className="!rounded-full"
+                        />
+                      ) : (
+                        <div
+                          className="w-9 h-9 rounded-full flex-shrink-0 flex items-center justify-center"
+                          style={{ background: 'linear-gradient(135deg, #1a3810, #2d5a1a)' }}
+                        >
+                          <i className="fa-solid fa-futbol text-white text-xs" />
+                        </div>
+                      )}
                       <div className="min-w-0">
                         <p className="font-bold text-[13px] text-[var(--color-text)] truncate leading-tight">
                           {field.name}

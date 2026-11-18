@@ -95,7 +95,7 @@ export const getImageErrorMessage = (error: unknown): string => {
   return 'No se pudo completar la operación con la imagen. Intenta de nuevo.';
 };
 
-const uploadToR2 = (
+export const uploadFileToR2 = (
   uploadUrl: string,
   file: File,
   contentType: string,
@@ -221,7 +221,7 @@ const ComplexImagesService = {
     const ticket = await ComplexImagesService.requestUpload(complexId, file);
 
     try {
-      await uploadToR2(ticket.upload_url, file, contentType, onProgress);
+      await uploadFileToR2(ticket.upload_url, file, contentType, onProgress);
     } catch (error) {
       try {
         await ComplexImagesService.remove(complexId, ticket.image_id);

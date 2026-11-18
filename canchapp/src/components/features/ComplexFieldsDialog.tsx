@@ -99,11 +99,16 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
   const [selectedTimeSlot, setSelectedTimeSlot] = useState<TimeSlotData | null>(null);
   const [isMobileBooking, setIsMobileBooking] = useState(false);
   const [bookingDone, setBookingDone] = useState(false);
+  const [bannerImageFailed, setBannerImageFailed] = useState(false);
   const navigate = useNavigate();
 
   const todayIso = getTodayISO();
   const dates = buildDates();
   const isToday = selectedDate === todayIso;
+
+  useEffect(() => {
+    setBannerImageFailed(false);
+  }, [complex?.imageUrl, isOpen]);
 
   const fetchFields = (complexId: string) => {
     abortRef.current?.();
@@ -240,6 +245,7 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
 
   if (!complex) return null;
 
+  const showBannerImage = Boolean(complex.imageUrl) && !bannerImageFailed;
   const activeCount = fields.filter((f) => f.status === 'active').length;
 
   return (
@@ -248,10 +254,25 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
       <div className="sticky top-0 z-10 px-5 pt-5 pb-4 border-b border-[var(--color-border)] bg-[var(--color-surf2)]">
         {/* Complex banner */}
         <div
-          className="rounded-[var(--radius-xl)] overflow-hidden mb-4"
-          style={{ background: 'linear-gradient(145deg, #1a3810, #2d5a1a)' }}
+          className={`relative rounded-[var(--radius-xl)] overflow-hidden mb-4 ${
+            showBannerImage ? 'min-h-[112px] flex items-end' : ''
+          }`}
+          style={showBannerImage ? undefined : { background: 'linear-gradient(145deg, #1a3810, #2d5a1a)' }}
         >
-          <div className="flex items-center gap-3 px-4 py-3">
+          {showBannerImage && (
+            <>
+              <img
+                src={complex.imageUrl ?? undefined}
+                alt={complex.name}
+                loading="lazy"
+                onError={() => setBannerImageFailed(true)}
+                className="absolute inset-0 h-full w-full object-cover"
+              />
+              <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/55 to-black/20" />
+            </>
+          )}
+
+          <div className="relative z-10 flex w-full items-center gap-3 px-4 py-3">
             <div className="w-10 h-10 rounded-full bg-white/15 flex-shrink-0 flex items-center justify-center">
               <i className="fa-solid fa-building text-white text-sm" />
             </div>

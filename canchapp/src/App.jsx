@@ -17,6 +17,7 @@ import Settings from './pages/Settings'
 import Payments from './pages/Payments'
 import AdminDashboard from './pages/admin/AdminDashboard'
 import AdminComplexes from './pages/admin/AdminComplexes'
+import AdminComplexEdit from './pages/admin/AdminComplexEdit'
 import AdminComplexFields from './pages/admin/AdminComplexFields'
 import AdminFieldSchedule from './pages/admin/AdminFieldSchedule'
 import AdminFields from './pages/admin/AdminFields'
@@ -53,6 +54,7 @@ function App() {
           <Route element={<AdminLayout />}>
             <Route path="/admin" element={<AdminDashboard />} />
             <Route path="/admin/complexes" element={<AdminComplexes />} />
+            <Route path="/admin/complexes/:complexId/edit" element={<AdminComplexEdit />} />
             <Route path="/admin/complexes/:complexId/fields" element={<AdminComplexFields />} />
             <Route path="/admin/complexes/:complexId/fields/:fieldId/schedule" element={<AdminFieldSchedule />} />
             <Route path="/admin/fields" element={<AdminFields />} />

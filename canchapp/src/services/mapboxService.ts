@@ -335,15 +335,20 @@ function createComplexMarkerElement(
   ].join(';');
 
   tooltip.innerHTML = `
-    <p style="color:#62bf3b;font-size:12px;font-weight:800;margin:0 0 6px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:186px;">${complex.name}</p>
-    <div style="display:flex;align-items:center;gap:5px;margin-bottom:9px;flex-wrap:wrap;">
-      <span style="display:inline-flex;align-items:center;gap:3px;background:rgba(98,191,59,0.12);border:1px solid rgba(98,191,59,0.25);border-radius:20px;padding:2px 8px;">
-        <i class="fa-solid fa-futbol" style="color:#62bf3b;font-size:9px;"></i>
-        <span style="color:#a7d99a;font-size:10px;font-weight:700;">${complex.fieldsCount} cancha${complex.fieldsCount !== 1 ? 's' : ''}</span>
-      </span>
-      <span style="display:inline-flex;align-items:center;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:2px 8px;">
-        <span style="color:#8cb87d;font-size:10px;font-weight:600;">${priceRange}</span>
-      </span>
+    <div style="display:flex;align-items:flex-start;gap:8px;margin-bottom:8px;">
+      ${complex.imageUrl ? `<img src="${complex.imageUrl.replace(/"/g, '&quot;')}" alt="" style="width:46px;height:46px;border-radius:10px;object-fit:cover;border:1px solid rgba(98,191,59,0.3);flex-shrink:0;" />` : ''}
+      <div style="min-width:0;flex:1;">
+        <p style="color:#62bf3b;font-size:12px;font-weight:800;margin:0 0 6px;line-height:1.3;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:${complex.imageUrl ? '132px' : '186px'};">${complex.name}</p>
+        <div style="display:flex;align-items:center;gap:5px;flex-wrap:wrap;">
+          <span style="display:inline-flex;align-items:center;gap:3px;background:rgba(98,191,59,0.12);border:1px solid rgba(98,191,59,0.25);border-radius:20px;padding:2px 8px;">
+            <i class="fa-solid fa-futbol" style="color:#62bf3b;font-size:9px;"></i>
+            <span style="color:#a7d99a;font-size:10px;font-weight:700;">${complex.fieldsCount} cancha${complex.fieldsCount !== 1 ? 's' : ''}</span>
+          </span>
+          <span style="display:inline-flex;align-items:center;background:rgba(255,255,255,0.06);border:1px solid rgba(255,255,255,0.1);border-radius:20px;padding:2px 8px;">
+            <span style="color:#8cb87d;font-size:10px;font-weight:600;">${priceRange}</span>
+          </span>
+        </div>
+      </div>
     </div>
     <div style="display:flex;align-items:center;justify-content:center;gap:5px;background:rgba(98,191,59,0.15);border:1px solid rgba(98,191,59,0.3);border-radius:8px;padding:5px 10px;color:#62bf3b;font-size:11px;font-weight:800;">
       Ver canchas <i class="fa-solid fa-arrow-right" style="font-size:9px;"></i>

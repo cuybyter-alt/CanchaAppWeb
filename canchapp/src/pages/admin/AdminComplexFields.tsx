@@ -2,11 +2,16 @@ import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Plus, Target, Building2, ChevronRight, X, Loader2, AlertCircle,
   Ruler, Users, Wrench, Trash2, Edit3, CheckCircle, MapPin,
-  UserX, RefreshCw, Save, ShieldOff,
+  UserX, RefreshCw, Save, ShieldOff, Images,
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
 import ApiClient from '../../services/ApiClient';
 import { toast } from 'sonner';
+import { ComplexImagesDialog } from '../../components/features/ComplexImagesDialog';
+import { FieldImagesDialog } from '../../components/features/FieldImagesDialog';
+import { ComplexImageCover, ComplexImageThumb } from '../../components/features/ComplexImageThumb';
+import FieldImagesService from '../../services/FieldImagesService';
+import type { ComplexImage } from '../../types/complexImage';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -31,6 +36,7 @@ interface ComplexDetail {
   fields: FieldItem[];
   min_price: number | null;
   max_price: number | null;
+  images?: ComplexImage[];
 }
 
 interface ManagerUser {
@@ -606,9 +612,12 @@ function EditFieldForm({
 // ─── Field Card ───────────────────────────────────────────────────────────────
 
 function FieldCard({
-  f, onDeactivate, onEdit, onSchedules,
+  f, imageUrl, imageCount, onImages, onDeactivate, onEdit, onSchedules,
 }: {
   f: FieldItem;
+  imageUrl?: string | null;
+  imageCount?: number;
+  onImages: () => void;
   onDeactivate: () => void;
   onEdit: () => void;
   onSchedules: () => void;
@@ -624,12 +633,19 @@ function FieldCard({
     }`}>
       {/* Top */}
       <div className="px-5 pt-4 pb-3 flex items-center gap-3">
-        <div className="w-9 h-9 rounded-[var(--radius-md)] bg-[var(--color-primary-tint)] flex items-center justify-center flex-shrink-0">
-          <Target className="w-5 h-5 text-[var(--color-primary)]" />
-        </div>
+        <ComplexImageThumb src={imageUrl} alt={f.name} size="sm" />
         <h3 className="font-extrabold text-[var(--color-text)] text-[15px] flex-1 min-w-0 truncate">
           {f.name}
         </h3>
+        <button
+          type="button"
+          onClick={onImages}
+          title="Gestionar fotos de la cancha"
+          className="inline-flex flex-shrink-0 items-center gap-1 rounded-full border border-[var(--color-border)] bg-white px-2.5 py-1 text-[10px] font-extrabold text-[var(--color-text-2)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary)]"
+        >
+          <Images className="h-3 w-3" />
+          Fotos{imageCount ? ` ${imageCount}` : ''}
+        </button>
         <span className={`px-2.5 py-1 rounded-full text-[10px] font-extrabold uppercase tracking-wider flex-shrink-0 ${cfg.cls}`}>
           {cfg.label}
         </span>
@@ -908,6 +924,9 @@ const AdminComplexFields: React.FC = () => {
   const [deactivateTarget, setDTgt] = useState<FieldItem | null>(null);
   const [deactivating, setDeact]    = useState(false);
   const [showManagers, setShowMgr]  = useState(false);
+  const [showImages, setShowImages] = useState(false);
+  const [fieldImages, setFieldImages] = useState<Record<string, { url: string | null; count: number }>>({});
+  const [imagesField, setImagesField] = useState<FieldItem | null>(null);
   const fetchedRef = useRef(false);
 
   const fetchData = useCallback(async () => {
@@ -937,10 +956,63 @@ const AdminComplexFields: React.FC = () => {
     fetchData();
   }, [fetchData]);
 
+  useEffect(() => {
+    if (fields.length === 0) {
+      setFieldImages({});
+      return;
+    }
+
+    let cancelled = false;
+
+    const loadFieldImages = async () => {
+      const entries: Array<[string, { url: string | null; count: number }]> = await Promise.all(
+        fields.map(async (field) => {
+          try {
+            const data = await FieldImagesService.list(field.field_id);
+            return [
+              field.field_id,
+              { url: data.items[0]?.image_url ?? null, count: data.total },
+            ] as [string, { url: string | null; count: number }];
+          } catch {
+            return [field.field_id, { url: null, count: 0 }] as [
+              string,
+              { url: string | null; count: number },
+            ];
+          }
+        }),
+      );
+
+      if (!cancelled) setFieldImages(Object.fromEntries(entries));
+    };
+
+    void loadFieldImages();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [fields]);
+
   const refresh = async () => {
     fetchedRef.current = false;
     await fetchData();
     fetchedRef.current = true;
+  };
+
+  const handleImagesChanged = (confirmed: ComplexImage[]) => {
+    setComplex((prev) => (prev ? { ...prev, images: confirmed } : prev));
+  };
+
+  const handleFieldImagesChanged = (confirmed: ComplexImage[]) => {
+    const fieldId = imagesField?.field_id;
+    if (!fieldId) return;
+
+    setFieldImages((prev) => ({
+      ...prev,
+      [fieldId]: {
+        url: confirmed[0]?.image_url ?? null,
+        count: confirmed.length,
+      },
+    }));
   };
 
   // Desactivar cancha: PUT con status="inactive"
@@ -1015,37 +1087,49 @@ const AdminComplexFields: React.FC = () => {
       {!loading && !error && complex && (
         <>
           {/* Complex hero */}
-          <div className="bg-[var(--color-text)] rounded-[var(--radius-2xl)] px-6 py-5 flex items-center justify-between gap-4 shadow-[var(--shadow-lg)]">
-            <div className="flex items-center gap-4">
-              <div className="w-[52px] h-[52px] rounded-[var(--radius-xl)] bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-[var(--shadow-primary)]">
-                <Building2 className="w-7 h-7 text-white" />
+          <ComplexImageCover
+            src={complex.images?.[0]?.image_url}
+            alt={complex.name}
+            className="rounded-[var(--radius-2xl)] px-6 py-5 shadow-[var(--shadow-lg)]"
+          >
+            <div className="relative z-10 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-4">
+                <div className="w-[52px] h-[52px] rounded-[var(--radius-xl)] bg-[var(--color-primary)] flex items-center justify-center flex-shrink-0 shadow-[var(--shadow-primary)]">
+                  <Building2 className="w-7 h-7 text-white" />
+                </div>
+                <div>
+                  <h1 className="text-white font-extrabold text-xl leading-tight">{complex.name}</h1>
+                  {complex.address && (
+                    <p className="text-white/70 text-sm mt-0.5 flex items-center gap-1.5">
+                      <MapPin className="w-3.5 h-3.5 text-[var(--color-primary-light)]" />
+                      {[complex.address, complex.city].filter(Boolean).join(', ')}
+                    </p>
+                  )}
+                </div>
               </div>
-              <div>
-                <h1 className="text-white font-extrabold text-xl leading-tight">{complex.name}</h1>
-                {complex.address && (
-                  <p className="text-[var(--color-text-3)] text-sm mt-0.5 flex items-center gap-1.5">
-                    <MapPin className="w-3.5 h-3.5 text-[var(--color-primary)]" />
-                    {[complex.address, complex.city].filter(Boolean).join(', ')}
-                  </p>
-                )}
+              <div className="flex gap-2 flex-shrink-0">
+                <button
+                  onClick={() => setShowImages(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-[var(--radius-lg)] border border-white/20 text-white text-xs font-extrabold hover:bg-white/10 transition-colors"
+                >
+                  <Images className="w-3.5 h-3.5" /> Fotos ({complex.images?.length ?? 0})
+                </button>
+                <button
+                  onClick={refresh}
+                  className="w-9 h-9 rounded-[var(--radius-lg)] border border-white/20 text-white flex items-center justify-center hover:bg-white/10 transition-colors"
+                  title="Recargar"
+                >
+                  <RefreshCw className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setShowMgr(true)}
+                  className="inline-flex items-center gap-2 px-4 py-2 rounded-[var(--radius-lg)] border border-white/20 text-white text-xs font-extrabold hover:bg-white/10 transition-colors"
+                >
+                  <Users className="w-3.5 h-3.5" /> Administradores ({managersCount})
+                </button>
               </div>
             </div>
-            <div className="flex gap-2 flex-shrink-0">
-              <button
-                onClick={refresh}
-                className="w-9 h-9 rounded-[var(--radius-lg)] border border-white/20 text-white flex items-center justify-center hover:bg-white/10 transition-colors"
-                title="Recargar"
-              >
-                <RefreshCw className="w-4 h-4" />
-              </button>
-              <button
-                onClick={() => setShowMgr(true)}
-                className="inline-flex items-center gap-2 px-4 py-2 rounded-[var(--radius-lg)] border border-white/20 text-white text-xs font-extrabold hover:bg-white/10 transition-colors"
-              >
-                <Users className="w-3.5 h-3.5" /> Administradores ({managersCount})
-              </button>
-            </div>
-          </div>
+          </ComplexImageCover>
 
           {/* Stats */}
           <div className="bg-white rounded-[var(--radius-xl)] border border-[var(--color-border)] px-6 py-4 flex items-center gap-8 shadow-[var(--shadow-sm)]">
@@ -1138,6 +1222,9 @@ const AdminComplexFields: React.FC = () => {
                 <FieldCard
                   key={f.field_id}
                   f={f}
+                  imageUrl={fieldImages[f.field_id]?.url}
+                  imageCount={fieldImages[f.field_id]?.count}
+                  onImages={() => setImagesField(f)}
                   onDeactivate={() => setDTgt(f)}
                   onEdit={() => { setShowCreate(false); setEditing(f); }}
                   onSchedules={() => navigate(
@@ -1149,6 +1236,26 @@ const AdminComplexFields: React.FC = () => {
             </div>
           )}
         </>
+      )}
+
+      {showImages && complex && (
+        <ComplexImagesDialog
+          complex={complex}
+          onClose={() => setShowImages(false)}
+          onChanged={handleImagesChanged}
+        />
+      )}
+
+      {imagesField && complex && (
+        <FieldImagesDialog
+          field={{
+            field_id: imagesField.field_id,
+            name: imagesField.name,
+            complexName: complex.name,
+          }}
+          onClose={() => setImagesField(null)}
+          onChanged={handleFieldImagesChanged}
+        />
       )}
 
       {/* Deactivate confirm */}

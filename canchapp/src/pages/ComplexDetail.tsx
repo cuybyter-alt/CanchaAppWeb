@@ -3,6 +3,8 @@ import { ArrowLeft, MapPin, Building2, Ruler } from 'lucide-react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { Typography } from '../components/ui/typography';
 import { ComplexImageGallery } from '../components/features/ComplexImageGallery';
+import { ComplexImageCover } from '../components/features/ComplexImageThumb';
+import FieldImagesService from '../services/FieldImagesService';
 import type { ComplexImage } from '../types/complexImage';
 import ApiClient from '../services/ApiClient';
 
@@ -57,6 +59,7 @@ const ComplexDetail: React.FC = () => {
   const navigate = useNavigate();
 
   const [complex, setComplex] = useState<ComplexDetailData | null>(null);
+  const [fieldImages, setFieldImages] = useState<Record<string, string | null>>({});
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -68,7 +71,21 @@ const ComplexDetail: React.FC = () => {
       setIsLoading(true);
       try {
         const res = await ApiClient.get<ApiWrapper>(`/complexes/${id}/`);
-        if (mounted) setComplex(res.data);
+        if (mounted) {
+          setComplex(res.data);
+          void Promise.all(
+            res.data.fields.map(async (field) => {
+              try {
+                const images = await FieldImagesService.list(field.field_id);
+                return [field.field_id, images.items[0]?.image_url ?? null] as const;
+              } catch {
+                return [field.field_id, null] as const;
+              }
+            }),
+          ).then((entries) => {
+            if (mounted) setFieldImages(Object.fromEntries(entries));
+          });
+        }
       } catch {
         if (mounted) setError('No se pudo cargar el complejo. Intenta de nuevo.');
       } finally {
@@ -213,6 +230,14 @@ const ComplexDetail: React.FC = () => {
                   key={field.field_id}
                   className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-5 flex flex-col gap-3 hover:border-[var(--color-primary)] hover:shadow-[var(--shadow-lg)] transition-all duration-[var(--duration-fast)]"
                 >
+                  {fieldImages[field.field_id] && (
+                    <ComplexImageCover
+                      src={fieldImages[field.field_id]}
+                      alt={field.name}
+                      className="h-28 rounded-[var(--radius-xl)] border border-[var(--color-border)]"
+                    />
+                  )}
+
                   {/* Sport badge */}
                   <div className="flex items-center justify-between">
                     <span

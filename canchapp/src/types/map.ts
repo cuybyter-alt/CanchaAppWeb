@@ -62,6 +62,8 @@ export interface ComplexMarker {
   reviewCount?: number;
   maxPrice: number;
   fieldsCount: number;
+  imageUrl?: string | null;
+  imagesCount?: number;
 }
 
 /**

@@ -105,6 +105,8 @@ export const hourlyRateOf = (slot: TimeSlotData): number =>
 export interface FieldSlotsEntry {
   field: ComplexField;
   complexName: string;
+  complexImageUrl?: string | null;
+  fieldImageUrl?: string | null;
   slots: TimeSlotData[];
 }
 
@@ -164,6 +166,8 @@ export const buildFieldResult = (
     hourlyRate: match ? hourlyRateOf(match) : null,
     startIso: match?.startIso,
     endIso: match?.endIso,
+    complexImageUrl: entry.complexImageUrl ?? null,
+    fieldImageUrl: entry.fieldImageUrl ?? null,
     timeLabel: minutesToLabel(requestedMinutes),
   };
 };

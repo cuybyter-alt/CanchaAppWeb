@@ -1,6 +1,7 @@
 import type { ApiError } from './ApiClient';
 import bookingService from './BookingService';
 import ComplexesService from './ComplexesService';
+import FieldImagesService from './FieldImagesService';
 import schedulingService, { localTodayISO } from './SchedulingService';
 import {
   buildFieldResult,
@@ -14,6 +15,7 @@ import {
   validateQuickBooking,
   type FieldSlotsEntry,
 } from '../lib/availability';
+import type { ComplexImage } from '../types/complexImage';
 import type {
   AdminComplexOption,
   AvailabilityFieldResult,
@@ -52,7 +54,11 @@ const availabilitySearchService = {
    */
   async getAdminComplexes(): Promise<AdminComplexOption[]> {
     const complexes = await ComplexesService.getManagerComplexes({ pageSize: 100 });
-    const options = complexes.map((complex) => ({ id: complex.id, name: complex.name }));
+    const options = complexes.map((complex) => ({
+      id: complex.id,
+      name: complex.name,
+      imageUrl: complex.lastImageUrl ?? null,
+    }));
     managedComplexIds = new Set(options.map((option) => option.id));
     return options;
   },
@@ -65,6 +71,7 @@ const availabilitySearchService = {
   async search(
     query: AvailabilityQuery,
     complexName: string,
+    complexImageUrl?: string | null,
   ): Promise<AvailabilitySearchResult> {
     const errors = validateAvailabilityQuery(query, localTodayISO());
     const firstError = errors.complexId ?? errors.date ?? errors.time;
@@ -91,7 +98,17 @@ const availabilitySearchService = {
     }
 
     const settled = await Promise.allSettled(
-      relevantFields.map((field) => schedulingService.getFieldTimeSlots(field.fieldId, query.date)),
+      relevantFields.map(async (field) => {
+        const [slots, images] = await Promise.all([
+          schedulingService.getFieldTimeSlots(field.fieldId, query.date),
+          FieldImagesService.list(field.fieldId).catch(() => ({ items: [] as ComplexImage[] })),
+        ]);
+
+        return {
+          slots,
+          fieldImageUrl: images.items[0]?.image_url ?? null,
+        };
+      }),
     );
 
     const entries: FieldSlotsEntry[] = [];
@@ -100,7 +117,13 @@ const availabilitySearchService = {
 
     settled.forEach((result, index) => {
       if (result.status === 'fulfilled') {
-        entries.push({ field: relevantFields[index], complexName, slots: result.value });
+        entries.push({
+          field: relevantFields[index],
+          complexName,
+          complexImageUrl,
+          fieldImageUrl: result.value.fieldImageUrl,
+          slots: result.value.slots,
+        });
         return;
       }
       failedFields += 1;

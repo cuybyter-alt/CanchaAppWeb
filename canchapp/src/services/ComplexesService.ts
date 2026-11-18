@@ -13,6 +13,7 @@ interface ComplexContext {
   id: string;
   name: string;
   city?: string;
+  imageUrl?: string | null;
 }
 
 type RawRecord = Record<string, unknown>;
@@ -42,7 +43,7 @@ const FALLBACK_TIMES = [
   '22:00',
 ];
 
-const FIELDS_CACHE_KEY = 'canchapp-fields-cache-v2';
+const FIELDS_CACHE_KEY = 'canchapp-fields-cache-v3';
 const CACHE_TTL_MS = 5 * 60 * 1000;
 const FIELDS_CONCURRENCY = 8;
 
@@ -190,6 +191,7 @@ const mapComplex = (item: RawRecord): ComplexContext | null => {
     id,
     name: asString(item.name) ?? asString(item.complex_name) ?? 'Complejo deportivo',
     city: asString(item.city) ?? asString(item.address_city),
+    imageUrl: asImageUrl(item.last_image) ?? asImageUrl(item.complex_image) ?? null,
   };
 };
 
@@ -225,6 +227,7 @@ const mapField = (item: RawRecord, complex: ComplexContext, index: number): Fiel
     rating: 4.7,
     reviewCount: 80 + index * 7,
     image: 'soccer-field',
+    complexImageUrl: complex.imageUrl ?? null,
     tags: [tag],
     amenities: [
       { icon: 'lightbulb', label: 'Iluminación' },
@@ -297,7 +300,7 @@ const complexesService = {
           fieldsCount: asNumber(item.fields_count) ?? 0,
           averageRating: asNumber(item.average_rating) ?? 0,
           reviewCount: asNumber(item.total_reviews) ?? asNumber(item.review_count) ?? 0,
-          lastImageUrl: asImageUrl(item.last_image) ?? null,
+          lastImageUrl: asImageUrl(item.last_image) ?? asImageUrl(item.complex_image) ?? null,
           imagesCount: asNumber(item.images_count) ?? 0,
         };
       })
@@ -485,6 +488,8 @@ const complexesService = {
           minPrice: asNumber(item.min_price) ?? 0,
           maxPrice: asNumber(item.max_price) ?? 0,
           fieldsCount: asNumber(item.fields_count) ?? 0,
+          imageUrl: asImageUrl(item.last_image) ?? null,
+          imagesCount: asNumber(item.images_count) ?? 0,
         };
       })
       .filter((m): m is ComplexMarker => m !== null);
@@ -510,7 +515,12 @@ const complexesService = {
       sorted.map(async (complex, complexIndex) => {
         const distKm = haversineKm(userLat, userLng, complex.latitude, complex.longitude);
         const distLabel = `${distKm.toFixed(1)} km`;
-        const ctx: ComplexContext = { id: complex.id, name: complex.name, city: complex.city };
+        const ctx: ComplexContext = {
+          id: complex.id,
+          name: complex.name,
+          city: complex.city,
+          imageUrl: complex.imageUrl ?? null,
+        };
         const response = await ApiClient.get<ApiResponse<unknown>>(`/complexes/${complex.id}/fields/`);
         const fieldItems = extractArray(response.data);
         return fieldItems

@@ -13,6 +13,7 @@ export interface PaymentMethodOption {
 export interface AdminComplexOption {
   id: string;
   name: string;
+  imageUrl?: string | null;
 }
 
 export interface AvailabilityQuery {
@@ -40,6 +41,8 @@ export interface AvailabilityFieldResult {
   hourlyRate: number | null;
   startIso?: string;
   endIso?: string;
+  complexImageUrl?: string | null;
+  fieldImageUrl?: string | null;
   /** Hora consultada, ej. "19:00" */
   timeLabel: string;
 }

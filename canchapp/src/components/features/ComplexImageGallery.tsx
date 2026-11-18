@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
-import { Image as ImageIcon, Images } from 'lucide-react';
+import { Image as ImageIcon, Images, Maximize2 } from 'lucide-react';
+import { ImageLightbox } from '../ui/image-lightbox';
 import type { ComplexImage } from '../../types/complexImage';
 
 interface ComplexImageGalleryProps {
@@ -10,6 +11,7 @@ interface ComplexImageGalleryProps {
 export function ComplexImageGallery({ images, alt }: ComplexImageGalleryProps) {
   const [activeIndex, setActiveIndex] = useState(0);
   const [failedUrls, setFailedUrls] = useState<Set<string>>(new Set());
+  const [lightboxOpen, setLightboxOpen] = useState(false);
 
   const confirmedImages = images.filter((image) => image.status === 'confirmed');
   const total = confirmedImages.length;
@@ -33,6 +35,7 @@ export function ComplexImageGallery({ images, alt }: ComplexImageGalleryProps) {
   const mainFailed = failedUrls.has(activeImage.image_url);
 
   return (
+    <>
     <section className="space-y-3">
       <div className="flex items-center justify-between gap-3">
         <h2 className="flex items-center gap-2 font-[var(--font-display)] text-lg font-extrabold text-[var(--color-text)]">
@@ -46,7 +49,10 @@ export function ComplexImageGallery({ images, alt }: ComplexImageGalleryProps) {
       </div>
 
       <div className="overflow-hidden rounded-[var(--radius-2xl)] border border-[var(--color-border)] bg-[var(--color-text)] shadow-[var(--shadow-md)]">
-        <div className="relative aspect-[16/9]">
+        <div
+          className="relative aspect-[16/9] cursor-zoom-in"
+          onClick={() => !mainFailed && setLightboxOpen(true)}
+        >
           {mainFailed ? (
             <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[var(--color-text)] text-white/40">
               <ImageIcon className="h-10 w-10" />
@@ -71,6 +77,21 @@ export function ComplexImageGallery({ images, alt }: ComplexImageGalleryProps) {
                 {activeImage.description}
               </p>
             </div>
+          )}
+
+          {!mainFailed && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setLightboxOpen(true);
+              }}
+              aria-label="Ampliar foto del complejo"
+              title="Ampliar foto"
+              className="absolute right-3 top-3 flex h-9 w-9 items-center justify-center rounded-full bg-black/55 text-white backdrop-blur-sm transition-all hover:bg-[var(--color-primary)] active:scale-95"
+            >
+              <Maximize2 className="h-4 w-4" />
+            </button>
           )}
         </div>
       </div>
@@ -113,6 +134,15 @@ export function ComplexImageGallery({ images, alt }: ComplexImageGalleryProps) {
         </div>
       )}
     </section>
+
+    <ImageLightbox
+      isOpen={lightboxOpen}
+      src={activeImage.image_url}
+      alt={activeImage.description || alt}
+      title={alt}
+      onClose={() => setLightboxOpen(false)}
+    />
+    </>
   );
 }
 

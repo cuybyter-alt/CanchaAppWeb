@@ -1,29 +1,44 @@
 import React, { useState } from "react";
 import { useNavigate, Link, useLocation } from "react-router-dom";
-import { FcGoogle } from "react-icons/fc";
-import { SiInstagram, SiTiktok } from "react-icons/si";
-import { MdEmail, MdVisibility, MdVisibilityOff } from "react-icons/md";
+import {
+  AlertCircle,
+  ArrowLeft,
+  ArrowRight,
+  Eye,
+  EyeOff,
+  Loader2,
+  Lock,
+  Mail,
+} from "lucide-react";
 import authService from "../services/AuthService";
 import notify from "../services/toast";
 import type { ApiError } from "../services/ApiClient";
 import { useAuth } from "../context/AuthContext";
- 
+import { AuthBackground } from "../components/auth/AuthBackground";
+import { AuthHeader } from "../components/auth/AuthHeader";
+import { AuthDivider, AuthSocialButtons } from "../components/auth/AuthSocialButtons";
+
 // ─── Types ────────────────────────────────────────────────────────────────────
- 
+
 type LoginView = "social" | "email";
- 
+
 interface LoginProps {
   onLogin?: () => void;
 }
- 
+
+const labelClass = "mb-1.5 block text-sm font-semibold text-gray-700";
+const inputClass =
+  "w-full rounded-2xl border border-gray-200 bg-white py-3 pl-11 pr-4 text-sm text-gray-900 placeholder-gray-400 transition-all focus:border-green-500 focus:outline-none focus:ring-2 focus:ring-green-500";
+const passwordInputClass = `${inputClass} pr-11`;
+
 // ─── Component ────────────────────────────────────────────────────────────────
- 
+
 const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const navigate = useNavigate();
   const location = useLocation();
   const { loginWithGoogle, refreshUser } = useAuth();
   const redirectTo: string = (location.state as { redirect?: string } | null)?.redirect ?? '';
- 
+
   const [view, setView] = useState<LoginView>("social");
   const [identifier, setIdentifier] = useState("");
   const [password, setPassword] = useState("");
@@ -31,9 +46,9 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
   const [loading, setLoading] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
- 
+
   // ── Handlers ──────────────────────────────────────────────────────────────
- 
+
   const handleEmailLogin = async () => {
     if (!identifier.trim() || !password.trim()) {
       setError("Por favor completa todos los campos.");
@@ -63,7 +78,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       setLoading(false);
     }
   };
- 
+
   const handleGoogleLogin = async () => {
     setGoogleLoading(true);
     setError(null);
@@ -74,7 +89,7 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       navigate("/");
     } catch (e) {
       const err = e as ApiError & { code?: string };
-      // El usuario cerró el popup → no mostrar error
+      // El usuario cerró el popup; no mostrar error
       if (err?.code === "auth/popup-closed-by-user") return;
       const msg = err.message ?? "Error al iniciar sesión con Google.";
       setError(msg);
@@ -83,205 +98,141 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
       setGoogleLoading(false);
     }
   };
- 
+
   const handleUnavailableProvider = (provider: string) => {
     notify.error(
       `${provider} no disponible`,
       "Por ahora solo está disponible Google. ¡Próximamente más opciones!"
     );
   };
- 
-  // ── Subcomponentes ────────────────────────────────────────────────────────
- 
-  const Logo = () => (
-    <div className="flex flex-col items-center mb-6">
-      <div className="w-16 h-16 rounded-2xl bg-black border-2 border-green-500 flex items-center justify-center shadow-lg shadow-green-500/20 mb-4">
-        <img src="/cuypequeniologo.png" alt="Canchapp" className="w-12 h-12 object-contain" />
-      </div>
-      <h1 className="text-2xl font-bold text-gray-900 tracking-tight">
-        Bienvenido de Nuevo
-      </h1>
-      <p className="text-sm text-gray-500 mt-1 text-center">
-        Inicia sesión para reservar tus canchas favoritas
-      </p>
-    </div>
-  );
- 
-  const Divider = () => (
-    <div className="relative my-4">
-      <div className="absolute inset-0 flex items-center">
-        <div className="w-full border-t border-gray-200" />
-      </div>
-      <div className="relative flex justify-center">
-        <span className="px-3 bg-white text-xs text-gray-400 font-medium">O</span>
-      </div>
-    </div>
-  );
- 
-  // ── Vista 1: Selección de método ──────────────────────────────────────────
-  if (view === "social") {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-[#f0f4f0] p-4">
-        <div className="w-full max-w-sm bg-white rounded-3xl shadow-sm px-8 py-10">
-          <Logo />
- 
-          <div className="space-y-3">
-            {/* Google — ACTIVO */}
+
+  return (
+    <AuthBackground>
+      <div className="relative z-10 mx-auto w-full max-w-md rounded-3xl bg-white/95 p-6 shadow-2xl backdrop-blur-md sm:p-8">
+        <AuthHeader
+          title="¡Bienvenido de Nuevo!"
+          subtitle="Inicia sesión para reservar tus canchas favoritas"
+        />
+
+        {view === "social" ? (
+          <>
+            <AuthSocialButtons
+              googleLabel="Continuar con Google"
+              instagramLabel="Continuar con Instagram"
+              tiktokLabel="Continuar con TikTok"
+              googleLoading={googleLoading}
+              onGoogle={handleGoogleLogin}
+              onUnavailable={handleUnavailableProvider}
+            />
+
+            <AuthDivider />
+
             <button
-              onClick={handleGoogleLogin}
-              disabled={googleLoading}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-white border border-gray-200 rounded-full text-sm font-medium text-gray-700 hover:bg-gray-50 hover:border-gray-300 transition-all duration-150 shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              {googleLoading ? (
-                <span className="w-5 h-5 border-2 border-gray-300 border-t-green-500 rounded-full animate-spin" />
-              ) : (
-                <FcGoogle size={20} />
-              )}
-              {googleLoading ? "Conectando con Google..." : "Continuar con Google"}
-            </button>
- 
-            {/* Instagram — próximamente */}
-            <button
-              onClick={() => handleUnavailableProvider("Instagram")}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 rounded-full text-sm font-semibold text-white transition-all duration-150 hover:opacity-90 hover:shadow-md opacity-70"
-              style={{ background: "linear-gradient(90deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888)" }}
-            >
-              <SiInstagram size={20} />
-              Continuar con Instagram
-            </button>
- 
-            {/* TikTok — próximamente */}
-            <button
-              onClick={() => handleUnavailableProvider("TikTok")}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-black rounded-full text-sm font-semibold text-white hover:bg-gray-900 hover:shadow-md transition-all duration-150 opacity-70"
-            >
-              <SiTiktok size={20} />
-              Continuar con TikTok
-            </button>
- 
-            <Divider />
- 
-            {/* Email */}
-            <button
+              type="button"
               onClick={() => setView("email")}
-              className="w-full flex items-center justify-center gap-3 px-4 py-3 bg-green-500 rounded-full text-sm font-semibold text-white hover:bg-green-600 hover:shadow-md hover:shadow-green-500/30 transition-all duration-150"
+              className="flex w-full items-center justify-center gap-2.5 rounded-full bg-green-500 px-4 py-3 text-sm font-bold text-white shadow-lg shadow-green-500/20 transition-all duration-150 hover:bg-green-600 hover:shadow-green-500/30"
             >
-              <MdEmail size={20} />
-              Continuar con Correo
+              <Mail className="h-4 w-4" />
+              Continuar con correo
+            </button>
+
+            {error && (
+              <div className="mt-4 flex items-start gap-2 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+                <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="space-y-4">
+            <div>
+              <label className={labelClass}>Correo electrónico</label>
+              <div className="relative">
+                <Mail className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type="text"
+                  value={identifier}
+                  onChange={(e) => setIdentifier(e.target.value)}
+                  placeholder="tu@correo.com"
+                  className={inputClass}
+                />
+              </div>
+            </div>
+
+            <div>
+              <label className={labelClass}>Contraseña</label>
+              <div className="relative">
+                <Lock className="pointer-events-none absolute left-4 top-1/2 h-4 w-4 -translate-y-1/2 text-gray-400" />
+                <input
+                  type={showPassword ? "text" : "password"}
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onKeyDown={(e) => e.key === "Enter" && handleEmailLogin()}
+                  placeholder="••••••••"
+                  className={passwordInputClass}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  aria-label={showPassword ? "Ocultar contraseña" : "Mostrar contraseña"}
+                  className="absolute right-3 top-1/2 flex h-8 w-8 -translate-y-1/2 items-center justify-center rounded-full text-gray-400 transition-colors hover:bg-gray-100 hover:text-gray-600"
+                >
+                  {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </button>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between pt-1 text-sm">
+              <button
+                type="button"
+                onClick={() => { setView("social"); setError(null); }}
+                className="inline-flex items-center gap-1.5 font-semibold text-green-600 transition-colors hover:text-green-700"
+              >
+                <ArrowLeft className="h-4 w-4" />
+                Volver
+              </button>
+              <Link to="/forgot-password" className="text-gray-500 transition-colors hover:text-gray-700">
+                ¿Olvidaste tu contraseña?
+              </Link>
+            </div>
+
+            {error && (
+              <div className="flex items-start gap-2 rounded-2xl border border-red-100 bg-red-50 px-4 py-3 text-sm text-red-600">
+                <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0" />
+                <span>{error}</span>
+              </div>
+            )}
+
+            <button
+              type="button"
+              onClick={handleEmailLogin}
+              disabled={loading}
+              className="flex w-full items-center justify-center gap-2.5 rounded-full bg-green-500 py-3 text-sm font-bold text-white shadow-lg shadow-green-500/20 transition-all duration-150 hover:bg-green-600 hover:shadow-green-500/30 disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Mail className="h-4 w-4" />}
+              {loading ? "Ingresando..." : "Ingresar"}
             </button>
           </div>
- 
-          {error && (
-            <div className="mt-4 px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600 text-center">
-              {error}
-            </div>
-          )}
- 
-          <p className="text-center text-sm text-gray-500 mt-6">
+        )}
+
+        <div className="mt-6 space-y-3 text-center">
+          <p className="text-sm text-gray-500">
             ¿No tienes una cuenta?{" "}
-            <Link to="/register" className="font-semibold text-green-600 hover:text-green-700">
+            <Link to="/register" className="font-bold text-green-600 transition-colors hover:text-green-700">
               Regístrate
             </Link>
           </p>
-          <p className="text-center mt-3">
-            <Link to="/" className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
-              Explorar canchas sin iniciar sesión →
-            </Link>
-          </p>
-        </div>
-      </div>
-    );
-  }
- 
-  // ── Vista 2: Login con correo ─────────────────────────────────────────────
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-[#f0f4f0] p-4">
-      <div className="w-full max-w-sm bg-white rounded-3xl shadow-sm px-8 py-10">
-        <Logo />
- 
-        <div className="space-y-4">
-          {/* Correo / Identificador */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Correo Electrónico
-            </label>
-            <input
-              type="text"
-              value={identifier}
-              onChange={(e) => setIdentifier(e.target.value)}
-              placeholder="tu@correo.com"
-              className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition-all"
-            />
-          </div>
- 
-          {/* Contraseña */}
-          <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
-              Contraseña
-            </label>
-            <div className="relative">
-              <input
-                type={showPassword ? "text" : "password"}
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                onKeyDown={(e) => e.key === "Enter" && handleEmailLogin()}
-                placeholder="••••••••"
-                className="w-full px-4 py-3 rounded-xl border border-gray-200 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-green-400 focus:border-transparent transition-all pr-11"
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors"
-              >
-                {showPassword ? <MdVisibilityOff size={20} /> : <MdVisibility size={20} />}
-              </button>
-            </div>
-          </div>
- 
-          {/* Links: Volver / Olvidaste */}
-          <div className="flex items-center justify-between text-sm pt-1">
-            <button
-              onClick={() => { setView("social"); setError(null); }}
-              className="text-green-600 font-medium hover:text-green-700 transition-colors"
-            >
-              ← Volver
-            </button>
-            <Link to="/forgot-password" className="text-gray-500 hover:text-gray-700 transition-colors">
-              ¿Olvidaste tu contraseña?
-            </Link>
-          </div>
- 
-          {/* Error */}
-          {error && (
-            <div className="px-4 py-3 bg-red-50 border border-red-100 rounded-xl text-sm text-red-600">
-              {error}
-            </div>
-          )}
- 
-          {/* Submit */}
-          <button
-            onClick={handleEmailLogin}
-            disabled={loading}
-            className="w-full py-3 bg-green-500 rounded-full text-sm font-semibold text-white hover:bg-green-600 hover:shadow-md hover:shadow-green-500/30 disabled:opacity-60 disabled:cursor-not-allowed transition-all duration-150 mt-1"
+          <Link
+            to="/"
+            className="inline-flex items-center gap-1.5 text-xs font-semibold text-gray-400 transition-colors hover:text-gray-600"
           >
-            {loading ? "Ingresando..." : "Ingresar"}
-          </button>
+            Explorar canchas sin iniciar sesión
+            <ArrowRight className="h-3.5 w-3.5" />
+          </Link>
         </div>
- 
-        <p className="text-center text-sm text-gray-500 mt-6">
-          ¿No tienes una cuenta?{" "}
-          <Link to="/register" className="font-semibold text-green-600 hover:text-green-700">
-            Regístrate
-          </Link>
-        </p>
-        <p className="text-center mt-3">
-          <Link to="/" className="text-xs text-gray-400 hover:text-gray-600 transition-colors">
-            Explorar canchas sin iniciar sesión →
-          </Link>
-        </p>
       </div>
-    </div>
+    </AuthBackground>
   );
 };
- 
+
 export default Login;

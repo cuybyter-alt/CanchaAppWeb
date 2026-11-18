@@ -433,7 +433,7 @@ const AdminDashboard: React.FC = () => {
             icon={<CalendarCheck className="w-4 h-4" />}
             iconClass="bg-amber-500"
             title="Reservas"
-            sub={`${pendingBookings} pendientes`}
+            sub={`${pendingBookings} por abonar`}
             loading={loading}
             onClick={() => navigate('/admin/bookings')}
           />
@@ -469,7 +469,7 @@ const AdminDashboard: React.FC = () => {
           faIcon="fa-calendar-check"
           label="Reservas hoy"
           value={todayBookings}
-          subtext={`${pendingBookings} pendientes de aprobar`}
+          subtext={`${pendingBookings} pendientes de abono`}
           variant="accent"
           loading={loading}
           onClick={() => navigate('/admin/bookings')}
@@ -734,7 +734,7 @@ const AdminDashboard: React.FC = () => {
                   : 'bg-[var(--color-surf2)] text-[var(--color-text-3)]'
               }`}
             >
-              {pendingBookings > 0 ? `${pendingBookings} pendientes` : 'Al día'}
+              {pendingBookings > 0 ? `${pendingBookings} por abonar` : 'Al día'}
             </span>
           </div>
           {loading ? (

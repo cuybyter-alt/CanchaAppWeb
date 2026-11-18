@@ -119,6 +119,7 @@ export function MapCard({
             mapInstance,
             markersToDisplay,
             markerClickHandler,
+            centerOnRef.current?.complexId,
           );
           markersRef.current = markers;
 

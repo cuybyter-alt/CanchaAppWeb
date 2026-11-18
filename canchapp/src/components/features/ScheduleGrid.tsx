@@ -12,6 +12,7 @@ import {
 import { format, addDays, subDays } from 'date-fns';
 import { es } from 'date-fns/locale';
 import { useScheduleGrid } from '../../hooks/useScheduleGrid';
+import { getTodayISO } from '../../lib/timezone';
 import { MoveConfirmationModal } from './MoveConfirmationModal';
 import type { GridSlot, GridField } from '../../types/grid';
 
@@ -330,7 +331,7 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ complexId }) => {
             {weekDays.map((dayISO) => {
               const dayDate = new Date(dayISO + 'T12:00:00');
               const daySlots = slotsByDate.get(dayISO) ?? [];
-              const isToday = dayISO === new Date().toISOString().slice(0, 10);
+              const isToday = dayISO === getTodayISO();
 
               return (
                 <div key={dayISO} className="min-w-[100px]">

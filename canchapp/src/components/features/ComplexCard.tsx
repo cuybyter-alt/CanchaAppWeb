@@ -1,6 +1,8 @@
-import { MapPin, ArrowRight, Heart } from 'lucide-react';
+import { useEffect, useState } from 'react';
+import { MapPin, ArrowRight, Heart, Maximize2 } from 'lucide-react';
 import type { NearbyComplex } from '../../types/map';
 import { Typography } from '../ui/typography';
+import { ImageLightbox } from '../ui/image-lightbox';
 import { formatPrice } from '../../lib/utils';
 import { useMapContext } from '../../context/MapContext';
 
@@ -14,6 +16,16 @@ interface ComplexCardProps {
 
 export function ComplexCard({ complex, onSelect, isFavorite, onToggleFavorite, onReviewOpen }: ComplexCardProps) {
   const { openMapAt } = useMapContext();
+  const [coverFailed, setCoverFailed] = useState(false);
+  const [imagePreviewOpen, setImagePreviewOpen] = useState(false);
+
+  useEffect(() => {
+    setCoverFailed(false);
+    setImagePreviewOpen(false);
+  }, [complex.imageUrl]);
+
+  const showCover = Boolean(complex.imageUrl) && !coverFailed;
+
   return (
     <div
       className="group cursor-pointer bg-[var(--color-surface)] rounded-[var(--radius-2xl)] overflow-hidden
@@ -25,22 +37,53 @@ export function ComplexCard({ complex, onSelect, isFavorite, onToggleFavorite, o
       {/* Visual header */}
       <div
         className="h-[130px] relative overflow-hidden"
-        style={{ background: 'linear-gradient(145deg, #1a3810, #2d5a1a)' }}
+        style={showCover ? undefined : { background: 'linear-gradient(145deg, #1a3810, #2d5a1a)' }}
       >
-        {/* Subtle grid pattern */}
-        <div
-          className="absolute inset-0 opacity-10"
-          style={{
-            backgroundImage:
-              'linear-gradient(rgba(255,255,255,.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.3) 1px, transparent 1px)',
-            backgroundSize: '22px 22px',
-          }}
-        />
+        {showCover ? (
+          <>
+            <img
+              src={complex.imageUrl ?? undefined}
+              alt={complex.name}
+              loading="lazy"
+              onError={() => setCoverFailed(true)}
+              className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-105"
+            />
+            <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/25 to-black/10" />
+          </>
+        ) : (
+          <>
+            {/* Subtle grid pattern */}
+            <div
+              className="absolute inset-0 opacity-10"
+              style={{
+                backgroundImage:
+                  'linear-gradient(rgba(255,255,255,.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.3) 1px, transparent 1px)',
+                backgroundSize: '22px 22px',
+              }}
+            />
 
-        {/* Center icon */}
-        <div className="absolute inset-0 flex items-center justify-center">
-          <i className="fa-solid fa-building text-white/15 text-6xl" />
-        </div>
+            {/* Center icon */}
+            <div className="absolute inset-0 flex items-center justify-center">
+              <i className="fa-solid fa-building text-white/15 text-6xl" />
+            </div>
+          </>
+        )}
+
+        {showCover && (
+          <button
+            type="button"
+            onClick={(event) => {
+              event.stopPropagation();
+              setImagePreviewOpen(true);
+            }}
+            title="Ampliar imagen"
+            aria-label={`Ampliar imagen de ${complex.name}`}
+            className="absolute top-3 left-3 z-10 inline-flex h-7 items-center gap-1.5 rounded-full bg-black/55 pl-2 pr-2.5 text-white/85 shadow-sm backdrop-blur-sm transition-all hover:bg-[var(--color-primary)] hover:text-white active:scale-95"
+          >
+            <Maximize2 className="h-3 w-3" />
+            <span className="text-[9px] font-extrabold uppercase tracking-wider">Ampliar</span>
+          </button>
+        )}
 
         {/* Distance badge — top right */}
         <div className="absolute top-3 right-3 flex items-center gap-1.5">
@@ -58,7 +101,16 @@ export function ComplexCard({ complex, onSelect, isFavorite, onToggleFavorite, o
           )}
           {(complex.latitude !== 0 || complex.longitude !== 0) && (
           <button
-            onClick={(e) => { e.stopPropagation(); openMapAt({ lng: complex.longitude, lat: complex.latitude, zoom: 16 }); }}
+            onClick={(e) => {
+              e.stopPropagation();
+              openMapAt({
+                lng: complex.longitude,
+                lat: complex.latitude,
+                zoom: 16,
+                complexId: complex.id,
+                complexName: complex.name,
+              });
+            }}
             title="Ver ubicación en mapa"
             className="group/loc flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2.5 py-1
               transition-all duration-200
@@ -73,12 +125,22 @@ export function ComplexCard({ complex, onSelect, isFavorite, onToggleFavorite, o
           )}
         </div>
 
-        {/* Fields count — bottom right */}
-        <div className="absolute bottom-3 right-3 flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2.5 py-1">
-          <i className="fa-solid fa-futbol text-[8px] text-[var(--color-primary)]" />
-          <span className="font-[var(--font-pixel)] text-[7px] tracking-widest text-white">
-            {complex.fieldsCount} {complex.fieldsCount === 1 ? 'cancha' : 'canchas'}
-          </span>
+        {/* Counts — bottom right */}
+        <div className="absolute bottom-3 right-3 flex items-center gap-1.5">
+          {(complex.imagesCount ?? 0) > 0 && (
+            <div className="flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2.5 py-1">
+              <i className="fa-solid fa-camera text-[8px] text-[var(--color-primary)]" />
+              <span className="font-[var(--font-pixel)] text-[7px] tracking-widest text-white">
+                {complex.imagesCount}
+              </span>
+            </div>
+          )}
+          <div className="flex items-center gap-1 bg-black/50 backdrop-blur-sm rounded-full px-2.5 py-1">
+            <i className="fa-solid fa-futbol text-[8px] text-[var(--color-primary)]" />
+            <span className="font-[var(--font-pixel)] text-[7px] tracking-widest text-white">
+              {complex.fieldsCount} {complex.fieldsCount === 1 ? 'cancha' : 'canchas'}
+            </span>
+          </div>
         </div>
 
         {/* City pill — bottom left */}
@@ -132,6 +194,16 @@ export function ComplexCard({ complex, onSelect, isFavorite, onToggleFavorite, o
           </button>
         </div>
       </div>
+
+      {showCover && (
+        <ImageLightbox
+          isOpen={imagePreviewOpen}
+          src={complex.imageUrl ?? ''}
+          alt={complex.name}
+          title={complex.name}
+          onClose={() => setImagePreviewOpen(false)}
+        />
+      )}
     </div>
   );
 }

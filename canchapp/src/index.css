@@ -385,3 +385,29 @@ body::before {
 .animate-slide-up {
   animation: slide-up 0.3s var(--ease-swift) forwards;
 }
+
+@keyframes complex-marker-pulse {
+  0% {
+    transform: scale(0.8);
+    opacity: 0.9;
+  }
+  70% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+  100% {
+    transform: scale(1.5);
+    opacity: 0;
+  }
+}
+
+.complex-marker-pulse {
+  animation: complex-marker-pulse 1.8s ease-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .complex-marker-pulse {
+    animation: none;
+    opacity: 0.55;
+  }
+}

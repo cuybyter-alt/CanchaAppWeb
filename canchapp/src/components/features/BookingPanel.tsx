@@ -10,6 +10,7 @@ import authService from '../../services/AuthService';
 import notify from '../../services/toast';
 import schedulingService, { localTodayISO } from '../../services/SchedulingService';
 import bookingService from '../../services/BookingService';
+import { formatEndTime24, getMinutesInTimezone, getTodayISO } from '../../lib/timezone';
 import type { ApiError } from '../../services/ApiClient';
 
 interface BookingPanelProps {
@@ -27,8 +28,7 @@ interface BookingPanelProps {
 const DAY_NAMES = ['DOM', 'LUN', 'MAR', 'MIE', 'JUE', 'VIE', 'SAB'];
 
 function generateDates(count = 7) {
-  const today = new Date();
-  today.setHours(0, 0, 0, 0);
+  const today = new Date(`${getTodayISO()}T12:00:00`);
   return Array.from({ length: count }, (_, i) => {
     const d = new Date(today);
     d.setDate(today.getDate() + i);
@@ -48,14 +48,9 @@ function isSlotPast(slot: import('../../types/field').TimeSlotData, isToday: boo
   if (!isToday) return false;
   if (slot.blockReason === 'past') return true;
   if (slot.startIso) return new Date(slot.startIso).getTime() <= Date.now();
-  if (slot.time && slot.period) {
-    const parts = slot.time.split(':');
-    let h = parseInt(parts[0], 10);
-    const m = parseInt(parts[1] || '0', 10);
-    if (slot.period === 'PM' && h < 12) h += 12;
-    if (slot.period === 'AM' && h === 12) h = 0;
-    const now = new Date();
-    return (h * 60 + m) <= (now.getHours() * 60 + now.getMinutes());
+  if (slot.time) {
+    const [h, m] = slot.time.split(':').map(Number);
+    return h * 60 + (m || 0) <= (getMinutesInTimezone(new Date()) ?? 0);
   }
   return false;
 }
@@ -239,8 +234,8 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
         sport: field.sport,
         sportLabel: field.sportLabel,
         date: `${date?.name ?? 'DÍA'}, ${date?.day ?? ''}`,
-        time: `${slot.time} ${slot.period}`,
-        endTime: '',
+        time: slot.time,
+        endTime: slot.endIso ? formatEndTime24(slot.endIso) : '',
         duration: '60 min',
         players: 0,
         status: 'pending',
@@ -456,7 +451,7 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
             bg-[var(--color-primary)]/20 border border-[var(--color-primary)]/50 animate-pulse">
             <i className="fa-solid fa-wand-magic-sparkles text-[var(--color-primary)] text-xs" />
             <span className="text-[11px] font-extrabold text-[var(--color-primary-dark)]">
-              Horario {selectedSlotData.time} {selectedSlotData.period} · {formatPrice(selectedSlotData.price)} preseleccionado
+              Horario {selectedSlotData.time} · {formatPrice(selectedSlotData.price)} preseleccionado
             </span>
           </div>
         )}
@@ -493,9 +488,6 @@ export const BookingPanel: React.FC<BookingPanelProps> = ({ field, onBookingCrea
                 )}
                 <div className={`font-[var(--font-display)] text-base font-extrabold leading-none ${isBlocked ? 'text-[var(--color-muted)]' : isActive ? 'text-white' : 'text-[var(--color-text)]'}`}>
                   {slot.time}
-                </div>
-                <div className={`text-[10px] font-bold ${isActive ? 'text-white' : 'text-[var(--color-text-3)]'}`}>
-                  {slot.period}
                 </div>
                 {!isBlocked && (
                   <div className={`font-[var(--font-pixel)] text-[7px] mt-0.5 ${isActive ? 'text-white' : 'text-[var(--color-primary-dark)]'}`}>

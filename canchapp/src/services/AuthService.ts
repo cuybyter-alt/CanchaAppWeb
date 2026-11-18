@@ -1,4 +1,5 @@
 import ApiClient, { type ApiError } from "./ApiClient";
+import { getDeviceTimezone } from "../lib/timezone";
 
 // ─── Types (mirror del backend DTOs) ─────────────────────────────────────────
 
@@ -15,6 +16,7 @@ export interface UserOutput {
   is_guest: boolean;
   location?: string | null;
   phone_number?: string | null;
+  timezone?: string | null;
 }
 
 export interface TokenPairOutput {
@@ -26,6 +28,7 @@ export interface TokenPairOutput {
 export interface LoginPayload {
   identifier: string; // email o username
   password: string;
+  timezone?: string | null;
 }
 
 export interface RegisterPayload {
@@ -35,6 +38,7 @@ export interface RegisterPayload {
   password: string;
   role_name: "Owner" | "Manager" | "Player";
   username: string;
+  timezone?: string | null;
 }
 
 export interface UpdateProfilePayload {
@@ -44,6 +48,7 @@ export interface UpdateProfilePayload {
   avatar_url?: string | null;
   location?: string | null;
   phone_number?: string | null;
+  timezone?: string | null;
 }
 
 export interface ChangePasswordPayload {
@@ -92,6 +97,7 @@ export const parseUserOutput = (raw: unknown): UserOutput => {
     is_guest: Boolean(u.is_guest ?? u.isGuest ?? false),
     location: asOptionalString(u.location),
     phone_number: asOptionalString(u.phone_number ?? u.phoneNumber),
+    timezone: asOptionalString(u.timezone),
   };
 };
 
@@ -104,10 +110,12 @@ const mergeProfilePayload = (
     ...user,
     location: user.location ?? payload.location ?? null,
     phone_number: user.phone_number ?? payload.phone_number ?? null,
+    timezone: payload.timezone ?? user.timezone ?? null,
   };
 };
 
 const PROFILE_EXTRAS_PREFIX = "canchapp_profile_extras_";
+const TIMEZONE_MANUAL_KEY = "canchapp_timezone_manual";
 
 /** Respaldo local cuando el API no devuelve teléfono/ubicación en GET. */
 export const profileExtrasStorage = {
@@ -140,6 +148,19 @@ export const profileExtrasStorage = {
   },
 };
 
+export const timezonePreferenceStorage = {
+  isManual(): boolean {
+    return localStorage.getItem(TIMEZONE_MANUAL_KEY) === "true";
+  },
+  setManual(value: boolean) {
+    if (value) {
+      localStorage.setItem(TIMEZONE_MANUAL_KEY, "true");
+    } else {
+      localStorage.removeItem(TIMEZONE_MANUAL_KEY);
+    }
+  },
+};
+
 export const enrichUserWithStoredExtras = (user: UserOutput): UserOutput => {
   if (!user.user_id) return user;
   const extras = profileExtrasStorage.get(user.user_id);
@@ -162,6 +183,7 @@ export const tokenStorage = {
     localStorage.removeItem("access_token");
     localStorage.removeItem("refresh_token");
     localStorage.removeItem("user");
+    localStorage.removeItem(TIMEZONE_MANUAL_KEY);
   },
   getAccess: () => localStorage.getItem("access_token"),
   getRefresh: () => localStorage.getItem("refresh_token"),
@@ -188,6 +210,11 @@ export const tokenStorage = {
 
 // ─── Auth Service ─────────────────────────────────────────────────────────────
 
+const withDeviceTimezone = (timezone?: string | null) => {
+  const resolved = timezone ?? getDeviceTimezone();
+  return resolved ? { timezone: resolved } : {};
+};
+
 const authService = {
   /**
    * POST /api/identity/auth/login/
@@ -196,7 +223,7 @@ const authService = {
   login: async (payload: LoginPayload): Promise<TokenPairOutput> => {
     const res = await ApiClient.post<ApiResponse<TokenPairOutput>>(
       "/identity/auth/login/",
-      payload
+      { ...payload, ...withDeviceTimezone(payload.timezone) }
     );
     tokenStorage.save(res.data);
     tokenStorage.saveUser(enrichUserWithStoredExtras(parseUserOutput(res.data.user)));
@@ -211,7 +238,7 @@ const authService = {
     const { role_name, ...rest } = payload;
     const res = await ApiClient.post<ApiResponse<UserOutput>>(
       "/identity/register/",
-      { ...rest, role_names: [role_name] }
+      { ...rest, role_names: [role_name], ...withDeviceTimezone(payload.timezone) }
     );
     return res.data;
   },
@@ -344,11 +371,16 @@ const authService = {
    */
   firebaseAuth: async (
     firebaseIdToken: string,
-    roleName: "Owner" | "Manager" | "Player" = "Player"
+    roleName: "Owner" | "Manager" | "Player" = "Player",
+    timezone?: string | null
   ): Promise<TokenPairOutput> => {
     const res = await ApiClient.post<ApiResponse<TokenPairOutput>>(
       "/identity/auth/firebase/",
-      { firebase_id_token: firebaseIdToken, role_names: [roleName] }
+      {
+        firebase_id_token: firebaseIdToken,
+        role_names: [roleName],
+        ...withDeviceTimezone(timezone),
+      }
     );
     tokenStorage.save(res.data);
     tokenStorage.saveUser(enrichUserWithStoredExtras(parseUserOutput(res.data.user)));
@@ -453,6 +485,22 @@ const authService = {
   },
 
   isAuthenticated: (): boolean => !!tokenStorage.getAccess(),
+};
+
+export const syncCurrentUserTimezone = async (user: UserOutput): Promise<UserOutput> => {
+  const timezone = getDeviceTimezone();
+  if (
+    !user.user_id ||
+    !timezone ||
+    user.timezone === timezone ||
+    timezonePreferenceStorage.isManual()
+  ) {
+    return user;
+  }
+
+  const updated = await authService.updateCurrentUserProfile({ timezone });
+  tokenStorage.saveUser(updated);
+  return updated;
 };
 
 export default authService;

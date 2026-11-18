@@ -11,6 +11,7 @@ import bookingService from '../../services/BookingService';
 import authService from '../../services/AuthService';
 import notify from '../../services/toast';
 import { formatPriceFull } from '../../lib/utils';
+import { formatEndTime24, getMinutesInTimezone, getTodayISO } from '../../lib/timezone';
 
 interface ComplexFieldsDialogProps {
   isOpen: boolean;
@@ -57,9 +58,9 @@ interface SlotsState {
 
 function buildDates(): { iso: string; label: string }[] {
   return Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
+    const d = new Date(`${getTodayISO()}T12:00:00`);
     d.setDate(d.getDate() + i);
-    const iso = d.toISOString().split('T')[0];
+    const iso = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const label =
       i === 0
         ? 'Hoy'
@@ -74,14 +75,9 @@ function isSlotPast(slot: TimeSlotData, isToday: boolean): boolean {
   if (!isToday) return false;
   if (slot.blockReason === 'past') return true;
   if (slot.startIso) return new Date(slot.startIso).getTime() <= Date.now();
-  if (slot.time && slot.period) {
-    const parts = slot.time.split(':');
-    let h = parseInt(parts[0], 10);
-    const m = parseInt(parts[1] || '0', 10);
-    if (slot.period === 'PM' && h < 12) h += 12;
-    if (slot.period === 'AM' && h === 12) h = 0;
-    const now = new Date();
-    return (h * 60 + m) <= (now.getHours() * 60 + now.getMinutes());
+  if (slot.time) {
+    const [h, m] = slot.time.split(':').map(Number);
+    return h * 60 + (m || 0) <= (getMinutesInTimezone(new Date()) ?? 0);
   }
   return false;
 }
@@ -105,7 +101,7 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
   const [bookingDone, setBookingDone] = useState(false);
   const navigate = useNavigate();
 
-  const todayIso = new Date().toISOString().split('T')[0];
+  const todayIso = getTodayISO();
   const dates = buildDates();
   const isToday = selectedDate === todayIso;
 
@@ -198,8 +194,8 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
         sport: 'futbol5',
         sportLabel: FIELD_TYPE_LABELS[selectedFieldForSlot.type] ?? selectedFieldForSlot.type,
         date: selectedDate,
-        time: `${selectedTimeSlot.time} ${selectedTimeSlot.period}`,
-        endTime: '',
+        time: selectedTimeSlot.time,
+        endTime: selectedTimeSlot.endIso ? formatEndTime24(selectedTimeSlot.endIso) : '',
         duration: '1 hr',
         players: 10,
         status: resp.status === 'canceled' ? 'canceled' : 'confirmed',
@@ -207,7 +203,7 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
       };
       onBookingCreated?.(newBooking);
       setBookingDone(true);
-      notify.success('¡Reserva confirmada!', `${selectedFieldForSlot.name} · ${selectedTimeSlot.time} ${selectedTimeSlot.period}`);
+      notify.success('¡Reserva confirmada!', `${selectedFieldForSlot.name} · ${selectedTimeSlot.time}`);
       setTimeout(onClose, 2000);
     } catch (err: unknown) {
       const e = err as { status?: number };
@@ -226,7 +222,7 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
 
   useEffect(() => {
     if (!isOpen || !complex) return;
-    const today = new Date().toISOString().split('T')[0];
+    const today = getTodayISO();
     setSelectedDate(today);
     setExpandedFieldId(null);
     setSlotsMap({});
@@ -560,9 +556,6 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
                                   }`}
                                 >
                                   <span className="text-[10px] font-extrabold leading-none">{slot.time}</span>
-                                  <span className="text-[7px] font-bold leading-none mt-0.5 opacity-80">
-                                    {slot.period}
-                                  </span>
                                 </button>
                               );
                             })}
@@ -597,7 +590,7 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
                   {selectedFieldForSlot.name}
                 </p>
                 <p className="text-[10px] font-bold text-[var(--color-primary-dark)]">
-                  {selectedTimeSlot.time} {selectedTimeSlot.period}
+                  {selectedTimeSlot.time}
                   {' · '}
                   {formatPriceFull(selectedTimeSlot.price)}/hr
                 </p>

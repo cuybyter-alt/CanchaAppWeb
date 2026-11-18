@@ -11,6 +11,7 @@ import type {
   QuickBookingFormErrors,
 } from '../types/availability';
 import { localTodayISO } from '../services/SchedulingService';
+import { getMinutesInTimezone } from './timezone';
 
 export const FIELD_TYPE_LABELS: Record<ComplexFieldType, string> = {
   futbol_5: 'Fútbol 5',
@@ -57,14 +58,8 @@ export const minutesToTime = (minutes: number): string => {
   return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}`;
 };
 
-/** Convierte minutos desde medianoche a una etiqueta de 12 horas, ej. "07:00 PM". */
-export const minutesToLabel = (minutes: number): string => {
-  const h = Math.floor(minutes / 60);
-  const m = minutes % 60;
-  const period = h >= 12 ? 'PM' : 'AM';
-  const hour12 = ((h + 11) % 12) + 1;
-  return `${String(hour12).padStart(2, '0')}:${String(m).padStart(2, '0')} ${period}`;
-};
+/** Convierte minutos desde medianoche a una etiqueta de 24 horas, ej. "19:00". */
+export const minutesToLabel = (minutes: number): string => minutesToTime(minutes);
 
 export const isValidISODate = (value: string): boolean => {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
@@ -87,12 +82,10 @@ export const formatLongDate = (isoDate: string): string => {
   });
 };
 
-/** Hora de inicio de una franja en minutos desde medianoche (hora local del navegador). */
+/** Hora de inicio de una franja en minutos desde medianoche (hora del complejo). */
 export const slotStartMinutes = (slot: TimeSlotData): number | null => {
   if (!slot.startIso) return null;
-  const start = new Date(slot.startIso);
-  if (Number.isNaN(start.getTime())) return null;
-  return start.getHours() * 60 + start.getMinutes();
+  return getMinutesInTimezone(slot.startIso);
 };
 
 export const slotDurationMinutes = (slot: TimeSlotData): number => {
@@ -133,7 +126,7 @@ export const buildFieldResult = (
   queryDate?: string,
   now: Date = new Date(),
 ): AvailabilityFieldResult | null => {
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const currentMinutes = getMinutesInTimezone(now) ?? 0;
   const isPastTime =
     queryDate && queryDate < localTodayISO()
       ? true
@@ -196,7 +189,7 @@ export const findAlternativeBlocks = (
 ): AlternativeTimeBlock[] => {
   const blocks = new Map<number, AlternativeTimeBlock>();
   const isToday = queryDate ? queryDate === localTodayISO() : true;
-  const currentMinutes = now.getHours() * 60 + now.getMinutes();
+  const currentMinutes = getMinutesInTimezone(now) ?? 0;
 
   for (const entry of entries) {
     if (entry.field.status !== 'active') continue;
@@ -271,7 +264,7 @@ export const validateAvailabilityQuery = (
     if (requestedMinutes === null) {
       errors.time = 'La hora no es válida.';
     } else if (input.date === todayISO) {
-      const currentMinutes = now.getHours() * 60 + now.getMinutes();
+      const currentMinutes = getMinutesInTimezone(now) ?? 0;
       if (requestedMinutes <= currentMinutes) {
         errors.time = 'La hora seleccionada ya pasó. Elige un horario futuro.';
       }

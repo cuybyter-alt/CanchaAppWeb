@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   BarChart3,
   Edit3,
+  Globe,
   LogOut,
   Lock,
   Mail,
@@ -14,12 +15,13 @@ import {
   User,
 } from 'lucide-react';
 import type { ApiError } from '../services/ApiClient';
-import { tokenStorage, type UpdateProfilePayload, type UserOutput } from '../services/AuthService';
+import { tokenStorage, timezonePreferenceStorage, type UpdateProfilePayload, type UserOutput } from '../services/AuthService';
 import bookingService from '../services/BookingService';
 import favoritesService from '../services/FavoritesService';
 import notify from '../services/toast';
 import authService from '../services/AuthService';
 import { useAuth } from '../context/AuthContext';
+import { getDeviceTimezone, getTimezoneOptions } from '../lib/timezone';
 
 interface ProfileData {
   username: string;
@@ -29,6 +31,7 @@ interface ProfileData {
   avatarUrl: string;
   location: string;
   phoneNumber: string;
+  timezone: string;
 }
 
 const buildProfile = (user = tokenStorage.getUser()): ProfileData => ({
@@ -39,6 +42,7 @@ const buildProfile = (user = tokenStorage.getUser()): ProfileData => ({
   avatarUrl: user?.avatar_url ?? '',
   location: user?.location ?? '',
   phoneNumber: user?.phone_number ?? '',
+  timezone: user?.timezone ?? getDeviceTimezone() ?? 'America/Bogota',
 });
 
 const normalizeValue = (value: string): string | null => {
@@ -215,6 +219,9 @@ const Profile: React.FC = () => {
     }
   })();
 
+  const timezoneOptions = getTimezoneOptions(profile.timezone);
+  const deviceTimezone = getDeviceTimezone();
+
   const handleEditToggle = () => {
     setIsEditing((prev) => !prev);
   };
@@ -291,9 +298,13 @@ const Profile: React.FC = () => {
         avatar_url: normalizeValue(profile.avatarUrl),
         location: normalizeValue(profile.location),
         phone_number: normalizeValue(profile.phoneNumber),
+        timezone: normalizeValue(profile.timezone),
       };
 
       const updatedUser = await authService.updateCurrentUserProfile(payload);
+      timezonePreferenceStorage.setManual(
+        Boolean(payload.timezone && payload.timezone !== getDeviceTimezone()),
+      );
       tokenStorage.saveUser(updatedUser);
       refreshUser();
       setProfileUser(updatedUser);
@@ -305,6 +316,7 @@ const Profile: React.FC = () => {
         avatarUrl: updatedUser.avatar_url ?? '',
         location: updatedUser.location ?? profile.location,
         phoneNumber: updatedUser.phone_number ?? profile.phoneNumber,
+        timezone: updatedUser.timezone ?? profile.timezone,
       });
       setIsEditing(false);
       notify.success('Perfil actualizado', 'Los cambios se guardaron en el backend.');
@@ -536,6 +548,39 @@ const Profile: React.FC = () => {
 
                 <div className="md:col-span-2 animate-fade-in">
                   <label className="block text-xs font-extrabold text-[var(--color-text-3)] uppercase tracking-[0.2em] mb-2">
+                    Zona horaria
+                  </label>
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <select
+                      value={profile.timezone}
+                      onChange={(e) => setProfile((p) => ({ ...p, timezone: e.target.value }))}
+                      disabled={!isEditing}
+                      className="w-full h-12 px-4 rounded-[var(--radius-lg)] border-[1.5px] border-[var(--color-border)] bg-[var(--color-surface)] text-[var(--color-text)] font-semibold outline-none transition-all disabled:opacity-70 disabled:cursor-not-allowed focus:border-[var(--color-primary)] focus:shadow-[var(--shadow-primary)]"
+                    >
+                      {timezoneOptions.map((timezone) => (
+                        <option key={timezone} value={timezone}>
+                          {timezone}
+                        </option>
+                      ))}
+                    </select>
+                    {isEditing && deviceTimezone && profile.timezone !== deviceTimezone && (
+                      <button
+                        type="button"
+                        onClick={() => setProfile((p) => ({ ...p, timezone: deviceTimezone ?? p.timezone }))}
+                        className="shrink-0 inline-flex items-center justify-center gap-2 px-4 h-12 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surf2)] text-[var(--color-text-2)] font-extrabold text-sm hover:border-[var(--color-primary)] hover:text-[var(--color-primary-dark)] transition-all"
+                      >
+                        <Globe className="w-4 h-4" />
+                        Usar mi zona actual
+                      </button>
+                    )}
+                  </div>
+                  <p className="mt-2 text-xs font-semibold text-[var(--color-text-3)]">
+                    Se usa para mostrar las horas de tus reservas en tu hora local.
+                  </p>
+                </div>
+
+                <div className="md:col-span-2 animate-fade-in">
+                  <label className="block text-xs font-extrabold text-[var(--color-text-3)] uppercase tracking-[0.2em] mb-2">
                     Avatar URL
                   </label>
                   <input
@@ -548,8 +593,14 @@ const Profile: React.FC = () => {
                 </div>
               </div>
 
-              {!isEditing && (profile.phoneNumber || profile.location) && (
+              {!isEditing && (profile.phoneNumber || profile.location || profile.timezone) && (
                 <div className="mt-4 flex flex-wrap gap-2">
+                  {profile.timezone && (
+                    <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--color-surf2)] text-[var(--color-text-2)] text-xs font-extrabold">
+                      <Globe className="w-3.5 h-3.5 text-[var(--color-primary)]" />
+                      {profile.timezone}
+                    </span>
+                  )}
                   {profile.phoneNumber && (
                     <span className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--color-surf2)] text-[var(--color-text-2)] text-xs font-extrabold">
                       <Phone className="w-3.5 h-3.5 text-[var(--color-primary)]" />

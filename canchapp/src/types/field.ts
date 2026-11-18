@@ -63,6 +63,7 @@ export interface Booking {
   startIso?: string;
   /** ISO 8601 end datetime — booking is completed when this is in the past */
   endIso?: string;
+  complexImageUrl?: string | null;
 }
 
 export interface ComplexListItem {
@@ -77,6 +78,8 @@ export interface ComplexListItem {
   fieldsCount: number;
   averageRating?: number;
   reviewCount?: number;
+  lastImageUrl?: string | null;
+  imagesCount?: number;
 }
 
 export type ComplexFieldType = 'futbol_5' | 'futbol_7' | 'futbol_11' | 'microfutbol' | 'futsal';

@@ -1,16 +1,30 @@
 ﻿import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Bell, BellOff, CheckCheck, ChevronRight, Loader2, QrCode, X } from 'lucide-react';
+import { useNavigate } from 'react-router-dom';
+import {
+  Bell,
+  BellOff,
+  CheckCheck,
+  ChevronRight,
+  CreditCard,
+  ExternalLink,
+  Loader2,
+  QrCode,
+  X,
+  XCircle,
+} from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import { Dialog } from '../components/ui/dialog';
 import notificationService from '../services/NotificationService';
 import bookingService from '../services/BookingService';
 import { useNotifications } from '../context/NotificationsContext';
+import { useAuth } from '../context/AuthContext';
 import { notify } from '../services/toast';
 import type { NotificationOutput, BookingConfirmation, NotificationsMeta } from '../types/notification';
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Tab = 'all' | 'unread' | 'read';
+type BookingNotificationStatus = 'pending' | 'part_paid' | 'confirmed' | 'rejected' | 'canceled';
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
@@ -22,39 +36,74 @@ function formatNotifDate(iso: string): string {
       year: 'numeric',
       hour: '2-digit',
       minute: '2-digit',
+      hour12: false,
     });
   } catch {
     return iso;
   }
 }
 
-function eventLabel(event: string): string {
-  const map: Record<string, string> = {
-    booking_accepted: 'Reserva Aprobada',
-    booking_rejected: 'Reserva Rechazada',
-    booking_cancelled: 'Reserva Cancelada',
-    booking_created: 'Nueva Reserva',
-    payment_confirmed: 'Pago Confirmado',
-    reminder: 'Recordatorio',
-  };
-  return map[event] ?? event.replace(/_/g, ' ');
+function normalizeEvent(event: string): string {
+  return (event ?? '').trim().toUpperCase();
 }
 
-function eventColor(event: string): string {
-  if (event.includes('accepted') || event.includes('confirmed') || event.includes('created')) {
+function getMetadataStatus(metadata: NotificationOutput['metadata']): BookingNotificationStatus | null {
+  const status = String(metadata?.status ?? '').toLowerCase();
+  if (status === 'pending' || status === 'part_paid' || status === 'confirmed' || status === 'rejected') {
+    return status;
+  }
+  if (status === 'canceled' || status === 'cancelled') return 'canceled';
+  return null;
+}
+
+function eventLabel(event: string, status: BookingNotificationStatus | null): string {
+  const normalized = normalizeEvent(event);
+
+  switch (normalized) {
+    case 'BOOKING_CREATED':
+      return status === 'pending' ? 'Reserva pendiente de abono' : 'Reserva creada';
+    case 'BOOKING_STATUS_CHANGED':
+      if (status === 'part_paid') return 'Reserva abonada';
+      if (status === 'rejected') return 'Reserva rechazada';
+      if (status === 'confirmed') return 'Reserva confirmada';
+      if (status === 'canceled') return 'Reserva cancelada';
+      return 'Reserva actualizada';
+    case 'BOOKING_CONFIRMED':
+      return 'Reserva confirmada';
+    case 'BOOKING_CANCELED':
+    case 'BOOKING_CANCELLED':
+      return 'Reserva cancelada';
+    case 'BOOKING_REJECTED':
+      return 'Reserva rechazada';
+    case 'BOOKING_ACCEPTED':
+    case 'BOOKING_APPROVED':
+      return 'Reserva aceptada';
+    case 'BOOKING_RESCHEDULED':
+      return 'Reserva reprogramada';
+    case 'BOOKING_MOVED':
+      return 'Reserva movida';
+    case 'PAYMENT_CONFIRMED':
+      return 'Pago confirmado';
+    case 'REMINDER':
+      return 'Recordatorio';
+    default:
+      return normalized.replace(/_/g, ' ');
+  }
+}
+
+function eventColor(event: string, status: BookingNotificationStatus | null): string {
+  if (status === 'pending') return 'bg-amber-50 text-amber-700';
+  if (status === 'part_paid') return 'bg-blue-50 text-blue-700';
+  if (status === 'confirmed') return 'bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)]';
+  if (status === 'rejected' || status === 'canceled') return 'bg-red-50 text-red-700';
+
+  const normalized = normalizeEvent(event);
+  if (normalized.includes('REJECT') || normalized.includes('CANCEL')) return 'bg-red-50 text-red-700';
+  if (normalized.includes('CONFIRM') || normalized.includes('ACCEPT') || normalized.includes('CREATED')) {
     return 'bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)]';
   }
-  if (event.includes('rejected') || event.includes('cancelled')) {
-    return 'bg-red-50 text-red-700';
-  }
-  if (event.includes('payment')) {
-    return 'bg-blue-50 text-blue-700';
-  }
+  if (normalized.includes('PAID')) return 'bg-blue-50 text-blue-700';
   return 'bg-gray-100 text-gray-600';
-}
-
-function isBookingConfirmationEvent(event: string): boolean {
-  return event === 'booking_accepted' || event === 'booking_confirmed';
 }
 
 // ─── QR Confirmation Panel (inside dialog) ───────────────────────────────────
@@ -89,7 +138,17 @@ function ConfirmationQR({ bookingId }: { bookingId: string }) {
     );
   }
 
-  if (error || !conf) return null;
+  if (error) {
+    return (
+      <div className="mt-4 rounded-[var(--radius-xl)] border border-red-200 bg-red-50 p-4">
+        <p className="text-sm font-bold text-red-700">
+          No se pudo cargar el código de confirmación. Intenta de nuevo más tarde.
+        </p>
+      </div>
+    );
+  }
+
+  if (!conf) return null;
 
   return (
     <div className="mt-4 rounded-[var(--radius-xl)] bg-[var(--color-primary-tint)] border border-[var(--color-primary)]/20 p-5">
@@ -136,24 +195,87 @@ function ConfirmationQR({ bookingId }: { bookingId: string }) {
 
 interface NotifDetailDialogProps {
   notif: NotificationOutput | null;
+  isAdmin: boolean;
   onClose: () => void;
+  onStatusChange: (notificationId: string, status: BookingNotificationStatus) => void;
 }
 
-function NotifDetailDialog({ notif, onClose }: NotifDetailDialogProps) {
+function NotifDetailDialog({ notif, isAdmin, onClose, onStatusChange }: NotifDetailDialogProps) {
+  const navigate = useNavigate();
+  const [actionStatus, setActionStatus] = useState<BookingNotificationStatus | null>(null);
+  const [actionLoading, setActionLoading] = useState<'pay' | 'reject' | null>(null);
+  const [actionError, setActionError] = useState<string | null>(null);
+
+  useEffect(() => {
+    setActionStatus(getMetadataStatus(notif?.metadata ?? null));
+    setActionLoading(null);
+    setActionError(null);
+  }, [notif?.notification_id, notif?.metadata?.status]);
+
   if (!notif) return null;
 
-  const bookingId = notif.metadata?.booking_id ?? null;
-  // Show QR whenever the backend provides a booking_id in metadata,
-  // regardless of the exact event name variant sent by the API.
-  const showQr = bookingId != null;
+  const notification = notif;
+  const bookingId = notification.metadata?.booking_id ?? null;
+  const status = actionStatus ?? getMetadataStatus(notification.metadata);
+  const event = normalizeEvent(notification.event);
+  const canPay = !isAdmin && event === 'BOOKING_CREATED' && status === 'pending' && !!bookingId;
+  const canReject = isAdmin && event === 'BOOKING_CREATED' && status === 'pending' && !!bookingId;
+  const canView = isAdmin && !!bookingId;
+  const showQr = !isAdmin && status === 'part_paid' && !!bookingId;
+
+  const handlePay = async () => {
+    if (!bookingId || actionLoading) return;
+
+    setActionLoading('pay');
+    setActionError(null);
+    try {
+      await bookingService.payDeposit(bookingId);
+      setActionStatus('part_paid');
+      onStatusChange(notification.notification_id, 'part_paid');
+      notify.success('¡Abono exitoso!', 'Tu reserva está abonada. Presenta tu QR al llegar.');
+    } catch (error) {
+      const message =
+        (error as { message?: string })?.message ?? 'No se pudo procesar el abono.';
+      setActionError(message);
+      notify.error('Error al abonar', message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleReject = async () => {
+    if (!bookingId || actionLoading) return;
+    if (!window.confirm('¿Rechazar esta reserva? Esta acción no se puede deshacer.')) return;
+
+    setActionLoading('reject');
+    setActionError(null);
+    try {
+      await bookingService.updateBookingStatus(bookingId, 'rejected');
+      setActionStatus('rejected');
+      onStatusChange(notification.notification_id, 'rejected');
+      notify.success('Reserva rechazada', 'La reserva quedó rechazada.');
+    } catch (error) {
+      const message =
+        (error as { message?: string })?.message ?? 'No se pudo rechazar la reserva.';
+      setActionError(message);
+      notify.error('Error al rechazar', message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const handleViewBooking = () => {
+    onClose();
+    navigate('/admin/bookings');
+  };
 
   return (
     <Dialog isOpen={!!notif} onClose={onClose} size="sm">
       <div className="p-6">
         {/* Close button (dialog header is empty so we add our own) */}
         <div className="flex items-start justify-between gap-3 mb-4">
-          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-widest ${eventColor(notif.event)}`}>
-            {eventLabel(notif.event)}
+          <span className={`text-[10px] font-bold px-2.5 py-1 rounded-full uppercase tracking-widest ${eventColor(notification.event, status)}`}>
+            {eventLabel(notification.event, status)}
           </span>
           <button
             onClick={onClose}
@@ -167,23 +289,92 @@ function NotifDetailDialog({ notif, onClose }: NotifDetailDialogProps) {
 
         {/* Title */}
         <h2 className="text-xl font-black text-[var(--color-text)] leading-snug mb-1">
-          {notif.message}
+          {notification.message}
         </h2>
 
         {/* Date */}
         <p className="text-xs text-[var(--color-text-3)] mb-4">
-          {formatNotifDate(notif.created_at)}
+          {formatNotifDate(notification.created_at)}
         </p>
 
         {/* Content body */}
-        {notif.content && (
+        {notification.content && (
           <p className="text-sm text-[var(--color-text-2)] leading-relaxed">
-            {notif.content}
+            {notification.content}
           </p>
         )}
 
-        {/* QR confirmation — prominent, centered, scannable */}
-        {showQr && <ConfirmationQR bookingId={bookingId!} />}
+        {actionError && (
+          <p className="mt-4 rounded-[var(--radius-lg)] border border-red-200 bg-red-50 px-3 py-2 text-sm font-semibold text-red-700">
+            {actionError}
+          </p>
+        )}
+
+        {canPay && (
+          <button
+            type="button"
+            onClick={handlePay}
+            disabled={actionLoading === 'pay'}
+            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius-lg)] bg-gradient-to-br from-[var(--color-primary-light)] via-[var(--color-primary)] to-[var(--color-primary-dark)] px-4 py-3 text-sm font-extrabold text-white shadow-[var(--shadow-primary)] transition-all hover:brightness-95 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {actionLoading === 'pay' ? (
+              <>
+                <Loader2 className="h-4 w-4 animate-spin" />
+                Procesando...
+              </>
+            ) : (
+              <>
+                <CreditCard className="h-4 w-4" />
+                Abonar
+              </>
+            )}
+          </button>
+        )}
+
+        {canReject && (
+          <div className="mt-5 flex gap-2">
+            <button
+              type="button"
+              onClick={handleViewBooking}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surf2)] px-3 py-2.5 text-sm font-extrabold text-[var(--color-text-2)] transition-all hover:border-[var(--color-primary)] hover:text-[var(--color-primary-dark)]"
+            >
+              <ExternalLink className="h-4 w-4" />
+              Ver reserva
+            </button>
+            <button
+              type="button"
+              onClick={handleReject}
+              disabled={actionLoading === 'reject'}
+              className="inline-flex flex-1 items-center justify-center gap-2 rounded-[var(--radius-lg)] bg-red-600 px-3 py-2.5 text-sm font-extrabold text-white transition-all hover:bg-red-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+            >
+              {actionLoading === 'reject' ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <XCircle className="h-4 w-4" />
+              )}
+              Rechazar
+            </button>
+          </div>
+        )}
+
+        {isAdmin && canView && !canReject && (
+          <button
+            type="button"
+            onClick={handleViewBooking}
+            className="mt-5 inline-flex w-full items-center justify-center gap-2 rounded-[var(--radius-lg)] border border-[var(--color-border)] bg-[var(--color-surf2)] px-4 py-2.5 text-sm font-extrabold text-[var(--color-text-2)] transition-all hover:border-[var(--color-primary)] hover:text-[var(--color-primary-dark)]"
+          >
+            <ExternalLink className="h-4 w-4" />
+            Ver reserva
+          </button>
+        )}
+
+        {isAdmin && status === 'part_paid' && (
+          <p className="mt-4 rounded-[var(--radius-lg)] border border-blue-200 bg-blue-50 px-3 py-2 text-sm font-semibold text-blue-700">
+            El jugador ya abonó. Puedes validar su QR desde Reservas.
+          </p>
+        )}
+
+        {showQr && <ConfirmationQR bookingId={bookingId} />}
       </div>
     </Dialog>
   );
@@ -193,13 +384,13 @@ function NotifDetailDialog({ notif, onClose }: NotifDetailDialogProps) {
 
 interface NotifItemProps {
   notif: NotificationOutput;
+  isAdmin: boolean;
   onClick: (notif: NotificationOutput) => void;
 }
 
-function NotifItem({ notif, onClick }: NotifItemProps) {
-  const hasQr =
-    isBookingConfirmationEvent(notif.event) &&
-    notif.metadata?.booking_id != null;
+function NotifItem({ notif, isAdmin, onClick }: NotifItemProps) {
+  const status = getMetadataStatus(notif.metadata);
+  const hasQr = !isAdmin && status === 'part_paid' && notif.metadata?.booking_id != null;
 
   return (
     <article
@@ -227,8 +418,8 @@ function NotifItem({ notif, onClick }: NotifItemProps) {
         {/* Content */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap mb-0.5">
-            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${eventColor(notif.event)}`}>
-              {eventLabel(notif.event)}
+            <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full uppercase tracking-wide ${eventColor(notif.event, status)}`}>
+              {eventLabel(notif.event, status)}
             </span>
             {hasQr && (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-[var(--color-primary-tint)] text-[var(--color-primary-dark)] flex items-center gap-1">
@@ -272,6 +463,12 @@ function StatCard({ value, label, color }: { value: number; label: string; color
 
 export default function Notifications() {
   const { refresh: refreshBadge } = useNotifications();
+  const { user } = useAuth();
+  const isAdmin = Boolean(
+    user?.role_name === 'Owner' ||
+      user?.role_name === 'Manager' ||
+      (user?.role_names ?? []).some((role) => role === 'Owner' || role === 'Manager'),
+  );
 
   const [notifications, setNotifications] = useState<NotificationOutput[]>([]);
   const [meta, setMeta] = useState<NotificationsMeta>({ total: 0, page: 1, page_size: 20 });
@@ -359,7 +556,6 @@ export default function Notifications() {
       prev.map((n) => (n.notification_id === notif.notification_id ? { ...n, is_read: true } : n))
     );
     setUnreadCount((c) => Math.max(0, c - 1));
-    refreshBadge();
 
     try {
       await notificationService.markAsRead(notif.notification_id);
@@ -367,6 +563,7 @@ export default function Notifications() {
       setSelectedNotif((prev) =>
         prev?.notification_id === notif.notification_id ? { ...prev, is_read: true } : prev
       );
+      refreshBadge();
     } catch {
       // Revert
       setNotifications((prev) =>
@@ -386,10 +583,10 @@ export default function Notifications() {
     const prevCount = unreadCount;
     setNotifications((prev) => prev.map((n) => ({ ...n, is_read: true })));
     setUnreadCount(0);
-    refreshBadge();
 
     try {
       await notificationService.markAllAsRead();
+      refreshBadge();
       void loadStats();
     } catch {
       setNotifications(prevNotifs);
@@ -407,6 +604,22 @@ export default function Notifications() {
     setLoadingMore(true);
     await loadNotifications(tab, nextPage, true);
   };
+
+  const handleStatusChange = useCallback(
+    (notificationId: string, status: BookingNotificationStatus) => {
+      const updateNotification = (notification: NotificationOutput): NotificationOutput =>
+        notification.notification_id === notificationId
+          ? {
+              ...notification,
+              metadata: { ...(notification.metadata ?? {}), status },
+            }
+          : notification;
+
+      setNotifications((prev) => prev.map(updateNotification));
+      setSelectedNotif((prev) => (prev ? updateNotification(prev) : prev));
+    },
+    [],
+  );
 
   const hasMore = notifications.length < (meta?.total ?? 0);
   const readCount = totalCount - unreadCount;
@@ -564,6 +777,7 @@ export default function Notifications() {
               <NotifItem
                 key={notif.notification_id}
                 notif={notif}
+                isAdmin={isAdmin}
                 onClick={handleItemClick}
               />
             ))}
@@ -593,7 +807,9 @@ export default function Notifications() {
       {/* Detail dialog */}
       <NotifDetailDialog
         notif={selectedNotif}
+        isAdmin={isAdmin}
         onClose={() => setSelectedNotif(null)}
+        onStatusChange={handleStatusChange}
       />
     </div>
   );

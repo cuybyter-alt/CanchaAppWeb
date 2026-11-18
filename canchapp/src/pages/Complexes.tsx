@@ -26,6 +26,8 @@ function toNearbyComplex(c: ComplexListItem): NearbyComplex {
     fieldsCount: c.fieldsCount,
     distanceKm: 0,
     distanceLabel: '',
+    imageUrl: c.lastImageUrl ?? null,
+    imagesCount: c.imagesCount ?? 0,
   };
 }
 

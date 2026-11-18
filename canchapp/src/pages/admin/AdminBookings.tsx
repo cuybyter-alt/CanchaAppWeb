@@ -23,6 +23,7 @@ import schedulingService, { localTodayISO } from '../../services/SchedulingServi
 import { notify } from '../../services/toast';
 import type { TimeSlotData } from '../../types/field';
 import { ScheduleGrid } from '../../components/features/ScheduleGrid';
+import { requestAdminTodayStatsRefresh } from '../../hooks/useAdminTodayStats';
 
 type BookingFilter = 'all' | 'pending' | 'part_paid' | 'confirmed' | 'canceled' | 'rejected';
 
@@ -45,7 +46,7 @@ interface BookingBadge {
 
 const filters: { key: BookingFilter; label: string }[] = [
   { key: 'all', label: 'Todas' },
-  { key: 'pending', label: 'Pendientes' },
+  { key: 'pending', label: 'Por abonar' },
   { key: 'part_paid', label: 'Abonadas' },
   { key: 'confirmed', label: 'Confirmadas' },
   { key: 'canceled', label: 'Canceladas' },
@@ -86,8 +87,7 @@ const AdminBookings: React.FC = () => {
   const formatPrice = (value: number) => `$${value.toLocaleString('es-CO')}`;
 
   const formatSlotLabel = (slot: TimeSlotData) => {
-    const time = `${slot.time} ${slot.period}`;
-    return `${time} - ${formatPrice(slot.price)}${slot.status !== 'available' ? ' (ocupado)' : ''}`;
+    return `${slot.time} - ${formatPrice(slot.price)}${slot.status !== 'available' ? ' (ocupado)' : ''}`;
   };
 
   const getBookingBadge = (booking: AdminBookingRow): BookingBadge => {
@@ -102,7 +102,7 @@ const AdminBookings: React.FC = () => {
         return { label: 'Rechazada', className: 'bg-red-600 text-white' };
       case 'pending':
       default:
-        return { label: 'Pendiente', className: 'bg-[var(--color-accent)] text-white' };
+        return { label: 'Por abonar', className: 'bg-[var(--color-accent)] text-white' };
     }
   };
 
@@ -377,6 +377,7 @@ const AdminBookings: React.FC = () => {
       );
 
       await reloadBookingsForComplexes(complexes);
+      requestAdminTodayStatsRefresh();
 
       setManualFieldId('');
       setManualSlotId('');
@@ -397,6 +398,7 @@ const AdminBookings: React.FC = () => {
     try {
       await bookingService.updateBookingStatus(id, 'rejected');
       await reloadBookingsForComplexes(complexes);
+      requestAdminTodayStatsRefresh();
       notify.warning('Reserva cancelada.');
     } catch (err) {
       const msg = (err as any)?.message || 'Error cancelando reserva';
@@ -421,6 +423,7 @@ const AdminBookings: React.FC = () => {
         isToken ? undefined : code,
       );
       await reloadBookingsForComplexes(complexes);
+      requestAdminTodayStatsRefresh();
       notify.success('¡Check-in confirmado!');
       setConfirmingBooking(null);
       setConfirmInput('');
@@ -674,8 +677,22 @@ const AdminBookings: React.FC = () => {
               className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-3.5 md:p-4 shadow-[var(--shadow-md)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--color-primary)] hover:shadow-[var(--shadow-primary)]"
             >
               <div className="flex flex-col xl:flex-row xl:items-center gap-3">
-                <div className="w-10 h-10 rounded-full bg-[var(--color-primary)] text-white flex items-center justify-center flex-shrink-0 shadow-[var(--shadow-primary)]">
+                <div className="relative w-10 h-10 rounded-full overflow-hidden bg-[var(--color-primary)] text-white flex items-center justify-center flex-shrink-0 shadow-[var(--shadow-primary)]">
                   <Smartphone className="w-4 h-4" />
+                  {booking.complexImageUrl && (
+                    <img
+                      src={booking.complexImageUrl}
+                      alt={booking.complexName}
+                      loading="lazy"
+                      onLoad={(event) => {
+                        event.currentTarget.style.display = '';
+                      }}
+                      onError={(event) => {
+                        event.currentTarget.style.display = 'none';
+                      }}
+                      className="absolute inset-0 h-full w-full object-cover"
+                    />
+                  )}
                 </div>
 
                 <div className="flex-1 min-w-0">

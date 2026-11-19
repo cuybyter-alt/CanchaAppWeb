@@ -6,6 +6,7 @@ import type { BookingConfirmation } from '../../types/notification';
 import { Typography } from '../ui/typography';
 import bookingService from '../../services/BookingService';
 import notify from '../../services/toast';
+import { BookingDetailModal, type BookingDetailData } from './BookingDetailModal';
 
 interface BookingCardProps {
   booking: Booking;
@@ -127,6 +128,7 @@ export function BookingCard({ booking, onCancelled }: BookingCardProps) {
   const [isPayingDeposit, setIsPayingDeposit] = useState(false);
   const [depositPaid, setDepositPaid] = useState(false);
   const [complexImageFailed, setComplexImageFailed] = useState(false);
+  const [showDetail, setShowDetail] = useState(false);
 
   useEffect(() => {
     setComplexImageFailed(false);
@@ -189,6 +191,24 @@ export function BookingCard({ booking, onCancelled }: BookingCardProps) {
   };
   const currentStatus = depositPaid ? 'part_paid' : booking.status;
   const status = statusConfig[currentStatus] ?? statusConfig.pending;
+  const priceLabel = new Intl.NumberFormat('es-CO', {
+    style: 'currency',
+    currency: 'COP',
+    maximumFractionDigits: 0,
+  }).format(booking.price);
+
+  const detailData: BookingDetailData = {
+    bookingId: booking.id,
+    complexName: booking.complexName,
+    fieldName: booking.fieldName,
+    dateLabel: booking.date,
+    timeRangeLabel: `${booking.time} – ${booking.endTime}`,
+    status: currentStatus as BookingDetailData['status'],
+    priceLabel,
+    imageUrl: booking.complexImageUrl ?? null,
+    duration: booking.duration,
+    sportLabel: booking.sportLabel,
+  };
 
   return (
     <>
@@ -200,6 +220,12 @@ export function BookingCard({ booking, onCancelled }: BookingCardProps) {
           loading={cancelling}
         />
       )}
+
+      <BookingDetailModal
+        isOpen={showDetail}
+        data={detailData}
+        onClose={() => setShowDetail(false)}
+      />
 
       {showQrModal && (
         <div
@@ -256,9 +282,20 @@ export function BookingCard({ booking, onCancelled }: BookingCardProps) {
       )}
 
       <div
+        role="button"
+        tabIndex={0}
+        aria-label={`Ver detalle de la reserva en ${booking.fieldName}`}
+        onClick={() => setShowDetail(true)}
+        onKeyDown={(event) => {
+          if (event.key === 'Enter' || event.key === ' ') {
+            event.preventDefault();
+            setShowDetail(true);
+          }
+        }}
         className="bg-[var(--color-surface)] rounded-[var(--radius-2xl)] border-[1.5px] border-[var(--color-border)]
           shadow-[var(--shadow-md)] overflow-hidden relative cursor-pointer
-          transition-all duration-[var(--duration-mid)] hover:-translate-y-1 hover:shadow-[var(--shadow-xl)]"
+          transition-all duration-[var(--duration-mid)] hover:-translate-y-1 hover:shadow-[var(--shadow-xl)]
+          focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-offset-2"
       >
         {/* Header con imagen del complejo o gradiente del deporte */}
         <div
@@ -327,12 +364,16 @@ export function BookingCard({ booking, onCancelled }: BookingCardProps) {
             </span>
           </div>
           <div className="mt-2 text-[13px] font-bold text-[var(--color-text)]">
-            {new Intl.NumberFormat('es-CO', { style: 'currency', currency: 'COP', maximumFractionDigits: 0 }).format(booking.price)}
+            {priceLabel}
           </div>
         </div>
 
         {/* Acciones */}
-        <div className="px-4 pb-4 flex gap-2 flex-wrap">
+        <div
+          className="px-4 pb-4 flex gap-2 flex-wrap"
+          onClick={(event) => event.stopPropagation()}
+          onKeyDown={(event) => event.stopPropagation()}
+        >
           {booking.status === 'confirmed' && (
             <button
               onClick={handleShowQr}

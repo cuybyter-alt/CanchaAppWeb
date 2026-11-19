@@ -19,6 +19,15 @@ export interface UserOutput {
   timezone?: string | null;
 }
 
+export interface UserLookupOutput {
+  user_id: string;
+  f_name: string;
+  l_name: string;
+  email: string;
+  avatar_url?: string | null;
+  is_guest: boolean;
+}
+
 export interface TokenPairOutput {
   access: string;
   refresh: string;
@@ -288,6 +297,32 @@ const authService = {
           { withAuth: true }
         );
         return retry.data;
+      }
+      throw error;
+    }
+  },
+
+  /**
+   * GET /api/identity/users/lookup/?identifier=email_o_username
+   * Búsqueda exacta de jugador para owner/manager.
+   */
+  lookupUser: async (identifier: string): Promise<UserLookupOutput> => {
+    const query = new URLSearchParams({ identifier: identifier.trim() });
+    const fetchOnce = async () => {
+      const res = await ApiClient.get<ApiResponse<UserLookupOutput>>(
+        `/identity/users/lookup/?${query.toString()}`,
+        { withAuth: true },
+      );
+      return res.data;
+    };
+
+    try {
+      return await fetchOnce();
+    } catch (error) {
+      const apiError = error as ApiError;
+      if (apiError?.status === 401) {
+        await authService.refreshToken();
+        return await fetchOnce();
       }
       throw error;
     }

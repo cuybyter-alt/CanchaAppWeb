@@ -11,6 +11,12 @@ creada (pending) → abonada (part_paid) → confirmada (confirmed)
 - **part_paid**: el jugador abonó. Debe presentar su QR/código al llegar.
 - **confirmed**: el manager/owner escaneó el QR o validó el código en la cancha.
 
+> Si un **owner/manager crea la reserva** (`created_by_admin=true`), nace
+> directamente en `part_paid`, ya tiene confirmación QR y no debe mostrar el CTA
+> **Abonar**. Si el responsable es un **invitado** (`is_guest=true`), no recibe
+> notificación: el admin creador puede consultar el QR. Ver
+> [`frontend-reservas-admin.md`](./frontend-reservas-admin.md).
+
 El admin/manager puede **rechazar** (`rejected`) una reserva pendiente o
 **registrar el abono** (`part_paid`) si el pago se hizo presencialmente.
 

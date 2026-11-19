@@ -426,7 +426,7 @@ const AdminDashboard: React.FC = () => {
             title="Canchas"
             sub={`${stats?.total_active_fields ?? 0} activas`}
             loading={loading}
-            onClick={() => navigate('/admin/fields')}
+            onClick={() => navigate('/admin/complexes')}
           />
           <QuickPanelButton
             icon={<CalendarCheck className="w-4 h-4" />}

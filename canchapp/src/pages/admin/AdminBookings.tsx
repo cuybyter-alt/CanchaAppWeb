@@ -5,6 +5,7 @@ import {
   Calendar,
   CalendarCheck,
   CheckCircle2,
+  ChevronDown,
   CircleDot,
   Clock,
   Clock3,
@@ -22,7 +23,18 @@ import ComplexesService from '../../services/ComplexesService';
 import schedulingService, { localTodayISO } from '../../services/SchedulingService';
 import { notify } from '../../services/toast';
 import type { TimeSlotData } from '../../types/field';
+import type { GridSlot, GridField } from '../../types/grid';
 import { ScheduleGrid } from '../../components/features/ScheduleGrid';
+import {
+  BookingDetailModal,
+  type BookingDetailData,
+} from '../../components/features/BookingDetailModal';
+import { BookingQrModal } from '../../components/features/BookingQrModal';
+import {
+  ManualBookingResponsiblePicker,
+  type ManualResponsible,
+} from '../../components/features/ManualBookingResponsiblePicker';
+import { formatDateLabel, formatTimeRange24 } from '../../lib/timezone';
 import { requestAdminTodayStatsRefresh } from '../../hooks/useAdminTodayStats';
 
 type BookingFilter = 'all' | 'pending' | 'part_paid' | 'confirmed' | 'canceled' | 'rejected';
@@ -59,11 +71,13 @@ const AdminBookings: React.FC = () => {
   const userId = tokenStorage.getUser()?.user_id ?? null;
 
   const [activeView, setActiveView] = useState<'bookings' | 'grid'>('bookings');
+  const [collapsedGrids, setCollapsedGrids] = useState<Set<string>>(new Set());
   const [filter, setFilter] = useState<BookingFilter>('all');
   const [bookings, setBookings] = useState<AdminBookingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [confirmingBooking, setConfirmingBooking] = useState<AdminBookingRow | null>(null);
+  const [selectedBookingDetail, setSelectedBookingDetail] = useState<BookingDetailData | null>(null);
   const [confirmInput, setConfirmInput] = useState('');
   const [confirming, setConfirming] = useState(false);
   const [showManualForm, setShowManualForm] = useState(false);
@@ -78,16 +92,68 @@ const AdminBookings: React.FC = () => {
   const [manualFieldId, setManualFieldId] = useState('');
   const [manualDate, setManualDate] = useState(localTodayISO);
   const [manualSlotId, setManualSlotId] = useState('');
-  const [manualClientName, setManualClientName] = useState('');
-  const [manualClientPhone, setManualClientPhone] = useState('');
+  const [manualResponsible, setManualResponsible] = useState<ManualResponsible>({ kind: 'self' });
+  const [qrBookingId, setQrBookingId] = useState<string | null>(null);
   const [submittingManual, setSubmittingManual] = useState(false);
   const [slotsLoading, setSlotsLoading] = useState(false);
   const [slotsHint, setSlotsHint] = useState<string | null>(null);
 
   const formatPrice = (value: number) => `$${value.toLocaleString('es-CO')}`;
 
+  const toggleComplexGrid = (complexId: string) => {
+    setCollapsedGrids((prev) => {
+      const next = new Set(prev);
+      if (next.has(complexId)) next.delete(complexId);
+      else next.add(complexId);
+      return next;
+    });
+  };
+
   const formatSlotLabel = (slot: TimeSlotData) => {
     return `${slot.time} - ${formatPrice(slot.price)}${slot.status !== 'available' ? ' (ocupado)' : ''}`;
+  };
+
+  const bookingRowToDetail = (booking: AdminBookingRow): BookingDetailData => ({
+    bookingId: booking.id,
+    complexName: booking.complexName,
+    fieldName: booking.fieldName,
+    dateLabel: booking.date ?? '—',
+    timeRangeLabel: booking.timeRange,
+    status: booking.status,
+    priceLabel: booking.totalLabel,
+    customerName: booking.customerName,
+    phone: booking.phone,
+    imageUrl: booking.complexImageUrl ?? null,
+    isGuest: booking.isGuest,
+    createdByName: booking.createdByName,
+  });
+
+  const openGridBookingDetail = (slot: GridSlot, field: GridField, complexName: string) => {
+    const bookingRow = bookings.find((booking) => booking.id === slot.booking_id);
+
+    if (bookingRow) {
+      setSelectedBookingDetail(bookingRowToDetail(bookingRow));
+      return;
+    }
+
+    const durationMinutes = Math.round(
+      (new Date(slot.end_datetime).getTime() - new Date(slot.start_datetime).getTime()) / 60000,
+    );
+
+    setSelectedBookingDetail({
+      bookingId: slot.booking_id ?? '—',
+      complexName,
+      fieldName: field.field_name,
+      dateLabel: formatDateLabel(slot.start_datetime),
+      timeRangeLabel: formatTimeRange24(slot.start_datetime, slot.end_datetime),
+      status: slot.booking_status ?? 'pending',
+      priceLabel: `$${slot.price.toLocaleString('es-CO')}`,
+      customerName: slot.user_name ?? 'Sin nombre',
+      imageUrl: null,
+      duration: Number.isFinite(durationMinutes) && durationMinutes > 0
+        ? `${durationMinutes} min`
+        : undefined,
+    });
   };
 
   const getBookingBadge = (booking: AdminBookingRow): BookingBadge => {
@@ -363,17 +429,36 @@ const AdminBookings: React.FC = () => {
   const handleManualBooking = async (event: React.FormEvent) => {
     event.preventDefault();
 
-    if (!manualFieldId || !manualSlotId || !manualClientName.trim()) {
+    if (!manualFieldId || !manualSlotId) {
       notify.error('Completa los campos obligatorios.');
+      return;
+    }
+
+    if (manualResponsible.kind === 'registered' && !manualResponsible.userId) {
+      notify.error('Busca y selecciona un jugador registrado.');
+      return;
+    }
+
+    if (manualResponsible.kind === 'guest' && !manualResponsible.guest.name.trim()) {
+      notify.error('Ingresa el nombre del invitado.');
       return;
     }
 
     setSubmittingManual(true);
     try {
-      await bookingService.createAdminBooking(
+      const created = await bookingService.createAdminBooking(
         manualSlotId,
-        manualClientName.trim(),
-        manualClientPhone.trim() || undefined,
+        manualResponsible.kind === 'registered'
+          ? { userId: manualResponsible.userId }
+          : manualResponsible.kind === 'guest'
+            ? {
+                guest: {
+                  name: manualResponsible.guest.name.trim(),
+                  phone_number: manualResponsible.guest.phone_number.trim() || undefined,
+                  email: manualResponsible.guest.email.trim() || undefined,
+                },
+              }
+            : undefined,
       );
 
       await reloadBookingsForComplexes(complexes);
@@ -381,10 +466,13 @@ const AdminBookings: React.FC = () => {
 
       setManualFieldId('');
       setManualSlotId('');
-      setManualClientName('');
-      setManualClientPhone('');
+      setManualResponsible({ kind: 'self' });
       setShowManualForm(false);
-      notify.success('Reserva manual creada exitosamente.');
+      notify.success('Reserva creada y marcada como abonada.');
+
+      if (manualResponsible.kind === 'guest') {
+        setQrBookingId(created.booking_id);
+      }
     } catch (err) {
       const msg = (err as any)?.message || 'Error creando reserva manual';
       notify.error(msg);
@@ -491,6 +579,13 @@ const AdminBookings: React.FC = () => {
             Crea una reserva manual para una cancha que pertenezca a uno de tus complejos.
           </p>
 
+          <div className="mb-4 flex items-start gap-2 rounded-[var(--radius-lg)] border border-amber-200 bg-amber-50 px-3 py-2.5">
+            <AlertCircle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-700" />
+            <p className="text-xs font-extrabold leading-relaxed text-amber-800">
+              Recuerde recibir el valor del abono antes de confirmar la reserva.
+            </p>
+          </div>
+
           <form onSubmit={handleManualBooking} className="grid grid-cols-1 md:grid-cols-2 gap-3">
             <div>
               <label className="block mb-1.5 font-extrabold text-sm text-[var(--color-text-2)]">
@@ -566,29 +661,13 @@ const AdminBookings: React.FC = () => {
               )}
             </div>
 
-            <div>
-              <label className="block mb-1.5 font-extrabold text-sm text-[var(--color-text-2)]">
-                Nombre del cliente *
+            <div className="md:col-span-2">
+              <label className="block mb-2 font-extrabold text-sm text-[var(--color-text-2)]">
+                Responsable de la reserva
               </label>
-              <input
-                value={manualClientName}
-                onChange={(e) => setManualClientName(e.target.value)}
-                placeholder="Ej: Juan Pérez"
-                className="w-full h-10 px-3 rounded-[var(--radius-md)] border-[1.5px] border-[var(--color-border)] bg-white font-semibold text-sm"
-                required
-                disabled={submittingManual}
-              />
-            </div>
-
-            <div>
-              <label className="block mb-1.5 font-extrabold text-sm text-[var(--color-text-2)]">
-                Teléfono del cliente
-              </label>
-              <input
-                value={manualClientPhone}
-                onChange={(e) => setManualClientPhone(e.target.value)}
-                placeholder="Ej: +57 300 123 4567"
-                className="w-full h-10 px-3 rounded-[var(--radius-md)] border-[1.5px] border-[var(--color-border)] bg-white font-semibold text-sm"
+              <ManualBookingResponsiblePicker
+                value={manualResponsible}
+                onChange={setManualResponsible}
                 disabled={submittingManual}
               />
             </div>
@@ -674,7 +753,17 @@ const AdminBookings: React.FC = () => {
                     {group.bookings.map((booking) => (
             <article
               key={booking.id}
-              className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-3.5 md:p-4 shadow-[var(--shadow-md)] transition-all duration-200 hover:-translate-y-0.5 hover:border-[var(--color-primary)] hover:shadow-[var(--shadow-primary)]"
+              role="button"
+              tabIndex={0}
+              aria-label={`Ver detalle de la reserva de ${booking.customerName}`}
+              onClick={() => setSelectedBookingDetail(bookingRowToDetail(booking))}
+              onKeyDown={(event) => {
+                if (event.key === 'Enter' || event.key === ' ') {
+                  event.preventDefault();
+                  setSelectedBookingDetail(bookingRowToDetail(booking));
+                }
+              }}
+              className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-3.5 md:p-4 shadow-[var(--shadow-md)] transition-all duration-200 cursor-pointer hover:-translate-y-0.5 hover:border-[var(--color-primary)] hover:shadow-[var(--shadow-primary)] focus:outline-none focus:ring-2 focus:ring-[var(--color-primary)] focus:ring-offset-2"
             >
               <div className="flex flex-col xl:flex-row xl:items-center gap-3">
                 <div className="relative w-10 h-10 rounded-full overflow-hidden bg-[var(--color-primary)] text-white flex items-center justify-center flex-shrink-0 shadow-[var(--shadow-primary)]">
@@ -705,7 +794,17 @@ const AdminBookings: React.FC = () => {
                     >
                       {getBookingBadge(booking).label}
                     </span>
+                    {booking.isGuest && (
+                      <span className="px-2 py-0.5 rounded-full bg-violet-100 text-violet-700 text-[10px] font-extrabold uppercase">
+                        Invitado
+                      </span>
+                    )}
                   </div>
+                  {booking.createdByAdmin && booking.createdByName && (
+                    <p className="mb-1 text-[11px] font-semibold text-[var(--color-text-3)]">
+                      Creada por {booking.createdByName}
+                    </p>
+                  )}
 
                   <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm md:text-base text-[var(--color-text-2)] font-bold">
                     <span className="inline-flex items-center gap-1.5">
@@ -731,10 +830,25 @@ const AdminBookings: React.FC = () => {
                   </div>
                 </div>
 
-                <div className="flex items-center gap-2 xl:gap-2.5 flex-wrap xl:flex-nowrap">
+                <div
+                  className="flex items-center gap-2 xl:gap-2.5 flex-wrap xl:flex-nowrap"
+                  onClick={(event) => event.stopPropagation()}
+                  onKeyDown={(event) => event.stopPropagation()}
+                >
                   <p className="text-2xl md:text-3xl leading-none font-extrabold text-[var(--color-primary)] mr-1">
                     {booking.totalLabel}
                   </p>
+
+                  {booking.createdByAdmin && (
+                    <button
+                      type="button"
+                      onClick={() => setQrBookingId(booking.id)}
+                      className="px-3 py-1.5 rounded-full bg-white text-[var(--color-primary-dark)] border border-[var(--color-primary)]/30 text-sm font-extrabold inline-flex items-center gap-1.5 transition-all hover:-translate-y-0.5"
+                    >
+                      <QrCode className="w-3.5 h-3.5" />
+                      Ver QR
+                    </button>
+                  )}
 
                   {booking.status === 'confirmed' ? (
                     <span className="px-3 py-1.5 rounded-full bg-emerald-600 text-white text-sm font-extrabold inline-flex items-center gap-1.5">
@@ -808,15 +922,55 @@ const AdminBookings: React.FC = () => {
 
       {activeView === 'grid' && complexes.length > 0 && (
         <div className="space-y-4">
-          {complexes.map((complex) => (
-            <div key={complex.id} className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-5 shadow-[var(--shadow-sm)]">
-              <h2 className="font-extrabold text-[var(--color-text)] text-lg mb-4 flex items-center gap-2">
-                <Grid3X3 className="w-5 h-5 text-[var(--color-primary)]" />
-                {complex.name}
-              </h2>
-              <ScheduleGrid complexId={complex.id} />
-            </div>
-          ))}
+          {complexes.map((complex) => {
+            const collapsed = collapsedGrids.has(complex.id);
+
+            return (
+              <div
+                key={complex.id}
+                className="bg-[var(--color-surface)] border-[1.5px] border-[var(--color-border)] rounded-[var(--radius-2xl)] p-5 shadow-[var(--shadow-sm)]"
+              >
+                <button
+                  type="button"
+                  onClick={() => toggleComplexGrid(complex.id)}
+                  aria-expanded={!collapsed}
+                  className="flex w-full items-center justify-between gap-3 text-left"
+                >
+                  <h2 className="font-extrabold text-[var(--color-text)] text-lg flex items-center gap-2">
+                    <Grid3X3 className="w-5 h-5 text-[var(--color-primary)]" />
+                    {complex.name}
+                  </h2>
+                  <span className="inline-flex items-center gap-2 text-xs font-extrabold text-[var(--color-text-3)]">
+                    {collapsed ? 'Mostrar grilla' : 'Minimizar grilla'}
+                    <ChevronDown
+                      className={`w-4 h-4 transition-transform duration-300 ${
+                        collapsed ? '-rotate-90' : ''
+                      }`}
+                    />
+                  </span>
+                </button>
+
+                <div
+                  className={`grid transition-all duration-300 ease-out ${
+                    collapsed
+                      ? 'grid-rows-[0fr] opacity-0'
+                      : 'grid-rows-[1fr] opacity-100'
+                  }`}
+                >
+                  <div className="overflow-hidden">
+                    <div className="pt-4">
+                      <ScheduleGrid
+                        complexId={complex.id}
+                        onBookingSelect={(slot, field) =>
+                          openGridBookingDetail(slot, field, complex.name)
+                        }
+                      />
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          })}
         </div>
       )}
 
@@ -902,6 +1056,17 @@ const AdminBookings: React.FC = () => {
           </div>
         </div>
       )}
+
+      <BookingDetailModal
+        isOpen={!!selectedBookingDetail}
+        data={selectedBookingDetail}
+        onClose={() => setSelectedBookingDetail(null)}
+      />
+
+      <BookingQrModal
+        bookingId={qrBookingId}
+        onClose={() => setQrBookingId(null)}
+      />
     </div>
   );
 };

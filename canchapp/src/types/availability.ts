@@ -81,9 +81,12 @@ export interface QuickBookingInput {
   fieldId: string;
   slotId: string;
   date: string;
-  clientName: string;
-  clientPhone: string;
-  paymentMethod: PaymentMethodId;
+  userId?: string;
+  guest?: {
+    name: string;
+    phone_number?: string;
+    email?: string;
+  };
 }
 
 export type QuickBookingOutcome =
@@ -97,7 +100,5 @@ export interface AvailabilityFormErrors {
 }
 
 export interface QuickBookingFormErrors {
-  clientName?: string;
-  clientPhone?: string;
-  paymentMethod?: string;
+  responsible?: string;
 }

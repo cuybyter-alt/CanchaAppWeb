@@ -153,9 +153,8 @@ const availabilitySearchService = {
    */
   async quickBook(input: QuickBookingInput): Promise<QuickBookingOutcome> {
     const errors = validateQuickBooking(input);
-    const firstError = errors.clientName ?? errors.clientPhone ?? errors.paymentMethod;
-    if (firstError) {
-      throw buildApiError(400, firstError);
+    if (errors.responsible) {
+      throw buildApiError(400, errors.responsible);
     }
 
     if (input.date < localTodayISO()) {
@@ -183,9 +182,11 @@ const availabilitySearchService = {
 
       const created = await bookingService.createAdminBooking(
         input.slotId,
-        input.clientName.trim(),
-        input.clientPhone.trim(),
-        input.paymentMethod,
+        input.userId
+          ? { userId: input.userId }
+          : input.guest
+            ? { guest: input.guest }
+            : undefined,
       );
       return { status: 'created', bookingId: created.booking_id };
     } catch (error) {

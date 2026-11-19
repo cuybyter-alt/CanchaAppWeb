@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback, useRef } from 'react';
 import {
   Plus, Target, Building2, ChevronRight, X, Loader2, AlertCircle,
-  Ruler, Users, Wrench, Trash2, Edit3, CheckCircle, MapPin,
+  Ruler, Users, Trash2, Edit3, CheckCircle, MapPin,
   UserX, RefreshCw, Save, ShieldOff, Images,
 } from 'lucide-react';
 import { useParams, useNavigate } from 'react-router-dom';
@@ -706,15 +706,6 @@ function FieldCard({
           className="flex-1 py-1.5 rounded-[var(--radius-lg)] text-xs font-extrabold text-[var(--color-text-2)] hover:bg-[var(--color-surf2)] transition-colors flex items-center justify-center gap-1"
         >
           <Edit3 className="w-3 h-3" /> Editar
-        </button>
-        <button
-          onClick={() => {
-            // Mantenimiento: cambiar status via PUT
-            toast.info('Cambia el estado desde Editar → "Mantenimiento"');
-          }}
-          className="flex-1 py-1.5 rounded-[var(--radius-lg)] text-xs font-extrabold text-[var(--color-text-2)] hover:bg-[var(--color-surf2)] transition-colors flex items-center justify-center gap-1"
-        >
-          <Wrench className="w-3 h-3" /> Mantenim.
         </button>
         {f.status !== 'inactive' ? (
           <button

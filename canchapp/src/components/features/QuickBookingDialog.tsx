@@ -2,11 +2,15 @@ import React, { useState } from 'react';
 import { AlertTriangle, Building2, CalendarDays, CircleDot, Clock3, Loader, Search } from 'lucide-react';
 import { Dialog } from '../ui/dialog';
 import { ComplexImageCover } from './ComplexImageThumb';
+import { BookingQrModal } from './BookingQrModal';
+import {
+  ManualBookingResponsiblePicker,
+  type ManualResponsible,
+} from './ManualBookingResponsiblePicker';
 import availabilitySearchService from '../../services/AvailabilitySearchService';
 import { notify } from '../../services/toast';
 import {
   FIELD_TYPE_LABELS,
-  PAYMENT_METHODS,
   extractErrorMessage,
   formatLongDate,
   validateQuickBooking,
@@ -14,7 +18,6 @@ import {
 import { formatPriceFull } from '../../lib/utils';
 import type {
   AvailabilityFieldResult,
-  PaymentMethodId,
   QuickBookingFormErrors,
 } from '../../types/availability';
 
@@ -31,9 +34,6 @@ interface QuickBookingDialogProps {
   /** El horario fue tomado: se relanza la búsqueda para ofrecer alternativas actualizadas. */
   onShowAlternatives: (target: AvailabilityFieldResult) => void;
 }
-
-const inputClass =
-  'w-full h-10 px-3 rounded-[var(--radius-md)] border-[1.5px] border-[var(--color-border)] bg-white font-semibold text-sm focus:outline-none focus:border-[var(--color-primary)] disabled:opacity-60';
 
 const labelClass = 'block mb-1.5 font-extrabold text-sm text-[var(--color-text-2)]';
 
@@ -61,12 +61,11 @@ const QuickBookingDialog: React.FC<QuickBookingDialogProps> = ({
   onBackToSearch,
   onShowAlternatives,
 }) => {
-  const [clientName, setClientName] = useState('');
-  const [clientPhone, setClientPhone] = useState('');
-  const [paymentMethod, setPaymentMethod] = useState<PaymentMethodId | ''>('cash');
+  const [responsible, setResponsible] = useState<ManualResponsible>({ kind: 'self' });
   const [errors, setErrors] = useState<QuickBookingFormErrors>({});
   const [submitting, setSubmitting] = useState(false);
   const [conflictMessage, setConflictMessage] = useState<string | null>(null);
+  const [guestQrBookingId, setGuestQrBookingId] = useState<string | null>(null);
 
   const handleClose = () => {
     if (submitting) return;
@@ -77,7 +76,23 @@ const QuickBookingDialog: React.FC<QuickBookingDialogProps> = ({
     event.preventDefault();
     if (!target || !target.slotId || submitting) return;
 
-    const validation = validateQuickBooking({ clientName, clientPhone, paymentMethod });
+    const responsibleInput =
+      responsible.kind === 'registered'
+        ? { userId: responsible.userId }
+        : responsible.kind === 'guest'
+          ? {
+              guest: {
+                name: responsible.guest.name.trim(),
+                phone_number: responsible.guest.phone_number.trim() || undefined,
+                email: responsible.guest.email.trim() || undefined,
+              },
+            }
+          : {};
+
+    const validation = validateQuickBooking(responsibleInput);
+    if (responsible.kind === 'registered' && !responsible.userId) {
+      validation.responsible = 'Busca y selecciona un jugador registrado.';
+    }
     setErrors(validation);
     if (Object.keys(validation).length > 0) return;
 
@@ -87,9 +102,7 @@ const QuickBookingDialog: React.FC<QuickBookingDialogProps> = ({
         fieldId: target.fieldId,
         slotId: target.slotId,
         date,
-        clientName,
-        clientPhone,
-        paymentMethod: paymentMethod as PaymentMethodId,
+        ...responsibleInput,
       });
 
       if (outcome.status === 'slot_unavailable') {
@@ -98,10 +111,15 @@ const QuickBookingDialog: React.FC<QuickBookingDialogProps> = ({
       }
 
       notify.success(
-        'Reserva creada',
-        `${clientName.trim()} · ${target.fieldName} · ${formatLongDate(date)} a las ${target.timeLabel}`,
+        'Reserva creada y abonada',
+        `${target.fieldName} · ${formatLongDate(date)} a las ${target.timeLabel}`,
       );
-      onBooked(target);
+
+      if (responsible.kind === 'guest') {
+        setGuestQrBookingId(outcome.bookingId);
+      } else {
+        onBooked(target);
+      }
     } catch (err) {
       notify.error(extractErrorMessage(err, 'No se pudo crear la reserva. Inténtalo de nuevo.'));
     } finally {
@@ -110,6 +128,7 @@ const QuickBookingDialog: React.FC<QuickBookingDialogProps> = ({
   };
 
   return (
+    <>
     <Dialog isOpen={target !== null} onClose={handleClose} title="Reserva rápida" size="sm">
       {target && (
         <form onSubmit={handleSubmit} className="p-6 flex flex-col gap-4" noValidate>
@@ -123,6 +142,13 @@ const QuickBookingDialog: React.FC<QuickBookingDialogProps> = ({
               <p className="truncate text-xs font-semibold text-white/75">{target.fieldName}</p>
             </div>
           </ComplexImageCover>
+
+          <div className="flex items-start gap-2 rounded-[var(--radius-lg)] border border-amber-200 bg-amber-50 px-3 py-2.5">
+            <AlertTriangle className="mt-0.5 h-4 w-4 flex-shrink-0 text-amber-700" />
+            <p className="text-xs font-extrabold leading-relaxed text-amber-800">
+              Recuerde recibir el valor del abono antes de confirmar la reserva.
+            </p>
+          </div>
 
           <div className="grid grid-cols-2 gap-3 p-4 rounded-[var(--radius-xl)] bg-[var(--color-primary-tint)] border border-[var(--color-border)]">
             <SummaryRow icon={<Building2 className="w-4 h-4" />} label="Complejo" value={target.complexName} />
@@ -171,63 +197,14 @@ const QuickBookingDialog: React.FC<QuickBookingDialogProps> = ({
           ) : (
             <>
               <div>
-                <label htmlFor="quick-booking-name" className={labelClass}>
-                  Nombre del jugador *
-                </label>
-                <input
-                  id="quick-booking-name"
-                  value={clientName}
-                  onChange={(e) => setClientName(e.target.value)}
-                  placeholder="Ej: Juan Pérez"
-                  className={inputClass}
+                <label className={labelClass}>Responsable de la reserva</label>
+                <ManualBookingResponsiblePicker
+                  value={responsible}
+                  onChange={setResponsible}
                   disabled={submitting}
-                  autoFocus
-                  autoComplete="off"
                 />
-                {errors.clientName && (
-                  <p className="mt-1 text-xs font-bold text-red-600">{errors.clientName}</p>
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="quick-booking-phone" className={labelClass}>
-                  Teléfono del jugador *
-                </label>
-                <input
-                  id="quick-booking-phone"
-                  type="tel"
-                  value={clientPhone}
-                  onChange={(e) => setClientPhone(e.target.value)}
-                  placeholder="Ej: +57 300 123 4567"
-                  className={inputClass}
-                  disabled={submitting}
-                  autoComplete="off"
-                />
-                {errors.clientPhone && (
-                  <p className="mt-1 text-xs font-bold text-red-600">{errors.clientPhone}</p>
-                )}
-              </div>
-
-              <div>
-                <label htmlFor="quick-booking-payment" className={labelClass}>
-                  Método de pago *
-                </label>
-                <select
-                  id="quick-booking-payment"
-                  value={paymentMethod}
-                  onChange={(e) => setPaymentMethod(e.target.value as PaymentMethodId | '')}
-                  className={inputClass}
-                  disabled={submitting}
-                >
-                  <option value="">Seleccionar método</option>
-                  {PAYMENT_METHODS.map((method) => (
-                    <option key={method.id} value={method.id}>
-                      {method.label}
-                    </option>
-                  ))}
-                </select>
-                {errors.paymentMethod && (
-                  <p className="mt-1 text-xs font-bold text-red-600">{errors.paymentMethod}</p>
+                {errors.responsible && (
+                  <p className="mt-1 text-xs font-bold text-red-600">{errors.responsible}</p>
                 )}
               </div>
 
@@ -261,6 +238,15 @@ const QuickBookingDialog: React.FC<QuickBookingDialogProps> = ({
         </form>
       )}
     </Dialog>
+
+    <BookingQrModal
+      bookingId={guestQrBookingId}
+      onClose={() => {
+        setGuestQrBookingId(null);
+        if (target) onBooked(target);
+      }}
+    />
+    </>
   );
 };
 

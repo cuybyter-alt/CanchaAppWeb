@@ -513,3 +513,28 @@ body::before {
     opacity: 0.2;
   }
 }
+
+@media print {
+  body * {
+    visibility: hidden;
+  }
+
+  #booking-qr-print,
+  #booking-qr-print * {
+    visibility: visible;
+  }
+
+  #booking-qr-print {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    max-width: 420px;
+    margin: 0 auto;
+    padding: 24px;
+    background: white;
+  }
+
+  .print\:hidden {
+    display: none !important;
+  }
+}

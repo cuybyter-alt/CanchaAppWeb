@@ -61,7 +61,9 @@ function eventLabel(event: string, status: BookingNotificationStatus | null): st
 
   switch (normalized) {
     case 'BOOKING_CREATED':
-      return status === 'pending' ? 'Reserva pendiente de abono' : 'Reserva creada';
+      if (status === 'pending') return 'Reserva pendiente de abono';
+      if (status === 'part_paid') return 'Reserva creada — abonada';
+      return 'Reserva creada';
     case 'BOOKING_STATUS_CHANGED':
       if (status === 'part_paid') return 'Reserva abonada';
       if (status === 'rejected') return 'Reserva rechazada';

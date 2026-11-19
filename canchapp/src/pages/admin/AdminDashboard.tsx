@@ -16,7 +16,6 @@ import {
 } from 'recharts';
 import {
   Building2,
-  CalendarCheck,
   CircleDot,
   Clock3,
   History,
@@ -160,40 +159,6 @@ function PrototypeStatCard({
         <p className="text-xs text-[var(--color-text-3)] mt-1 font-semibold">{loading ? 'Cargando...' : subtext}</p>
       )}
     </div>
-  );
-}
-
-function QuickPanelButton({
-  icon,
-  iconClass,
-  title,
-  sub,
-  loading,
-  onClick,
-}: {
-  icon: React.ReactNode;
-  iconClass: string;
-  title: string;
-  sub: string;
-  loading?: boolean;
-  onClick: () => void;
-}) {
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      className="w-full flex items-center gap-3 bg-white rounded-[var(--radius-xl)] px-5 py-4 hover:shadow-md transition-all active:scale-[0.98] text-left"
-    >
-      <div className={`w-10 h-10 rounded-[var(--radius-md)] flex items-center justify-center text-white flex-shrink-0 ${iconClass}`}>
-        {icon}
-      </div>
-      <div className="min-w-0 flex-1">
-        <p className="font-extrabold text-[var(--color-text)] text-sm">{title}</p>
-        <p className="text-[11px] text-[var(--color-text-3)] font-semibold truncate">
-          {loading ? 'Cargando...' : sub}
-        </p>
-      </div>
-    </button>
   );
 }
 
@@ -408,80 +373,45 @@ const AdminDashboard: React.FC = () => {
             Panel de Control
           </h2>
           <p className="text-white/80 text-sm font-semibold mt-1">
-            Acciones rápidas para gestionar tu negocio
+            Resumen de tus complejos y accesos rápidos
           </p>
         </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <QuickPanelButton
-            icon={<Building2 className="w-4 h-4" />}
-            iconClass="bg-[var(--color-primary-dark)]"
-            title="Mis Complejos"
-            sub={`${stats?.total_complexes ?? 0} registrados`}
+        <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4">
+          <PrototypeStatCard
+            faIcon="fa-building"
+            label="Complejos"
+            value={stats?.total_complexes ?? 0}
+            subtext={`${stats?.total_complexes ?? 0} total registrados`}
             loading={loading}
             onClick={() => navigate('/admin/complexes')}
           />
-          <QuickPanelButton
-            icon={<CircleDot className="w-4 h-4" />}
-            iconClass="bg-rose-500"
-            title="Canchas"
-            sub={`${stats?.total_active_fields ?? 0} activas`}
+          <PrototypeStatCard
+            faIcon="fa-futbol"
+            label="Canchas activas"
+            value={stats?.total_active_fields ?? 0}
+            subtext={`${stats?.total_fields ?? 0} total (${stats?.total_maintenance_fields ?? 0} en mantenimiento)`}
             loading={loading}
-            onClick={() => navigate('/admin/fields')}
+            onClick={() => navigate('/admin/complexes')}
           />
-          <QuickPanelButton
-            icon={<CalendarCheck className="w-4 h-4" />}
-            iconClass="bg-amber-500"
-            title="Reservas"
-            sub={`${pendingBookings} por abonar`}
+          <PrototypeStatCard
+            faIcon="fa-calendar-check"
+            label="Reservas hoy"
+            value={todayBookings}
+            subtext={`${pendingBookings} pendientes de abono`}
+            variant="accent"
             loading={loading}
             onClick={() => navigate('/admin/bookings')}
           />
-          <QuickPanelButton
-            icon={<TrendingUp className="w-4 h-4" />}
-            iconClass="bg-purple-600"
-            title="Estadísticas"
-            sub="Análisis y reportes"
+          <PrototypeStatCard
+            faIcon="fa-coins"
+            label="Ingresos hoy"
+            value={loading ? '—' : formatCOP(todayIncome)}
+            subtext={`${occupancy}% de ocupación`}
+            variant="score"
+            loading={loading}
             onClick={() => navigate('/admin/reports')}
           />
         </div>
-      </div>
-
-      {/* KPIs */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-5 animate-fade-in">
-        <PrototypeStatCard
-          faIcon="fa-building"
-          label="Complejos"
-          value={stats?.total_complexes ?? 0}
-          subtext={`${stats?.total_complexes ?? 0} total registrados`}
-          loading={loading}
-          onClick={() => navigate('/admin/complexes')}
-        />
-        <PrototypeStatCard
-          faIcon="fa-futbol"
-          label="Canchas activas"
-          value={stats?.total_active_fields ?? 0}
-          subtext={`${stats?.total_fields ?? 0} total (${stats?.total_maintenance_fields ?? 0} en mantenimiento)`}
-          loading={loading}
-          onClick={() => navigate('/admin/fields')}
-        />
-        <PrototypeStatCard
-          faIcon="fa-calendar-check"
-          label="Reservas hoy"
-          value={todayBookings}
-          subtext={`${pendingBookings} pendientes de abono`}
-          variant="accent"
-          loading={loading}
-          onClick={() => navigate('/admin/bookings')}
-        />
-        <PrototypeStatCard
-          faIcon="fa-coins"
-          label="Ingresos hoy"
-          value={loading ? '—' : formatCOP(todayIncome)}
-          subtext={`${occupancy}% de ocupación`}
-          variant="score"
-          loading={loading}
-          onClick={() => navigate('/admin/reports')}
-        />
       </div>
 
       {/* Gráficos */}

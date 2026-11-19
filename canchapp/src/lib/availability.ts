@@ -40,8 +40,6 @@ export const MAX_ALTERNATIVE_BLOCKS = 4;
 /** Duración asumida de una franja cuando el backend no informa la hora de fin. */
 export const DEFAULT_SLOT_MINUTES = 60;
 
-const MIN_PHONE_DIGITS = 7;
-const MAX_PHONE_DIGITS = 15;
 const MIN_NAME_LENGTH = 2;
 
 /** Convierte "HH:mm" (24h) a minutos desde medianoche; null si el formato es inválido. */
@@ -284,32 +282,17 @@ export const isPaymentMethodId = (value: string): value is PaymentMethodId =>
 export const getPaymentMethodLabel = (id: string): string =>
   PAYMENT_METHODS.find((method) => method.id === id)?.label ?? id;
 
-/** Una reserva presencial exige, como mínimo, nombre y teléfono del jugador y un método de pago. */
+/** Valida el responsable de una reserva manual. */
 export const validateQuickBooking = (input: {
-  clientName: string;
-  clientPhone: string;
-  paymentMethod: string;
+  userId?: string;
+  guest?: { name: string };
 }): QuickBookingFormErrors => {
   const errors: QuickBookingFormErrors = {};
 
-  if (input.clientName.trim().length < MIN_NAME_LENGTH) {
-    errors.clientName = 'Ingresa el nombre del jugador.';
-  }
-
-  const phone = input.clientPhone.trim();
-  const phoneDigits = phone.replace(/\D/g, '').length;
-  if (!phone) {
-    errors.clientPhone = 'Ingresa el teléfono del jugador.';
-  } else if (
-    !/^\+?[\d\s()-]+$/.test(phone) ||
-    phoneDigits < MIN_PHONE_DIGITS ||
-    phoneDigits > MAX_PHONE_DIGITS
-  ) {
-    errors.clientPhone = 'Ingresa un teléfono válido (7 a 15 dígitos).';
-  }
-
-  if (!isPaymentMethodId(input.paymentMethod)) {
-    errors.paymentMethod = 'Selecciona un método de pago.';
+  if (input.userId && input.guest) {
+    errors.responsible = 'Selecciona un jugador o un invitado, no ambos.';
+  } else if (input.guest && input.guest.name.trim().length < MIN_NAME_LENGTH) {
+    errors.responsible = 'Ingresa el nombre del invitado.';
   }
 
   return errors;

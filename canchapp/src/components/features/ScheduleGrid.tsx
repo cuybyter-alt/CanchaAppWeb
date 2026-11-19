@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useCallback, useState } from 'react';
+import React, { useEffect, useMemo, useCallback, useRef, useState } from 'react';
 import {
   Calendar,
   ChevronLeft,
@@ -18,6 +18,7 @@ import type { GridSlot, GridField } from '../../types/grid';
 
 interface ScheduleGridProps {
   complexId: string;
+  onBookingSelect?: (slot: GridSlot, field: GridField) => void;
 }
 
 const SLOT_COLORS: Record<string, { bg: string; text: string; border: string }> = {
@@ -39,19 +40,112 @@ function getSlotDate(slot: GridSlot): string {
   return slot.start_datetime.slice(0, 10);
 }
 
-function groupSlotsByDate(fields: GridField[]): Map<string, GridSlot[]> {
-  const map = new Map<string, GridSlot[]>();
-  for (const field of fields) {
-    for (const slot of field.slots) {
-      const d = getSlotDate(slot);
-      if (!map.has(d)) map.set(d, []);
-      map.get(d)!.push(slot);
-    }
-  }
-  return map;
+interface DayBookingSummary {
+  key: string;
+  fieldName: string;
+  userName: string;
+  startDatetime: string;
+  endDatetime: string;
+  status: GridSlot['booking_status'];
 }
 
-export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ complexId }) => {
+interface DayTimeSummary {
+  key: string;
+  startDatetime: string;
+  availableCount: number;
+  totalSlots: number;
+  bookings: DayBookingSummary[];
+}
+
+interface DaySummary {
+  times: DayTimeSummary[];
+  availableCount: number;
+  totalSlots: number;
+  bookingsCount: number;
+}
+
+function groupDaySummaries(fields: GridField[]): Map<string, DaySummary> {
+  const byDate = new Map<string, Map<string, DayTimeSummary>>();
+
+  for (const field of fields) {
+    for (const slot of field.slots) {
+      const day = getSlotDate(slot);
+      const timeKey = slot.start_datetime;
+
+      let times = byDate.get(day);
+      if (!times) {
+        times = new Map();
+        byDate.set(day, times);
+      }
+
+      const timeSummary = times.get(timeKey) ?? {
+        key: timeKey,
+        startDatetime: slot.start_datetime,
+        availableCount: 0,
+        totalSlots: 0,
+        bookings: [],
+      };
+
+      timeSummary.totalSlots += 1;
+
+      if (slot.status === 'available') {
+        timeSummary.availableCount += 1;
+      }
+
+      if (slot.status === 'booked') {
+        const bookingKey = slot.booking_id ?? `${slot.field_id}-${slot.time_slot_id}`;
+        const existing = timeSummary.bookings.find((booking) => booking.key === bookingKey);
+
+        if (existing) {
+          if (new Date(slot.start_datetime) < new Date(existing.startDatetime)) {
+            existing.startDatetime = slot.start_datetime;
+          }
+          if (new Date(slot.end_datetime) > new Date(existing.endDatetime)) {
+            existing.endDatetime = slot.end_datetime;
+          }
+        } else {
+          timeSummary.bookings.push({
+            key: bookingKey,
+            fieldName: field.field_name,
+            userName: slot.user_name ?? 'Sin nombre',
+            startDatetime: slot.start_datetime,
+            endDatetime: slot.end_datetime,
+            status: slot.booking_status,
+          });
+        }
+      }
+
+      times.set(timeKey, timeSummary);
+    }
+  }
+
+  const result = new Map<string, DaySummary>();
+
+  for (const [day, timesMap] of byDate.entries()) {
+    const times = [...timesMap.values()].sort(
+      (a, b) => new Date(a.startDatetime).getTime() - new Date(b.startDatetime).getTime(),
+    );
+
+    for (const time of times) {
+      time.bookings.sort(
+        (a, b) =>
+          a.fieldName.localeCompare(b.fieldName, 'es', { numeric: true }) ||
+          a.userName.localeCompare(b.userName, 'es', { numeric: true }),
+      );
+    }
+
+    result.set(day, {
+      times,
+      availableCount: times.reduce((total, time) => total + time.availableCount, 0),
+      totalSlots: times.reduce((total, time) => total + time.totalSlots, 0),
+      bookingsCount: times.reduce((total, time) => total + time.bookings.length, 0),
+    });
+  }
+
+  return result;
+}
+
+export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ complexId, onBookingSelect }) => {
   const {
     gridData,
     weekData,
@@ -82,6 +176,7 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ complexId }) => {
   const [pendingTargetSlot, setPendingTargetSlot] = useState<GridSlot | null>(null);
   const [pendingTargetField, setPendingTargetField] = useState<GridField | null>(null);
   const [pendingSourceField, setPendingSourceField] = useState<GridField | null>(null);
+  const suppressBookingClickRef = useRef(false);
 
   useEffect(() => {
     void loadGrid(complexId);
@@ -93,6 +188,7 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ complexId }) => {
     (e: React.DragEvent, slot: GridSlot, field: GridField) => {
       e.dataTransfer.effectAllowed = 'move';
       e.dataTransfer.setData('text/plain', slot.time_slot_id);
+      suppressBookingClickRef.current = true;
       setPendingSourceField(field);
       startDrag(slot);
     },
@@ -129,6 +225,9 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ complexId }) => {
 
   const handleDragEnd = useCallback(() => {
     setOverSlotId(null);
+    window.setTimeout(() => {
+      suppressBookingClickRef.current = false;
+    }, 0);
   }, []);
 
   const weekDays = useMemo(() => {
@@ -153,9 +252,9 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ complexId }) => {
     return format(d, "EEEE d 'de' MMMM", { locale: es });
   }, [date]);
 
-  const slotsByDate = useMemo(() => {
-    if (!weekData) return new Map();
-    return groupSlotsByDate(weekData.fields);
+  const daySummaries = useMemo(() => {
+    if (!weekData) return new Map<string, DaySummary>();
+    return groupDaySummaries(weekData.fields);
   }, [weekData]);
 
   const renderSlot = (slot: GridSlot, field: GridField, compact?: boolean) => {
@@ -195,14 +294,27 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ complexId }) => {
     return (
       <div
         key={slot.time_slot_id}
+        role={slot.status === 'booked' ? 'button' : undefined}
+        tabIndex={slot.status === 'booked' ? 0 : undefined}
+        title={slot.status === 'booked' ? 'Ver detalle de la reserva' : undefined}
         draggable={canDrag}
         onDragStart={canDrag ? (e) => handleDragStart(e, slot, field) : undefined}
         onDragEnd={canDrag ? handleDragEnd : undefined}
+        onClick={() => {
+          if (suppressBookingClickRef.current) return;
+          if (slot.status === 'booked') onBookingSelect?.(slot, field);
+        }}
+        onKeyDown={(event) => {
+          if (slot.status === 'booked' && (event.key === 'Enter' || event.key === ' ')) {
+            event.preventDefault();
+            onBookingSelect?.(slot, field);
+          }
+        }}
         className={`
           relative rounded-[var(--radius-md)] border ${colors.border} ${colors.bg}
           transition-all duration-150 select-none
           ${compact ? 'p-1.5 min-h-[44px]' : 'p-2 min-h-[60px]'}
-          ${canDrag ? 'cursor-grab active:cursor-grabbing hover:shadow-md hover:-translate-y-0.5' : 'cursor-default'}
+          ${canDrag ? 'cursor-grab active:cursor-grabbing hover:shadow-md hover:-translate-y-0.5' : 'cursor-pointer'}
           ${isDragged ? 'opacity-50 scale-95' : ''}
         `}
       >
@@ -327,14 +439,19 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ complexId }) => {
       {/* Week View */}
       {!isLoading && !error && viewMode === 'week' && weekData && (
         <div className="overflow-x-auto">
-          <div className="grid grid-cols-7 gap-2 min-w-[700px]">
+          <div className="grid grid-cols-7 gap-2 min-w-[840px]">
             {weekDays.map((dayISO) => {
               const dayDate = new Date(dayISO + 'T12:00:00');
-              const daySlots = slotsByDate.get(dayISO) ?? [];
+              const summary = daySummaries.get(dayISO) ?? {
+                times: [],
+                availableCount: 0,
+                totalSlots: 0,
+                bookingsCount: 0,
+              };
               const isToday = dayISO === getTodayISO();
 
               return (
-                <div key={dayISO} className="min-w-[100px]">
+                <div key={dayISO} className="min-w-[112px]">
                   <button
                     onClick={() => goToDay(dayISO)}
                     className={`w-full rounded-t-[var(--radius-lg)] px-2 py-2 text-center transition-colors ${
@@ -348,14 +465,105 @@ export const ScheduleGrid: React.FC<ScheduleGridProps> = ({ complexId }) => {
                     </p>
                     <p className="text-lg font-extrabold">{format(dayDate, 'd')}</p>
                   </button>
-                  <div className="bg-[var(--color-surface)] border border-t-0 border-[var(--color-border)] rounded-b-[var(--radius-lg)] p-1.5 space-y-1 max-h-[500px] overflow-y-auto">
-                    {daySlots.length === 0 && (
-                      <p className="text-[9px] text-[var(--color-text-3)] text-center py-2">Sin slots</p>
+
+                  <div className="space-y-1.5 rounded-b-[var(--radius-lg)] border border-t-0 border-[var(--color-border)] bg-[var(--color-surface)] p-1.5 max-h-[500px] overflow-y-auto">
+                    <div className="rounded-[var(--radius-md)] bg-[var(--color-surf2)] px-2 py-1">
+                      <p className="text-[9px] font-extrabold text-[var(--color-primary-dark)]">
+                        {summary.availableCount} disponibles
+                      </p>
+                      <p className="text-[8px] font-semibold text-[var(--color-text-3)]">
+                        {summary.bookingsCount} reservas · {summary.totalSlots} franjas
+                      </p>
+                    </div>
+
+                    {summary.times.length === 0 && (
+                      <p className="py-2 text-center text-[9px] font-semibold text-[var(--color-text-3)]">
+                        Sin franjas configuradas
+                      </p>
                     )}
-                    {daySlots.map((slot: GridSlot) => {
-                      const field = weekData.fields.find((f) => f.field_id === slot.field_id);
-                      if (!field) return null;
-                      return renderSlot(slot, field, true);
+
+                    {summary.times.map((time) => {
+                      const visibleBookings = time.bookings.length > 4
+                        ? time.bookings.slice(0, 3)
+                        : time.bookings;
+                      const remainingBookings = time.bookings.length > 4
+                        ? time.bookings.length - 3
+                        : 0;
+                      const isFull = time.availableCount === 0;
+
+                      if (time.bookings.length === 0) {
+                        return (
+                          <div
+                            key={time.key}
+                            className={`rounded-[var(--radius-md)] border px-2 py-1.5 ${
+                              isFull
+                                ? 'border-gray-300 bg-gray-100'
+                                : 'border-gray-200 bg-white'
+                            }`}
+                          >
+                            <div className="flex items-center justify-between gap-1">
+                              <p className="text-[9px] font-extrabold text-[var(--color-text-2)]">
+                                {formatTime(time.startDatetime)}
+                              </p>
+                              <p className={`text-[8px] font-bold ${isFull ? 'text-gray-500' : 'text-[var(--color-primary-dark)]'}`}>
+                                {isFull ? 'Completo' : `${time.availableCount} libres`}
+                              </p>
+                            </div>
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div
+                          key={time.key}
+                          className="rounded-[var(--radius-md)] border border-[var(--color-border)] bg-white p-1.5"
+                        >
+                          <div className="mb-1 flex items-center justify-between gap-1">
+                            <p className="text-[9px] font-extrabold text-[var(--color-text-2)]">
+                              {formatTime(time.startDatetime)}
+                            </p>
+                            <p className={`text-[8px] font-bold ${isFull ? 'text-gray-500' : 'text-[var(--color-primary-dark)]'}`}>
+                              {isFull ? 'Completo' : `${time.availableCount} libres`}
+                            </p>
+                          </div>
+
+                          <div className="space-y-1">
+                            {visibleBookings.map((booking) => {
+                              const colorKey = booking.status
+                                ? `booked_${booking.status}`
+                                : 'booked_pending';
+                              const colors = SLOT_COLORS[colorKey] ?? SLOT_COLORS.booked_pending;
+
+                              return (
+                                <button
+                                  key={booking.key}
+                                  type="button"
+                                  onClick={() => goToDay(dayISO)}
+                                  className={`w-full rounded-[var(--radius-sm)] border px-2 py-1 text-left transition-all hover:-translate-y-0.5 hover:shadow-sm ${colors.bg} ${colors.border}`}
+                                >
+                                  <p className={`truncate text-[10px] font-extrabold leading-tight ${colors.text}`}>
+                                    {booking.fieldName}
+                                  </p>
+                                  <p className={`mt-0.5 truncate text-[8px] font-bold ${colors.text} opacity-85`}>
+                                    {booking.userName}
+                                  </p>
+                                </button>
+                              );
+                            })}
+
+                            {remainingBookings > 0 && (
+                              <button
+                                type="button"
+                                onClick={() => goToDay(dayISO)}
+                                className="flex w-full items-center justify-between rounded-[var(--radius-sm)] border border-dashed border-[var(--color-primary)]/40 bg-[var(--color-primary-tint)] px-2 py-1 text-[8px] font-extrabold text-[var(--color-primary-dark)] transition-colors hover:border-[var(--color-primary)] hover:bg-[var(--color-primary)]/10"
+                              >
+                                <span>+{remainingBookings} más</span>
+                                <ChevronRight className="h-2.5 w-2.5" />
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
                     })}
                   </div>
                 </div>

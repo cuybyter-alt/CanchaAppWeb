@@ -18,6 +18,23 @@ export interface BookingOutput {
   status?: string;
   is_approved?: boolean;
   total_price?: number;
+  user_id?: string;
+  user_name?: string;
+  is_guest?: boolean;
+  created_by?: string | null;
+  created_by_name?: string | null;
+  created_by_admin?: boolean;
+  reviewed_by?: string | null;
+  reviewed_at?: string | null;
+}
+
+export interface AdminBookingResponsible {
+  userId?: string;
+  guest?: {
+    name: string;
+    phone_number?: string;
+    email?: string;
+  };
 }
 
 export interface PaginatedBookingsOutput {
@@ -54,6 +71,10 @@ export interface AdminBookingRow {
   status: 'pending' | 'part_paid' | 'confirmed' | 'canceled' | 'rejected';
   isManual?: boolean;
   createdByAdmin?: boolean;
+  isGuest?: boolean;
+  createdBy?: string | null;
+  createdByName?: string | null;
+  userName?: string | null;
   startIso?: string;
   complexImageUrl?: string | null;
 }
@@ -114,6 +135,7 @@ function formatPersonName(user: {
 function pickCustomerName(raw: RawRecord, user?: { f_name?: string | null; l_name?: string | null; username?: string | null; email?: string } | null): string {
   const nestedUser = raw.user as RawRecord | undefined;
   const fromApi =
+    (typeof raw.user_name === 'string' && raw.user_name.trim()) ||
     (typeof raw.client_name === 'string' && raw.client_name.trim()) ||
     (typeof raw.customer_name === 'string' && raw.customer_name.trim()) ||
     (nestedUser && formatPersonName({
@@ -317,6 +339,10 @@ function mapToAdminBookingRow(
     status: mapStatus(status),
     isManual: (raw.created_by_admin ?? false) as boolean,
     createdByAdmin: (raw.created_by_admin ?? false) as boolean,
+    isGuest: Boolean(raw.is_guest ?? false),
+    createdBy: (raw.created_by as string | null | undefined) ?? null,
+    createdByName: (raw.created_by_name as string | null | undefined) ?? null,
+    userName: (raw.user_name as string | null | undefined) ?? null,
     startIso: startDt,
     complexImageUrl: pickComplexImageUrl(raw),
   };
@@ -610,45 +636,43 @@ const bookingService = {
 
   createAdminBooking: async (
     timeSlotId: string,
-    clientName: string,
-    clientPhone?: string,
-    paymentMethod?: string,
+    responsible?: AdminBookingResponsible,
   ): Promise<BookingOutput> => {
+    const guest = responsible?.guest
+      ? {
+          name: responsible.guest.name.trim(),
+          ...(responsible.guest.phone_number?.trim()
+            ? { phone_number: responsible.guest.phone_number.trim() }
+            : {}),
+          ...(responsible.guest.email?.trim()
+            ? { email: responsible.guest.email.trim() }
+            : {}),
+        }
+      : undefined;
+
+    const body: Record<string, unknown> = { time_slot_id: timeSlotId };
+    if (guest) {
+      body.guest = guest;
+    } else if (responsible?.userId) {
+      body.user_id = responsible.userId;
+    }
+
     const fetchOnce = async () => {
       const res = await ApiClient.post<ApiResponse<BookingOutput>>(
         '/bookings/',
-        {
-          time_slot_id: timeSlotId,
-          client_name: clientName,
-          phone: clientPhone || '',
-          created_by_admin: true,
-        },
+        body,
         { withAuth: true },
       );
       return res.data;
     };
 
-    const persistMeta = (created: BookingOutput) => {
-      if (created.booking_id && clientName.trim()) {
-        manualBookingMetaStorage.save(created.booking_id, {
-          clientName: clientName.trim(),
-          phone: clientPhone?.trim() || undefined,
-          paymentMethod: paymentMethod || undefined,
-        });
-      }
-    };
-
     try {
-      const created = await fetchOnce();
-      persistMeta(created);
-      return created;
+      return await fetchOnce();
     } catch (error) {
       const apiError = error as ApiError;
       if (apiError?.status === 401) {
         await authService.refreshToken();
-        const created = await fetchOnce();
-        persistMeta(created);
-        return created;
+        return await fetchOnce();
       }
       throw error;
     }

@@ -1,14 +1,17 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import {
+  Award,
   BarChart2,
-  Trophy,
-  Calendar,
-  Clock,
-  TrendingUp,
-  ChevronDown,
-  RefreshCw,
   Building2,
+  Calendar,
+  ChevronDown,
   CircleDot,
+  Clock,
+  Crown,
+  Medal,
+  RefreshCw,
+  TrendingUp,
+  Trophy,
 } from 'lucide-react';
 import statisticsService, {
   type ComplexUsage,
@@ -180,19 +183,68 @@ function UsageBarChart({ usage, mode, title, subtitle }: {
 }
  
 function TopSlots({ fields }: { fields: { name: string; bookings: number }[] }) {
-  const medals = ['🥇', '🥈', '🥉', '4️⃣', '5️⃣'];
-  if (!fields.length) return <p className="text-sm text-[var(--color-text-3)]">Sin datos disponibles.</p>;
+  if (!fields.length) {
+    return <p className="text-sm text-[var(--color-text-3)]">Sin datos disponibles.</p>;
+  }
+
+  const maxBookings = Math.max(...fields.map((field) => field.bookings), 1);
+
+  const rankStyles = [
+    {
+      icon: Crown,
+      className: 'border-amber-200 bg-amber-100 text-amber-700',
+    },
+    {
+      icon: Medal,
+      className: 'border-slate-200 bg-slate-100 text-slate-600',
+    },
+    {
+      icon: Award,
+      className: 'border-orange-200 bg-orange-100 text-orange-700',
+    },
+  ];
+
   return (
-    <div className="space-y-3">
-      {fields.map((f, i) => (
-        <div key={f.name} className="flex items-center gap-3 bg-[var(--color-surf2)] rounded-[var(--radius-lg)] px-4 py-3">
-          <span className="text-xl w-7 text-center flex-shrink-0">{medals[i]}</span>
-          <div className="min-w-0 flex-1">
-            <p className="font-extrabold text-[var(--color-text)] text-sm truncate">{f.name}</p>
-            <p className="text-xs text-[var(--color-text-3)]">{f.bookings} {f.bookings === 1 ? 'reserva' : 'reservas'}</p>
+    <div className="space-y-2.5">
+      {fields.map((field, index) => {
+        const rank = rankStyles[index];
+        const Icon = rank?.icon;
+        const percentage = Math.max(8, Math.round((field.bookings / maxBookings) * 100));
+
+        return (
+          <div
+            key={field.name}
+            className="flex items-center gap-3 rounded-[var(--radius-lg)] border border-transparent bg-[var(--color-surf2)] px-3.5 py-3 transition-colors hover:border-[var(--color-border)]"
+          >
+            <span
+              className={`flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-[var(--radius-md)] border ${
+                rank
+                  ? rank.className
+                  : 'border-[var(--color-border)] bg-white text-[var(--color-text-3)]'
+              }`}
+            >
+              {Icon ? <Icon className="h-4 w-4" /> : <span className="text-xs font-black">{index + 1}</span>}
+            </span>
+
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-2">
+                <p className="truncate text-sm font-extrabold text-[var(--color-text)]">
+                  {field.name}
+                </p>
+                <span className="flex-shrink-0 text-[11px] font-extrabold text-[var(--color-primary-dark)]">
+                  {field.bookings} {field.bookings === 1 ? 'reserva' : 'reservas'}
+                </span>
+              </div>
+              <div className="mt-1.5 h-1.5 overflow-hidden rounded-full bg-[var(--color-border)]">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-[var(--color-primary-light)] to-[var(--color-primary-dark)]"
+                  style={{ width: `${percentage}%` }}
+                />
+              </div>
+            </div>
           </div>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }

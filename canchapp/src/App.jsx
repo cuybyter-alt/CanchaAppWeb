@@ -6,6 +6,7 @@ import Home from './pages/Home'
 import AppLayout from './layouts/AppLayout'
 import AdminLayout from './layouts/AdminLayout'
 import RequireAdmin from './components/auth/RequireAdmin'
+import RequireAuth from './components/auth/RequireAuth'
 import Register from './pages/Register'
 import Bookings from './pages/Bookings'
 import Favorites from './pages/Favorites'
@@ -69,11 +70,15 @@ function App() {
           <Route path="/fields" element={<Fields />} />
           <Route path="/complexes" element={<Complexes />} />
           <Route path="/complexes/:id" element={<ComplexDetail />} />
-          <Route path="/bookings" element={<Bookings />} />
-          <Route path="/notifications" element={<Notifications />} />
+
+          <Route element={<RequireAuth />}>
+            <Route path="/bookings" element={<Bookings />} />
+            <Route path="/notifications" element={<Notifications />} />
+            <Route path="/profile" element={<Profile />} />
+            <Route path="/payments" element={<Payments />} />
+          </Route>
+
           <Route path="/favorites" element={<Favorites />} />
-          <Route path="/profile" element={<Profile />} />
-          <Route path="/payments" element={<Payments />} />
           <Route path="/settings" element={<Settings />} />
           <Route path="/history" element={<div className="p-8">Historial - Próximamente</div>} />
         </Route>

@@ -34,6 +34,8 @@ export interface TokenPairOutput {
   user: UserOutput;
 }
 
+export type AuthRole = "Owner" | "Manager" | "Player";
+
 export interface LoginPayload {
   identifier: string; // email o username
   password: string;
@@ -45,7 +47,7 @@ export interface RegisterPayload {
   f_name: string;
   l_name: string;
   password: string;
-  role_name: "Owner" | "Manager" | "Player";
+  role_name: AuthRole;
   username: string;
   timezone?: string | null;
 }
@@ -406,20 +408,23 @@ const authService = {
    */
   firebaseAuth: async (
     firebaseIdToken: string,
-    roleName: "Owner" | "Manager" | "Player" = "Player",
+    roleName?: AuthRole,
     timezone?: string | null
   ): Promise<TokenPairOutput> => {
+    const body: Record<string, unknown> = {
+      firebase_id_token: firebaseIdToken,
+      ...withDeviceTimezone(timezone),
+    };
+    if (roleName) body.role_names = [roleName];
+
     const res = await ApiClient.post<ApiResponse<TokenPairOutput>>(
       "/identity/auth/firebase/",
-      {
-        firebase_id_token: firebaseIdToken,
-        role_names: [roleName],
-        ...withDeviceTimezone(timezone),
-      }
+      body
     );
+    const parsedUser = enrichUserWithStoredExtras(parseUserOutput(res.data.user));
     tokenStorage.save(res.data);
-    tokenStorage.saveUser(enrichUserWithStoredExtras(parseUserOutput(res.data.user)));
-    return res.data;
+    tokenStorage.saveUser(parsedUser);
+    return { ...res.data, user: parsedUser };
   },
 
   /**

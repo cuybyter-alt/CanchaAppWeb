@@ -83,10 +83,17 @@ const Login: React.FC<LoginProps> = ({ onLogin }) => {
     setGoogleLoading(true);
     setError(null);
     try {
-      await loginWithGoogle();
+      const loggedUser = await loginWithGoogle();
       notify.success("¡Bienvenido!", "Sesión iniciada con Google.");
       onLogin?.();
-      navigate("/");
+
+      if (redirectTo) {
+        navigate(redirectTo);
+      } else if (loggedUser.role_name === 'Owner' || loggedUser.role_name === 'Manager') {
+        navigate('/admin');
+      } else {
+        navigate('/');
+      }
     } catch (e) {
       const err = e as ApiError & { code?: string };
       // El usuario cerró el popup; no mostrar error

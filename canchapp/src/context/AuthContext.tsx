@@ -27,6 +27,7 @@ import { auth, googleProvider } from "../firebase";
 import authService, {
     syncCurrentUserTimezone,
     tokenStorage,
+    type AuthRole,
     type UserOutput,
 } from "../services/AuthService";
 
@@ -40,7 +41,7 @@ interface AuthContextValue {
   /** true mientras se verifica la sesión inicial */
     loading: boolean;
   /** Abre el popup de Google y sincroniza con el backend */
-    loginWithGoogle: () => Promise<void>;
+    loginWithGoogle: (roleName?: AuthRole) => Promise<UserOutput>;
   /** Recarga el usuario almacenado desde localStorage */
     refreshUser: () => void;
   /** Cierra sesión en Firebase y limpia los tokens locales */
@@ -57,6 +58,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
     const [user, setUser] = useState<UserOutput | null>(tokenStorage.getUser());
     const [loading, setLoading] = useState(true);
+    const googleAuthInProgressRef = useRef(false);
 
   // Escucha cambios de sesión de Firebase (ej: refresh de página)
     useEffect(() => {
@@ -66,6 +68,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       return;
     }
     const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
+        // Un flujo explícito de Google ya está manejando el intercambio
+        // con el backend; evitar autenticaciones duplicadas o con rol Player.
+        if (googleAuthInProgressRef.current) {
+          setFirebaseUser(fbUser);
+          return;
+        }
+
         setLoading(true);
 
     if (fbUser) {
@@ -75,7 +84,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         if (!authService.isAuthenticated()) {
             try {
             const idToken = await fbUser.getIdToken();
-            const tokenPair = await authService.firebaseAuth(idToken, "Player");
+            // Restauración de sesión: no forzar un rol nuevo.
+            const tokenPair = await authService.firebaseAuth(idToken);
             setUser(tokenPair.user);
             } catch (err) {
             console.error(
@@ -136,12 +146,42 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // ── Acciones ────────────────────────────────────────────────────────────────
 
-  const loginWithGoogle = async () => {
+  const loginWithGoogle = useCallback(async (roleName?: AuthRole): Promise<UserOutput> => {
     if (!auth || !googleProvider) {
       throw new Error('Google sign-in no está disponible: Firebase no configurado.');
     }
-    await signInWithPopup(auth, googleProvider);
-  };
+
+    googleAuthInProgressRef.current = true;
+    setLoading(true);
+    let signedInWithFirebase = false;
+
+    try {
+      const credential = await signInWithPopup(auth, googleProvider);
+      signedInWithFirebase = true;
+      setFirebaseUser(credential.user);
+
+      const idToken = await credential.user.getIdToken();
+      const tokenPair = await authService.firebaseAuth(idToken, roleName);
+      setUser(tokenPair.user);
+      return tokenPair.user;
+    } catch (err) {
+      const code = (err as { code?: string }).code;
+      const cancelled =
+        code === "auth/popup-closed-by-user" ||
+        code === "auth/cancelled-popup-request";
+
+      if (signedInWithFirebase && !cancelled) {
+        if (auth) await signOut(auth);
+        tokenStorage.clear();
+        setFirebaseUser(null);
+        setUser(null);
+      }
+      throw err;
+    } finally {
+      googleAuthInProgressRef.current = false;
+      setLoading(false);
+    }
+  }, []);
 
   const refreshUser = useCallback(() => {
     setUser(tokenStorage.getUser());

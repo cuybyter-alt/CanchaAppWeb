@@ -1,11 +1,14 @@
-import { useEffect, useRef, useState } from 'react';
-import { ArrowRight, ChevronDown, MapPin, RefreshCw, X } from 'lucide-react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { ArrowRight, Building2, ChevronDown, Images, MapPin, RefreshCw, X } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Dialog } from '../ui/dialog';
 import { Badge } from '../ui/badge';
+import { ImageGalleryLightbox, type GalleryImageItem } from '../ui/image-gallery-lightbox';
 import type { NearbyComplex } from '../../types/map';
 import type { Booking, ComplexField, ComplexFieldStatus, ComplexFieldType, TimeSlotData } from '../../types/field';
+import type { ComplexImage } from '../../types/complexImage';
 import complexesService from '../../services/ComplexesService';
+import ComplexImagesService from '../../services/ComplexImagesService';
 import schedulingService from '../../services/SchedulingService';
 import bookingService from '../../services/BookingService';
 import authService from '../../services/AuthService';
@@ -58,6 +61,10 @@ interface SlotsState {
   date: string;
 }
 
+type GalleryTarget =
+  | { kind: 'complex' }
+  | { kind: 'field'; fieldId: string; fieldName: string };
+
 function buildDates(): { iso: string; label: string }[] {
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(`${getTodayISO()}T12:00:00`);
@@ -102,9 +109,12 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
   const [isMobileBooking, setIsMobileBooking] = useState(false);
   const [bookingDone, setBookingDone] = useState(false);
   const [bannerImageFailed, setBannerImageFailed] = useState(false);
-  const [fieldImages, setFieldImages] = useState<Record<string, string | null>>({});
+  const [fieldGalleries, setFieldGalleries] = useState<Record<string, ComplexImage[]>>({});
+  const [complexImages, setComplexImages] = useState<ComplexImage[]>([]);
+  const [galleryTarget, setGalleryTarget] = useState<GalleryTarget | null>(null);
   const navigate = useNavigate();
 
+  const complexId = complex?.id ?? null;
   const todayIso = getTodayISO();
   const dates = buildDates();
   const isToday = selectedDate === todayIso;
@@ -115,7 +125,7 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
 
   useEffect(() => {
     if (fields.length === 0) {
-      setFieldImages({});
+      setFieldGalleries({});
       return;
     }
 
@@ -125,19 +135,70 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
       fields.map(async (field) => {
         try {
           const images = await FieldImagesService.list(field.fieldId);
-          return [field.fieldId, images.items[0]?.image_url ?? null] as const;
+          return [field.fieldId, images.items.filter((image) => image.status === 'confirmed')] as const;
         } catch {
-          return [field.fieldId, null] as const;
+          return [field.fieldId, []] as const;
         }
       }),
     ).then((entries) => {
-      if (!cancelled) setFieldImages(Object.fromEntries(entries));
+      if (cancelled) return;
+      const next: Record<string, ComplexImage[]> = {};
+      for (const [fieldId, images] of entries) next[fieldId] = images;
+      setFieldGalleries(next);
     });
 
     return () => {
       cancelled = true;
     };
   }, [fields]);
+
+  useEffect(() => {
+    if (!isOpen || !complexId) {
+      setComplexImages([]);
+      return;
+    }
+
+    let cancelled = false;
+
+    void ComplexImagesService.list(complexId)
+      .then((data) => {
+        if (!cancelled) {
+          setComplexImages(data.items.filter((image) => image.status === 'confirmed'));
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setComplexImages([]);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [isOpen, complexId]);
+
+  const galleryImages = useMemo<GalleryImageItem[]>(() => {
+    if (!galleryTarget) return [];
+
+    if (galleryTarget.kind === 'complex') {
+      const title = complex?.name ?? 'Complejo';
+      if (complexImages.length > 0) {
+        return complexImages.map((image) => ({
+          src: image.image_url,
+          alt: image.description || title,
+          title,
+        }));
+      }
+      if (complex?.imageUrl) {
+        return [{ src: complex.imageUrl, alt: title, title }];
+      }
+      return [];
+    }
+
+    return (fieldGalleries[galleryTarget.fieldId] ?? []).map((image) => ({
+      src: image.image_url,
+      alt: image.description || galleryTarget.fieldName,
+      title: galleryTarget.fieldName,
+    }));
+  }, [galleryTarget, complexImages, fieldGalleries, complex?.imageUrl, complex?.name]);
 
   const fetchFields = (complexId: string) => {
     abortRef.current?.();
@@ -255,7 +316,10 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
   };
 
   useEffect(() => {
-    if (!isOpen || !complex) return;
+    if (!isOpen || !complex) {
+      setGalleryTarget(null);
+      return;
+    }
     const today = getTodayISO();
     setSelectedDate(today);
     setExpandedFieldId(null);
@@ -264,6 +328,7 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
     setSelectedFieldForSlot(null);
     setSelectedTimeSlot(null);
     setBookingDone(false);
+    setGalleryTarget(null);
     fetchFields(complex.id);
     return () => {
       abortRef.current?.();
@@ -275,6 +340,7 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
   if (!complex) return null;
 
   const showBannerImage = Boolean(complex.imageUrl) && !bannerImageFailed;
+  const hasComplexPhotos = complexImages.length > 0 || Boolean(complex.imageUrl);
   const activeCount = fields.filter((f) => f.status === 'active').length;
 
   return (
@@ -299,6 +365,21 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
               />
               <div className="absolute inset-0 bg-gradient-to-r from-black/85 via-black/55 to-black/20" />
             </>
+          )}
+
+          {hasComplexPhotos && (
+            <button
+              type="button"
+              onClick={(event) => {
+                event.stopPropagation();
+                setGalleryTarget({ kind: 'complex' });
+              }}
+              aria-label={`Ver fotos de ${complex.name}`}
+              className="absolute right-2 top-2 z-20 inline-flex items-center gap-1 rounded-full bg-black/55 px-2.5 py-1 text-[9px] font-extrabold uppercase tracking-wide text-white/90 backdrop-blur-sm transition-all hover:bg-[var(--color-primary)] active:scale-95"
+            >
+              <Images className="h-3 w-3" />
+              Ver fotos
+            </button>
           )}
 
           <div className="relative z-10 flex w-full items-center gap-3 px-4 py-3">
@@ -447,6 +528,8 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
               const canExpand = field.status === 'active';
               const isExpanded = expandedFieldId === field.fieldId;
               const sState = slotsMap[field.fieldId];
+              const fieldGallery = fieldGalleries[field.fieldId] ?? [];
+              const fieldThumb = fieldGallery[0]?.image_url ?? null;
               const availableSlots = sState?.slots.filter(
                 (s) => s.status !== 'taken' && !isSlotPast(s, isToday),
               );
@@ -472,9 +555,9 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
                   >
                     {/* Left: icon + info */}
                     <div className="flex items-center gap-3 min-w-0">
-                      {fieldImages[field.fieldId] ? (
+                      {fieldThumb ? (
                         <ComplexImageThumb
-                          src={fieldImages[field.fieldId]}
+                          src={fieldThumb}
                           alt={field.name}
                           size="sm"
                           className="!rounded-full"
@@ -539,6 +622,44 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
                   {/* Expanded: slots panel */}
                   {isExpanded && (
                     <div className="border-t border-[var(--color-border)] bg-[var(--color-surface)] px-4 py-3">
+                      {(hasComplexPhotos || fieldGallery.length > 0) && (
+                        <div className="mb-2 flex flex-wrap items-center gap-1.5">
+                          <span className="text-[9px] font-bold uppercase tracking-wide text-[var(--color-text-3)]">
+                            Fotos
+                          </span>
+                          {hasComplexPhotos && (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setGalleryTarget({ kind: 'complex' });
+                              }}
+                              className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surf2)] px-2.5 py-1 text-[10px] font-extrabold text-[var(--color-text-2)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary-dark)]"
+                            >
+                              <Building2 className="h-3 w-3" />
+                              Complejo
+                            </button>
+                          )}
+                          {fieldGallery.length > 0 && (
+                            <button
+                              type="button"
+                              onClick={(event) => {
+                                event.stopPropagation();
+                                setGalleryTarget({
+                                  kind: 'field',
+                                  fieldId: field.fieldId,
+                                  fieldName: field.name,
+                                });
+                              }}
+                              className="inline-flex items-center gap-1 rounded-full border border-[var(--color-border)] bg-[var(--color-surf2)] px-2.5 py-1 text-[10px] font-extrabold text-[var(--color-text-2)] transition-colors hover:border-[var(--color-primary)] hover:text-[var(--color-primary-dark)]"
+                            >
+                              <Images className="h-3 w-3" />
+                              Cancha
+                            </button>
+                          )}
+                        </div>
+                      )}
+
                       {/* Loading */}
                       {sState?.loading && (
                         <div className="grid grid-cols-4 gap-1.5">
@@ -716,6 +837,12 @@ export function ComplexFieldsDialog({ isOpen, onClose, complex, onSlotSelected, 
           </button>
         </div>
       </div>
+
+      <ImageGalleryLightbox
+        isOpen={galleryTarget !== null}
+        images={galleryImages}
+        onClose={() => setGalleryTarget(null)}
+      />
     </Dialog>
   );
 }

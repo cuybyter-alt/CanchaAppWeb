@@ -97,7 +97,7 @@ const RoleSelector = ({
 
 const Register: React.FC = () => {
   const navigate = useNavigate();
-  useAuth();
+  const { loginWithGoogle } = useAuth();
 
   const [view, setView] = useState<RegisterView>("social");
   const [role, setRole] = useState<Role>("Player");
@@ -164,22 +164,23 @@ const Register: React.FC = () => {
     setGoogleLoading(true);
     setError(null);
     try {
-      const { auth: firebaseAuth, googleProvider: provider } = await import("../firebase");
-      if (!firebaseAuth || !provider) {
-        notify.error("No disponible", "El inicio de sesión con Google no está configurado.");
-        return;
-      }
-      const { signInWithPopup } = await import("firebase/auth");
-      const result = await signInWithPopup(firebaseAuth, provider);
-      const idToken = await result.user.getIdToken();
+      const loggedUser = await loginWithGoogle(role);
+      const isAdmin =
+        loggedUser.role_name === "Owner" || loggedUser.role_name === "Manager";
 
-      await authService.firebaseAuth(idToken, role);
-      notify.success(
-        "¡Bienvenido!",
-        `Cuenta creada como ${role === "Player" ? "Jugador" : "Administrador"}.`
-      );
-      // El AuthContext detectará el cambio de Firebase y cargará el user
-      navigate("/");
+      if (role === "Owner" && !isAdmin) {
+        notify.info(
+          "Rol conservado",
+          "Tu cuenta ya existía como Jugador; mantuvimos el rol actual."
+        );
+      } else {
+        notify.success(
+          "¡Bienvenido!",
+          `Sesión iniciada como ${isAdmin ? "Administrador" : "Jugador"}.`
+        );
+      }
+
+      navigate(isAdmin ? "/admin" : "/");
     } catch (e) {
       const err = e as ApiError & { code?: string };
       if (err?.code === "auth/popup-closed-by-user") return;
